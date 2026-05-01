@@ -37,7 +37,15 @@ Directly manipulate world or module settings.
 - `foundry.setSetting(module: string, key: string, value: any)`
 - `foundry.getFlag(uuid: string, scope: string, key: string)`
 
-#### C. Hook & Event Simulation
+#### C. Deterministic Polling (Persistence Stability)
+Foundry's backend persistence is asynchronous. Use these helpers to wait for state changes deterministically:
+- `waitForSetting(page, module, key, expected)`
+- `waitForActorFlag(page, actorId, scope, key, expected)`
+- `waitForActorData(page, actorId, path, expected)`
+
+These helpers use `page.waitForFunction` to poll the internal `game` object, ensuring the test only proceeds once the state has been persisted.
+
+#### D. Hook & Event Simulation
 Manually trigger Foundry hooks to test reactive logic.
 - `foundry.triggerHook(hookName: string, ...args: any[])`
 - Example: Simulating a drop event on a sheet without performing a real drag-and-drop.
