@@ -1,0 +1,36 @@
+<form class="{{cssClass}}" autocomplete="off">
+    <header class="sheet-header">
+        <img src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="64" width="64"/>
+        <h1 class="charname"><input name="name" type="text" value="{{actor.name}}" placeholder="Name"/></h1>
+    </header>
+
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="description">Description</a>
+        <a class="item" data-tab="items">Items</a>
+        <a class="item" data-tab="attributes">Attributes</a>
+    </nav>
+
+    <section class="sheet-body">
+        <div class="tab description" data-group="primary" data-tab="description">
+            <p>Description Tab</p>
+        </div>
+
+        <div class="tab items" data-group="primary" data-tab="items">
+            <ol class="items-list">
+                {{#each actor.items as |item id|}}
+                <li class="item flexrow" data-item-id="{{item.id}}">
+                    <img src="{{item.img}}" title="{{item.name}}" width="24" height="24"/>
+                    <h4 class="item-name">{{item.name}}</h4>
+                </li>
+                {{/each}}
+            </ol>
+        </div>
+
+        <div class="tab attributes" data-group="primary" data-tab="attributes">
+            <div class="resource">
+                <span class="resource-label">HP</span>
+                <input type="text" name="system.attributes.hp.value" value="{{actor.system.attributes.hp.value}}" data-dtype="Number"/>
+            </div>
+        </div>
+    </section>
+</form>
