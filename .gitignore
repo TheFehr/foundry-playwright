@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+
+# Build and Reports
+dist
+test-results
+playwright-report
+blob-report
+
+# Cache and Local Environment
+.foundry_cache
+.foundry_data_tmp_*
+foundry_data/
+.env
+
+# Playwright Auth State
+e2e/.auth
+
+# IDE - IntelliJ IDEA
+.idea/.gitignore
+.idea/foundry-playwright.iml
+.idea/modules.xml
+.idea/vcs.xml

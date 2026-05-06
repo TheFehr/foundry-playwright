@@ -1,0 +1,15 @@
+services:
+  foundry:
+    image: ghcr.io/felddy/foundryvtt:${FOUNDRY_VERSION:-13}
+    ports:
+      - "30000:30000"
+    environment:
+      - FOUNDRY_USERNAME=${FOUNDRY_USERNAME}
+      - FOUNDRY_PASSWORD=${FOUNDRY_PASSWORD}
+      - FOUNDRY_ADMIN_KEY=${FOUNDRY_ADMIN_KEY:-password}
+    volumes:
+      - foundry_data:/data
+      - ./.foundry_cache:/data/container_cache
+
+volumes:
+  foundry_data:
