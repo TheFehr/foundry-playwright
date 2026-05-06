@@ -11,15 +11,23 @@ export class DnD5eAdapter extends BaseSystemAdapter {
     return "system.attributes.hp.value";
   }
 
-  async grantCurrency(page: Page, actorName: string, amount: number, currency: string = "gp"): Promise<void> {
-    await page.evaluate(({ actorName, amount, currency }) => {
-      const actor = (window as any).game.actors.getName(actorName);
-      if (!actor) throw new Error(`Actor ${actorName} not found.`);
-      
-      const current = actor.system.currency[currency] || 0;
-      return actor.update({
-        [`system.currency.${currency}`]: current + amount
-      });
-    }, { actorName, amount, currency });
+  async grantCurrency(
+    page: Page,
+    actorName: string,
+    amount: number,
+    currency: string = "gp",
+  ): Promise<void> {
+    await page.evaluate(
+      ({ actorName, amount, currency }) => {
+        const actor = (window as any).game.actors.getName(actorName);
+        if (!actor) throw new Error(`Actor ${actorName} not found.`);
+
+        const current = actor.system.currency[currency] || 0;
+        return actor.update({
+          [`system.currency.${currency}`]: current + amount,
+        });
+      },
+      { actorName, amount, currency },
+    );
   }
 }

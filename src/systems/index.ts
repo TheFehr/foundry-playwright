@@ -3,8 +3,8 @@ import { DnD5eAdapter } from "./dnd5e.js";
 import { PF2eAdapter } from "./pf2e.js";
 
 const adapters: Record<string, SystemAdapter> = {
-  "dnd5e": new DnD5eAdapter(),
-  "pf2e": new PF2eAdapter(),
+  dnd5e: new DnD5eAdapter(),
+  pf2e: new PF2eAdapter(),
 };
 
 /**

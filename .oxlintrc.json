@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "vitest"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {},
+  "ignorePatterns": ["e2e/tidy5e-sheet/**", "e2e/fake-module/**", "node_modules/**", "dist/**"],
+  "env": {
+    "builtin": true
+  }
+}

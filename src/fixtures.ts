@@ -27,7 +27,7 @@ export const test = base.extend<FoundryFixtures>({
   foundry: async ({ page }, use) => {
     const systemId = process.env.FOUNDRY_SYSTEM_ID || "dnd5e";
     const uiAdapterId = process.env.FOUNDRY_UI_ADAPTER || "default";
-    
+
     await use({
       state: new FoundryState(page, systemId),
       ui: new FoundryUI(page, uiAdapterId),
@@ -73,11 +73,13 @@ export const test = base.extend<FoundryFixtures>({
       await use(page);
     } catch (error) {
       // If a test fails, try to dump FP_VERIFY logs for debugging
-      const verifyData = await page.evaluate(() => {
-        // @ts-ignore
-        return window.FP_VERIFY ? JSON.stringify(window.FP_VERIFY.logs, null, 2) : null;
-      }).catch(() => null);
-      
+      const verifyData = await page
+        .evaluate(() => {
+          // @ts-ignore
+          return window.FP_VERIFY ? JSON.stringify(window.FP_VERIFY.logs, null, 2) : null;
+        })
+        .catch(() => null);
+
       if (verifyData) {
         console.error(`[FP_VERIFY DUMP on Failure]:\n${verifyData}`);
       }

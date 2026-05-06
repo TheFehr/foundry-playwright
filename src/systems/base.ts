@@ -28,5 +28,10 @@ export interface SystemAdapter {
 export abstract class BaseSystemAdapter implements SystemAdapter {
   abstract id: string;
   abstract getHPPath(): string;
-  abstract grantCurrency(page: Page, actorName: string, amount: number, currency?: string): Promise<void>;
+  abstract grantCurrency(
+    page: Page,
+    actorName: string,
+    amount: number,
+    currency?: string,
+  ): Promise<void>;
 }

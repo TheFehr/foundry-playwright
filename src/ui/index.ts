@@ -4,9 +4,9 @@ import { Tidy5eUIAdapter } from "./tidy5e.js";
 import { DnD5eUIAdapter } from "./dnd5e.js";
 
 const adapters: Record<string, UIAdapter> = {
-  "default": new DefaultUIAdapter(),
+  default: new DefaultUIAdapter(),
   "tidy5e-sheet": new Tidy5eUIAdapter(),
-  "dnd5e": new DnD5eUIAdapter(),
+  dnd5e: new DnD5eUIAdapter(),
 };
 
 /**
@@ -29,7 +29,10 @@ export function registerUIAdapter(adapter: UIAdapter) {
 export class FoundryUI {
   private adapter: UIAdapter;
 
-  constructor(private page: Page, adapterId: string = "default") {
+  constructor(
+    private page: Page,
+    adapterId: string = "default",
+  ) {
     this.adapter = getUIAdapter(adapterId);
   }
 

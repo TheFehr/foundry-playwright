@@ -14,8 +14,11 @@ export class Tidy5eUIAdapter extends DefaultUIAdapter {
   override async switchAppTab(page: Page, appSelector: string, tabName: string): Promise<void> {
     const app = page.locator(appSelector);
     // Tidy5e might use different navigation or tab structures, especially for Group actors
-    const tabItem = app.locator('.tidy-tabs [data-tab], nav.tabs a.item, .navigation .item').filter({ hasText: tabName }).first();
-    await tabItem.evaluate(el => (el as HTMLElement).click());
+    const tabItem = app
+      .locator(".tidy-tabs [data-tab], nav.tabs a.item, .navigation .item")
+      .filter({ hasText: tabName })
+      .first();
+    await tabItem.evaluate((el) => (el as HTMLElement).click());
     // In Tidy5e, the active state might be checked differently, but usually it's still a class
     await expect(tabItem).toHaveClass(/active|selected/);
   }

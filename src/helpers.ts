@@ -6,28 +6,37 @@ import { expect, Page } from "@playwright/test";
  */
 export async function disableTour(page: Page) {
   console.log("[disableTour] Aggressively removing tours and overlays...");
-  
+
   const removalScript = () => {
     const selectors = [
-      ".tour-overlay", "#tour-overlay", ".joyride-overlay", 
-      ".foundry-tour-overlay", ".tour-dot", ".tour-step-anchor",
-      ".nue-overlay", ".nue-container", "foundry-guide"
+      ".tour-overlay",
+      "#tour-overlay",
+      ".joyride-overlay",
+      ".foundry-tour-overlay",
+      ".tour-dot",
+      ".tour-step-anchor",
+      ".nue-overlay",
+      ".nue-container",
+      "foundry-guide",
     ];
-    
+
     // 1. Remove elements from DOM
     const remove = () => {
-        selectors.forEach(s => {
-            document.querySelectorAll(s).forEach(el => {
-                (el as HTMLElement).style.display = 'none';
-                (el as HTMLElement).style.pointerEvents = 'none';
-                el.remove();
-            });
+      selectors.forEach((s) => {
+        document.querySelectorAll(s).forEach((el) => {
+          (el as HTMLElement).style.display = "none";
+          (el as HTMLElement).style.pointerEvents = "none";
+          el.remove();
         });
-        // Also remove pointer-events from body if blocked
-        if (document.body.classList.contains('tour-open') || document.body.style.pointerEvents === 'none') {
-            document.body.classList.remove('tour-open', 'nue-open');
-            document.body.style.pointerEvents = 'auto';
-        }
+      });
+      // Also remove pointer-events from body if blocked
+      if (
+        document.body.classList.contains("tour-open") ||
+        document.body.style.pointerEvents === "none"
+      ) {
+        document.body.classList.remove("tour-open", "nue-open");
+        document.body.style.pointerEvents = "auto";
+      }
     };
     remove();
 
@@ -60,10 +69,10 @@ export async function disableTour(page: Page) {
 
     // 3. Set localStorage to mark tours as completed
     try {
-        const tourProgress = { core: { backupsOverview: 1, welcome: 1, setup: 1 } };
-        window.localStorage.setItem("core.tourProgress", JSON.stringify(tourProgress));
-    } catch (e) {}
-    
+      const tourProgress = { core: { backupsOverview: 1, welcome: 1, setup: 1 } };
+      window.localStorage.setItem("core.tourProgress", JSON.stringify(tourProgress));
+    } catch {}
+
     // 4. Mutation Observer to keep them gone
     const observer = new MutationObserver(remove);
     observer.observe(document.body, { childList: true, subtree: true });
@@ -84,26 +93,33 @@ export async function switchTab(page: Page, tabName: string) {
   // Map logical names to data-tab values for robustness
   const tabMap: Record<string, string> = {
     "Game Worlds": "worlds",
-    "Worlds": "worlds",
+    Worlds: "worlds",
     "Game Systems": "systems",
-    "Systems": "systems",
+    Systems: "systems",
     "Add-on Modules": "modules",
-    "Modules": "modules",
-    "Configuration": "config",
+    Modules: "modules",
+    Configuration: "config",
     "Update Software": "update",
   };
 
   const dataTabName = tabMap[tabName] || tabName.toLowerCase();
 
   // Quick check: is the tab already active?
-  const alreadyActive = await page.evaluate((dataTab) => {
-    const activeTab = document.querySelector(".tabs .item.active, [data-action='tab'].active, [role='tab'][aria-selected='true'], .active[data-tab], .tab.active, [data-application-part].active");
-    return activeTab?.getAttribute("data-tab") === dataTab || activeTab?.getAttribute("data-application-part") === dataTab;
-  }, dataTabName).catch(() => false);
+  const alreadyActive = await page
+    .evaluate((dataTab) => {
+      const activeTab = document.querySelector(
+        ".tabs .item.active, [data-action='tab'].active, [role='tab'][aria-selected='true'], .active[data-tab], .tab.active, [data-application-part].active",
+      );
+      return (
+        activeTab?.getAttribute("data-tab") === dataTab ||
+        activeTab?.getAttribute("data-application-part") === dataTab
+      );
+    }, dataTabName)
+    .catch(() => false);
 
   if (alreadyActive) {
-      console.log(`[switchTab] Tab "${tabName}" (${dataTabName}) is already active.`);
-      return;
+    console.log(`[switchTab] Tab "${tabName}" (${dataTabName}) is already active.`);
+    return;
   }
 
   console.log(`[switchTab] Switching to tab: ${tabName}`);
@@ -126,7 +142,7 @@ export async function switchTab(page: Page, tabName: string) {
   let tab = null;
   for (const selector of selectors) {
     const candidate = page.locator(selector).first();
-    if (await candidate.count() > 0 && await candidate.isVisible()) {
+    if ((await candidate.count()) > 0 && (await candidate.isVisible())) {
       console.log(`[switchTab] Found candidate with selector: ${selector}`);
       tab = candidate;
       break;
@@ -134,31 +150,47 @@ export async function switchTab(page: Page, tabName: string) {
   }
 
   if (!tab) {
-    console.log(`[switchTab] No robust selector matched for "${tabName}". Falling back to text search.`);
-    tab = page.locator(`*:visible:has-text("${tabName}")`).filter({ hasNot: page.locator('option') }).first();
+    console.log(
+      `[switchTab] No robust selector matched for "${tabName}". Falling back to text search.`,
+    );
+    tab = page
+      .locator(`*:visible:has-text("${tabName}")`)
+      .filter({ hasNot: page.locator("option") })
+      .first();
   }
-    
+
   await expect(tab).toBeVisible({ timeout: 15000 });
-  
+
   // Get the data-tab attribute if it exists to wait for content later
-  const dataTab = await tab.getAttribute("data-tab") || await tab.getAttribute("data-action");
+  const dataTab = (await tab.getAttribute("data-tab")) || (await tab.getAttribute("data-action"));
 
   // Force click via evaluate to bypass overlays, then wait for transition
-  await tab.evaluate(el => (el as HTMLElement).click());
-  
+  await tab.evaluate((el) => (el as HTMLElement).click());
+
   // Wait for the tab to be active or for the target content to be visible
-  await page.waitForFunction(({ name, dataTab }) => {
-    const activeTab = document.querySelector(".tabs .item.active, [data-action='tab'].active, [role='tab'][aria-selected='true'], .active[data-tab], .tab.active, [data-application-part].active");
-    const isTabActive = activeTab?.textContent?.trim().includes(name) || (dataTab && activeTab?.getAttribute("data-tab") === dataTab);
-    
-    // Also check if a section with that data-tab is now visible
-    const contentVisible = dataTab ? (
-        document.querySelector(`section.tab[data-tab="${dataTab}"].active, .tab[data-tab="${dataTab}"].active, [data-application-part="${dataTab}"].active`) !== null ||
-        document.querySelector(`#setup-packages-${dataTab}.active`) !== null
-    ) : true;
-    
-    return isTabActive || contentVisible; // Loosened check for V14
-  }, { name: tabName, dataTab }, { timeout: 10000 }).catch(() => null);
+  await page
+    .waitForFunction(
+      ({ name, dataTab }) => {
+        const activeTab = document.querySelector(
+          ".tabs .item.active, [data-action='tab'].active, [role='tab'][aria-selected='true'], .active[data-tab], .tab.active, [data-application-part].active",
+        );
+        const isTabActive =
+          activeTab?.textContent?.trim().includes(name) ||
+          (dataTab && activeTab?.getAttribute("data-tab") === dataTab);
+
+        // Also check if a section with that data-tab is now visible
+        const contentVisible = dataTab
+          ? document.querySelector(
+              `section.tab[data-tab="${dataTab}"].active, .tab[data-tab="${dataTab}"].active, [data-application-part="${dataTab}"].active`,
+            ) !== null || document.querySelector(`#setup-packages-${dataTab}.active`) !== null
+          : true;
+
+        return isTabActive || contentVisible; // Loosened check for V14
+      },
+      { name: tabName, dataTab },
+      { timeout: 10000 },
+    )
+    .catch(() => null);
 
   console.log(`[switchTab] Tab "${tabName}" clicked and verified.`);
 }
@@ -171,11 +203,23 @@ export async function switchTab(page: Page, tabName: string) {
  * @param expectedValue The expected value of the setting.
  * @param timeout The timeout in milliseconds.
  */
-export async function waitForSetting(page: Page, moduleId: string, settingId: string, expectedValue: any, timeout: number = 5000) {
-  console.log(`[waitForSetting] Waiting for setting ${moduleId}.${settingId} to be ${expectedValue}...`);
-  await page.waitForFunction(({ moduleId, settingId, expectedValue }) => {
-    return (window as any).game.settings.get(moduleId, settingId) === expectedValue;
-  }, { moduleId, settingId, expectedValue }, { timeout });
+export async function waitForSetting(
+  page: Page,
+  moduleId: string,
+  settingId: string,
+  expectedValue: any,
+  timeout: number = 5000,
+) {
+  console.log(
+    `[waitForSetting] Waiting for setting ${moduleId}.${settingId} to be ${expectedValue}...`,
+  );
+  await page.waitForFunction(
+    ({ moduleId, settingId, expectedValue }) => {
+      return (window as any).game.settings.get(moduleId, settingId) === expectedValue;
+    },
+    { moduleId, settingId, expectedValue },
+    { timeout },
+  );
 }
 
 /**
@@ -187,12 +231,26 @@ export async function waitForSetting(page: Page, moduleId: string, settingId: st
  * @param expectedValue The expected value of the flag.
  * @param timeout The timeout in milliseconds.
  */
-export async function waitForActorFlag(page: Page, actorId: string, scope: string, flagKey: string, expectedValue: any, timeout: number = 5000) {
-  console.log(`[waitForActorFlag] Waiting for flag ${scope}.${flagKey} on actor ${actorId} to be ${expectedValue}...`);
-  await page.waitForFunction(({ actorId, scope, flagKey, expectedValue }) => {
-    const actor = (window as any).game.actors.get(actorId) || (window as any).fromUuidSync(actorId);
-    return actor?.getFlag(scope, flagKey) === expectedValue;
-  }, { actorId, scope, flagKey, expectedValue }, { timeout });
+export async function waitForActorFlag(
+  page: Page,
+  actorId: string,
+  scope: string,
+  flagKey: string,
+  expectedValue: any,
+  timeout: number = 5000,
+) {
+  console.log(
+    `[waitForActorFlag] Waiting for flag ${scope}.${flagKey} on actor ${actorId} to be ${expectedValue}...`,
+  );
+  await page.waitForFunction(
+    ({ actorId, scope, flagKey, expectedValue }) => {
+      const actor =
+        (window as any).game.actors.get(actorId) || (window as any).fromUuidSync(actorId);
+      return actor?.getFlag(scope, flagKey) === expectedValue;
+    },
+    { actorId, scope, flagKey, expectedValue },
+    { timeout },
+  );
 }
 
 /**
@@ -203,19 +261,32 @@ export async function waitForActorFlag(page: Page, actorId: string, scope: strin
  * @param expectedValue The expected value.
  * @param timeout The timeout in milliseconds.
  */
-export async function waitForActorData(page: Page, actorId: string, dataPath: string, expectedValue: any, timeout: number = 5000) {
-  console.log(`[waitForActorData] Waiting for ${dataPath} on actor ${actorId} to be ${expectedValue}...`);
-  await page.waitForFunction(({ actorId, dataPath, expectedValue }) => {
-    const actor = (window as any).game.actors.get(actorId) || (window as any).fromUuidSync(actorId);
-    if (!actor) return false;
-    
-    // Simple helper to get nested property
-    const getProperty = (obj: any, path: string) => {
-      return path.split('.').reduce((o, i) => o?.[i], obj);
-    };
-    
-    return getProperty(actor, dataPath) === expectedValue;
-  }, { actorId, dataPath, expectedValue }, { timeout });
+export async function waitForActorData(
+  page: Page,
+  actorId: string,
+  dataPath: string,
+  expectedValue: any,
+  timeout: number = 5000,
+) {
+  console.log(
+    `[waitForActorData] Waiting for ${dataPath} on actor ${actorId} to be ${expectedValue}...`,
+  );
+  await page.waitForFunction(
+    ({ actorId, dataPath, expectedValue }) => {
+      const actor =
+        (window as any).game.actors.get(actorId) || (window as any).fromUuidSync(actorId);
+      if (!actor) return false;
+
+      // Simple helper to get nested property
+      const getProperty = (obj: any, path: string) => {
+        return path.split(".").reduce((o, i) => o?.[i], obj);
+      };
+
+      return getProperty(actor, dataPath) === expectedValue;
+    },
+    { actorId, dataPath, expectedValue },
+    { timeout },
+  );
 }
 
 /**
@@ -226,46 +297,61 @@ export async function waitForActorData(page: Page, actorId: string, dataPath: st
  * @param extraData Optional data to pass to the predicate (to avoid closure issues).
  * @param timeout The timeout in milliseconds.
  */
-export async function verifyResult(page: Page, key: string, predicate: (data: any, extra?: any) => boolean, extraData?: any, timeout: number = 5000) {
+export async function verifyResult(
+  page: Page,
+  key: string,
+  predicate: (data: any, extra?: any) => boolean,
+  extraData?: any,
+  timeout: number = 5000,
+) {
   console.log(`[verifyResult] Waiting for log "${key}" matching predicate...`);
   const predicateStr = predicate.toString();
-  
+
   // First check if it already exists in the logs
-  const alreadyFound = await page.evaluate(({ key, predicateStr, extraData }) => {
+  const alreadyFound = await page.evaluate(
+    ({ key, predicateStr, extraData }) => {
       const predicate = new Function(`return ${predicateStr}`)();
       const entries = (window as any).FP_VERIFY?.logs[key] || [];
       return entries.some((e: any) => {
-          try {
-              return e && predicate(e, extraData);
-          } catch (err) {
-              return false;
-          }
+        try {
+          return e && predicate(e, extraData);
+        } catch {
+          return false;
+        }
       });
-  }, { key, predicateStr, extraData });
+    },
+    { key, predicateStr, extraData },
+  );
 
   if (alreadyFound) {
-      console.log(`[verifyResult] Found existing log for "${key}".`);
-      return;
+    console.log(`[verifyResult] Found existing log for "${key}".`);
+    return;
   }
 
-  await page.waitForFunction(({ key, predicateStr, extraData }) => {
-    try {
-        const predicate = new Function(`return ${predicateStr}`)();
-        const entries = (window as any).FP_VERIFY?.logs[key] || [];
-        return entries.some((e: any) => {
+  await page
+    .waitForFunction(
+      ({ key, predicateStr, extraData }) => {
+        try {
+          const predicate = new Function(`return ${predicateStr}`)();
+          const entries = (window as any).FP_VERIFY?.logs[key] || [];
+          return entries.some((e: any) => {
             try {
-                return e && predicate(e, extraData);
-            } catch (err) {
-                return false;
+              return e && predicate(e, extraData);
+            } catch {
+              return false;
             }
-        });
-    } catch (err) {
-        return false;
-    }
-  }, { key, predicateStr, extraData }, { timeout }).catch(err => {
-    console.error(`[verifyResult] Timeout waiting for log "${key}".`);
-    throw err;
-  });
+          });
+        } catch {
+          return false;
+        }
+      },
+      { key, predicateStr, extraData },
+      { timeout },
+    )
+    .catch((err) => {
+      console.error(`[verifyResult] Timeout waiting for log "${key}".`);
+      throw err;
+    });
 }
 
 /**
@@ -286,23 +372,36 @@ export async function clearFPVerify(page: Page) {
  * @param selector The selector for the drop target.
  * @param data The data to include in the DragEvent's dataTransfer (type and uuid).
  */
-export async function simulateFoundryDrop(page: Page, selector: string, data: { type: string; uuid: string }) {
+export async function simulateFoundryDrop(
+  page: Page,
+  selector: string,
+  data: { type: string; uuid: string },
+) {
   console.log(`[simulateFoundryDrop] Dropping ${data.type} (${data.uuid}) onto ${selector}...`);
-  await page.evaluate(({ selector, data }) => {
-    const target = document.querySelector(selector);
-    if (!target) throw new Error(`Drop target not found: ${selector}`);
+  await page.evaluate(
+    ({ selector, data }) => {
+      const target = document.querySelector(selector);
+      if (!target) throw new Error(`Drop target not found: ${selector}`);
 
-    const dataTransfer = new DataTransfer();
-    dataTransfer.setData("text/plain", JSON.stringify(data));
-    dataTransfer.dropEffect = "copy";
+      const dataTransfer = new DataTransfer();
+      dataTransfer.setData("text/plain", JSON.stringify(data));
+      dataTransfer.dropEffect = "copy";
 
-    // Fire dragenter
-    target.dispatchEvent(new DragEvent("dragenter", { dataTransfer, bubbles: true, cancelable: true }));
+      // Fire dragenter
+      target.dispatchEvent(
+        new DragEvent("dragenter", { dataTransfer, bubbles: true, cancelable: true }),
+      );
 
-    // Fire dragover
-    target.dispatchEvent(new DragEvent("dragover", { dataTransfer, bubbles: true, cancelable: true }));
+      // Fire dragover
+      target.dispatchEvent(
+        new DragEvent("dragover", { dataTransfer, bubbles: true, cancelable: true }),
+      );
 
-    // Fire drop
-    target.dispatchEvent(new DragEvent("drop", { dataTransfer, bubbles: true, cancelable: true }));
-  }, { selector, data });
+      // Fire drop
+      target.dispatchEvent(
+        new DragEvent("drop", { dataTransfer, bubbles: true, cancelable: true }),
+      );
+    },
+    { selector, data },
+  );
 }

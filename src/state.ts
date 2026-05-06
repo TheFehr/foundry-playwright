@@ -19,7 +19,7 @@ export enum UserRole {
   PLAYER = 1,
   TRUSTED = 2,
   ASSISTANT = 3,
-  GAMEMASTER = 4
+  GAMEMASTER = 4,
 }
 
 /**
@@ -28,7 +28,10 @@ export enum UserRole {
 export class FoundryState {
   private adapter: SystemAdapter;
 
-  constructor(private page: Page, systemId: string = "dnd5e") {
+  constructor(
+    private page: Page,
+    systemId: string = "dnd5e",
+  ) {
     this.adapter = getSystemAdapter(systemId);
   }
 
@@ -46,11 +49,14 @@ export class FoundryState {
    * @param password The user password.
    */
   async createUser(name: string, role: UserRole = UserRole.PLAYER, password?: string) {
-    return this.page.evaluate(async ({ name, role, password }) => {
-      // @ts-ignore
-      const cls = game.users.documentClass;
-      return await cls.create({ name, role, password });
-    }, { name, role, password });
+    return this.page.evaluate(
+      async ({ name, role, password }) => {
+        // @ts-ignore
+        const cls = game.users.documentClass;
+        return await cls.create({ name, role, password });
+      },
+      { name, role, password },
+    );
   }
 
   /**
@@ -71,12 +77,15 @@ export class FoundryState {
    * @param role The new user role.
    */
   async setUserRole(userId: string, role: UserRole) {
-    return this.page.evaluate(async ({ userId, role }) => {
-      // @ts-ignore
-      const user = game.users.get(userId);
-      if (!user) throw new Error(`User ${userId} not found.`);
-      return await user.update({ role });
-    }, { userId, role });
+    return this.page.evaluate(
+      async ({ userId, role }) => {
+        // @ts-ignore
+        const user = game.users.get(userId);
+        if (!user) throw new Error(`User ${userId} not found.`);
+        return await user.update({ role });
+      },
+      { userId, role },
+    );
   }
 
   /**
@@ -85,12 +94,15 @@ export class FoundryState {
    * @param actorId The ID of the actor.
    */
   async assignActorToUser(userId: string, actorId: string) {
-    return this.page.evaluate(async ({ userId, actorId }) => {
-      // @ts-ignore
-      const user = game.users.get(userId);
-      if (!user) throw new Error(`User ${userId} not found.`);
-      return await user.update({ character: actorId });
-    }, { userId, actorId });
+    return this.page.evaluate(
+      async ({ userId, actorId }) => {
+        // @ts-ignore
+        const user = game.users.get(userId);
+        if (!user) throw new Error(`User ${userId} not found.`);
+        return await user.update({ character: actorId });
+      },
+      { userId, actorId },
+    );
   }
 
   /**
@@ -100,14 +112,17 @@ export class FoundryState {
    * @param allowed Whether the permission is allowed.
    */
   async setRolePermission(permission: string, role: UserRole, allowed: boolean) {
-    return this.page.evaluate(async ({ permission, role, allowed }) => {
-      // @ts-ignore
-      const permissions = foundry.utils.deepClone(game.settings.get("core", "permissions"));
-      if (!permissions[permission]) permissions[permission] = {};
-      permissions[permission][role] = allowed;
-      // @ts-ignore
-      return await game.settings.set("core", "permissions", permissions);
-    }, { permission, role, allowed });
+    return this.page.evaluate(
+      async ({ permission, role, allowed }) => {
+        // @ts-ignore
+        const permissions = foundry.utils.deepClone(game.settings.get("core", "permissions"));
+        if (!permissions[permission]) permissions[permission] = {};
+        permissions[permission][role] = allowed;
+        // @ts-ignore
+        return await game.settings.set("core", "permissions", permissions);
+      },
+      { permission, role, allowed },
+    );
   }
 
   /**
@@ -116,14 +131,22 @@ export class FoundryState {
    * @param data The data for the new document.
    * @param options Options for creation.
    */
-  async createDocument(documentName: string, data: any | any[], options: CreateDocumentOptions = {}) {
-    return this.page.evaluate(async ({ documentName, data, options }) => {
-      const collectionName = documentName.toLowerCase() + "s";
-      // @ts-ignore
-      const cls = (window as any).game[collectionName]?.documentClass || (window as any)[documentName];
-      if (!cls) throw new Error(`Document class ${documentName} not found.`);
-      return await cls.create(data, options);
-    }, { documentName, data, options });
+  async createDocument(
+    documentName: string,
+    data: any | any[],
+    options: CreateDocumentOptions = {},
+  ) {
+    return this.page.evaluate(
+      async ({ documentName, data, options }) => {
+        const collectionName = documentName.toLowerCase() + "s";
+        // @ts-ignore
+        const cls =
+          (window as any).game[collectionName]?.documentClass || (window as any)[documentName];
+        if (!cls) throw new Error(`Document class ${documentName} not found.`);
+        return await cls.create(data, options);
+      },
+      { documentName, data, options },
+    );
   }
 
   /**
@@ -144,7 +167,7 @@ export class FoundryState {
    * Creates a compendium pack.
    * @param config Compendium configuration (label, name, type, package).
    */
-  async createCompendium(config: { label: string, name: string, type: string, package?: string }) {
+  async createCompendium(config: { label: string; name: string; type: string; package?: string }) {
     return this.page.evaluate(async (config) => {
       const { label, name, type, package: pkg = "world" } = config;
       // @ts-ignore
@@ -161,18 +184,21 @@ export class FoundryState {
    * Gets a document by name from a collection.
    */
   async getDocumentByName(documentName: string, name: string, options: { pack?: string } = {}) {
-    return this.page.evaluate(({ documentName, name, options }) => {
-      let collection;
-      if (options.pack) {
-        collection = (window as any).game.packs.get(options.pack);
-      } else {
-        const collectionName = documentName.toLowerCase() + "s";
-        collection = (window as any).game[collectionName];
-      }
-      
-      if (!collection) return null;
-      return collection.getName(name)?.toJSON() || null;
-    }, { documentName, name, options });
+    return this.page.evaluate(
+      ({ documentName, name, options }) => {
+        let collection;
+        if (options.pack) {
+          collection = (window as any).game.packs.get(options.pack);
+        } else {
+          const collectionName = documentName.toLowerCase() + "s";
+          collection = (window as any).game[collectionName];
+        }
+
+        if (!collection) return null;
+        return collection.getName(name)?.toJSON() || null;
+      },
+      { documentName, name, options },
+    );
   }
 
   /**
@@ -180,21 +206,24 @@ export class FoundryState {
    * DANGEROUS: Use with caution.
    */
   async clearCollection(documentName: string, options: { pack?: string } = {}) {
-    await this.page.evaluate(async ({ documentName, options }) => {
-      let collection;
-      if (options.pack) {
-        collection = (window as any).game.packs.get(options.pack);
-      } else {
-        const collectionName = documentName.toLowerCase() + "s";
-        collection = (window as any).game[collectionName];
-      }
+    await this.page.evaluate(
+      async ({ documentName, options }) => {
+        let collection;
+        if (options.pack) {
+          collection = (window as any).game.packs.get(options.pack);
+        } else {
+          const collectionName = documentName.toLowerCase() + "s";
+          collection = (window as any).game[collectionName];
+        }
 
-      if (!collection) return;
+        if (!collection) return;
 
-      const ids = collection.map((d: any) => d.id);
-      const cls = (window as any)[documentName];
-      await cls.deleteDocuments(ids, options);
-    }, { documentName, options });
+        const ids = collection.map((d: any) => d.id);
+        const cls = (window as any)[documentName];
+        await cls.deleteDocuments(ids, options);
+      },
+      { documentName, options },
+    );
   }
 
   /**
@@ -205,7 +234,7 @@ export class FoundryState {
       name,
       type,
       img: "icons/svg/mystery-man.svg",
-      ...data
+      ...data,
     });
   }
 
@@ -216,12 +245,12 @@ export class FoundryState {
     return this.createItem({
       name,
       type,
-      ...data
+      ...data,
     });
   }
 
   /**
-   * Grants currency to an actor. 
+   * Grants currency to an actor.
    * Uses the configured system adapter.
    */
   async grantCurrency(actorName: string, amount: number, currency?: string) {
@@ -240,11 +269,14 @@ export class FoundryState {
    */
   async setHP(actorName: string, value: number) {
     const hpPath = this.getHPPath();
-    return this.page.evaluate(({ actorName, hpPath, value }) => {
-      const actor = (window as any).game.actors.getName(actorName);
-      if (!actor) throw new Error(`Actor ${actorName} not found.`);
-      return actor.update({ [hpPath]: value });
-    }, { actorName, hpPath, value });
+    return this.page.evaluate(
+      ({ actorName, hpPath, value }) => {
+        const actor = (window as any).game.actors.getName(actorName);
+        if (!actor) throw new Error(`Actor ${actorName} not found.`);
+        return actor.update({ [hpPath]: value });
+      },
+      { actorName, hpPath, value },
+    );
   }
 
   /**
@@ -253,9 +285,12 @@ export class FoundryState {
    * @param args Arguments to pass to the hook.
    */
   async triggerHook(hookName: string, ...args: any[]) {
-    return this.page.evaluate(({ hookName, args }) => {
-      return (window as any).Hooks.call(hookName, ...args);
-    }, { hookName, args });
+    return this.page.evaluate(
+      ({ hookName, args }) => {
+        return (window as any).Hooks.call(hookName, ...args);
+      },
+      { hookName, args },
+    );
   }
 
   /**
@@ -264,9 +299,12 @@ export class FoundryState {
    * @param data The data to emit.
    */
   async emitSocket(eventName: string, data: any) {
-    return this.page.evaluate(({ eventName, data }) => {
-      return (window as any).game.socket.emit(eventName, data);
-    }, { eventName, data });
+    return this.page.evaluate(
+      ({ eventName, data }) => {
+        return (window as any).game.socket.emit(eventName, data);
+      },
+      { eventName, data },
+    );
   }
 
   /**
@@ -276,22 +314,26 @@ export class FoundryState {
    */
   async waitForHook(hookName: string, timeout: number = 10000) {
     await this.page.evaluate((hookName) => {
-        (window as any)._hookLogs = (window as any)._hookLogs || {};
-        (window as any)._hookLogs[hookName] = (window as any)._hookLogs[hookName] || 0;
-        // @ts-ignore
-        Hooks.on(hookName, () => {
-            (window as any)._hookLogs[hookName]++;
-        });
+      (window as any)._hookLogs = (window as any)._hookLogs || {};
+      (window as any)._hookLogs[hookName] = (window as any)._hookLogs[hookName] || 0;
+      // @ts-ignore
+      Hooks.on(hookName, () => {
+        (window as any)._hookLogs[hookName]++;
+      });
     }, hookName);
 
-    await this.page.waitForFunction((name) => {
+    await this.page.waitForFunction(
+      (name) => {
         return (window as any)._hookLogs?.[name] > 0;
-    }, hookName, { timeout });
+      },
+      hookName,
+      { timeout },
+    );
 
     return this.page.evaluate((name) => {
-        const count = (window as any)._hookLogs[name];
-        (window as any)._hookLogs[name] = 0;
-        return [count]; // Return count as args for now to verify it was called
+      const count = (window as any)._hookLogs[name];
+      (window as any)._hookLogs[name] = 0;
+      return [count]; // Return count as args for now to verify it was called
     }, hookName);
   }
 
@@ -302,21 +344,25 @@ export class FoundryState {
    */
   async waitForSocket(eventName: string, timeout: number = 10000) {
     await this.page.evaluate((eventName) => {
-        (window as any)._socketLogs = (window as any)._socketLogs || {};
-        (window as any)._socketLogs[eventName] = (window as any)._socketLogs[eventName] || 0;
-        (window as any).game.socket.on(eventName, () => {
-            (window as any)._socketLogs[eventName]++;
-        });
+      (window as any)._socketLogs = (window as any)._socketLogs || {};
+      (window as any)._socketLogs[eventName] = (window as any)._socketLogs[eventName] || 0;
+      (window as any).game.socket.on(eventName, () => {
+        (window as any)._socketLogs[eventName]++;
+      });
     }, eventName);
 
-    await this.page.waitForFunction((name) => {
+    await this.page.waitForFunction(
+      (name) => {
         return (window as any)._socketLogs?.[name] > 0;
-    }, eventName, { timeout });
+      },
+      eventName,
+      { timeout },
+    );
 
     return this.page.evaluate((name) => {
-        const count = (window as any)._socketLogs[name];
-        (window as any)._socketLogs[name] = 0;
-        return count;
+      const count = (window as any)._socketLogs[name];
+      (window as any)._socketLogs[name] = 0;
+      return count;
     }, eventName);
   }
 
@@ -324,8 +370,11 @@ export class FoundryState {
    * Sets or updates a Foundry VTT setting.
    */
   async setSetting(module: string, key: string, value: any) {
-    return this.page.evaluate(({ module, key, value }) => {
-      return (window as any).game.settings.set(module, key, value);
-    }, { module, key, value });
+    return this.page.evaluate(
+      ({ module, key, value }) => {
+        return (window as any).game.settings.set(module, key, value);
+      },
+      { module, key, value },
+    );
   }
 }

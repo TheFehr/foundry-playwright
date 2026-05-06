@@ -33,7 +33,7 @@ export class DefaultUIAdapter implements UIAdapter {
 
   async switchAppTab(page: Page, appSelector: string, tabName: string): Promise<void> {
     const app = page.locator(appSelector);
-    
+
     // Support for both V1 (nav.tabs a.item) and V2 (nav.tabs [data-tab])
     const tabSelectors = [
       `nav.tabs [data-tab]:has-text("${tabName}")`,
@@ -45,7 +45,7 @@ export class DefaultUIAdapter implements UIAdapter {
     let clicked = false;
     for (const selector of tabSelectors) {
       const candidate = app.locator(selector).first();
-      if (await candidate.count() > 0 && await candidate.isVisible()) {
+      if ((await candidate.count()) > 0 && (await candidate.isVisible())) {
         await candidate.click();
         clicked = true;
         break;
