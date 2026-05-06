@@ -21,3 +21,6 @@ e2e/.auth
 .idea/foundry-playwright.iml
 .idea/modules.xml
 .idea/vcs.xml
+
+# Gemini Agent Mandates
+GEMINI.md
