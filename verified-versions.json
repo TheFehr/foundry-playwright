@@ -1,0 +1,13 @@
+{
+  "verified": [],
+  "pending": [
+    {
+      "version": "13.351.0",
+      "notes": "Latest stable V13 release."
+    },
+    {
+      "version": "14.360.0",
+      "notes": "Latest stable V14 release."
+    }
+  ]
+}

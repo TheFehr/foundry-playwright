@@ -1,0 +1,38 @@
+{
+  "name": "@thefehrs/foundry-playwright",
+  "version": "0.1.0",
+  "description": "A robust, multi-version E2E testing library for FoundryVTT modules and systems, powered by Playwright.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "verify:local": "node scripts/verify-local.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "foundryvtt",
+    "playwright",
+    "testing",
+    "e2e"
+  ],
+  "author": "TheFehrs",
+  "license": "MIT",
+  "peerDependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.10.0",
+    "dotenv": "^17.4.2",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}
