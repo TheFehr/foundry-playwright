@@ -203,10 +203,9 @@ export async function switchTab(page: Page, tabName: string) {
 export async function waitForReady(page: Page, timeout: number = 60000) {
   console.log("[waitForReady] Waiting for game to be ready...");
   await expect(page.locator("#loading")).toBeHidden({ timeout });
-  await page.waitForFunction(
-    () => typeof window.game !== "undefined" && window.game.ready,
-    { timeout },
-  );
+  await page.waitForFunction(() => typeof window.game !== "undefined" && window.game.ready, {
+    timeout,
+  });
 }
 
 /**
@@ -221,7 +220,11 @@ export async function handleReload(page: Page) {
     .last();
 
   await reloadDialog.waitFor({ state: "visible", timeout: 10000 });
-  await reloadDialog.locator("button").filter({ hasText: /Yes|Confirm/i }).first().click();
+  await reloadDialog
+    .locator("button")
+    .filter({ hasText: /Yes|Confirm/i })
+    .first()
+    .click();
   await page.waitForLoadState("networkidle");
 }
 
@@ -279,7 +282,9 @@ export async function handleModuleActivationFlow(page: Page, moduleId: string) {
   }
 
   // 3. Save and Reload
-  const saveBtn = page.locator('button:has-text("Save Module Settings"), button[name="submit"]').first();
+  const saveBtn = page
+    .locator('button:has-text("Save Module Settings"), button[name="submit"]')
+    .first();
   if (await saveBtn.isVisible()) {
     await saveBtn.click();
     await handleReload(page);
@@ -347,8 +352,7 @@ export async function waitForActorFlag(
   );
   await page.waitForFunction(
     ({ actorId, scope, flagKey, expectedValue }) => {
-      const actor =
-        window.game.actors.get(actorId) || window.fromUuidSync(actorId);
+      const actor = window.game.actors.get(actorId) || window.fromUuidSync(actorId);
       return actor?.getFlag(scope, flagKey) === expectedValue;
     },
     { actorId, scope, flagKey, expectedValue },
@@ -376,8 +380,7 @@ export async function waitForActorData(
   );
   await page.waitForFunction(
     ({ actorId, dataPath, expectedValue }) => {
-      const actor =
-        window.game.actors.get(actorId) || window.fromUuidSync(actorId);
+      const actor = window.game.actors.get(actorId) || window.fromUuidSync(actorId);
       if (!actor) return false;
 
       // Simple helper to get nested property

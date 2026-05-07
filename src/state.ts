@@ -123,7 +123,9 @@ export class FoundryState {
   async setRolePermission(permission: string, role: UserRole, allowed: boolean) {
     return this.page.evaluate(
       async ({ permission, role, allowed }) => {
-        const permissions = window.foundry.utils.deepClone(window.game.settings.get("core", "permissions"));
+        const permissions = window.foundry.utils.deepClone(
+          window.game.settings.get("core", "permissions"),
+        );
         if (!permissions[permission]) permissions[permission] = {};
         permissions[permission][role] = allowed;
         return await window.game.settings.set("core", "permissions", permissions);

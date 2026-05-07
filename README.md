@@ -61,7 +61,7 @@ test.beforeAll(async ({ browser }) => {
     userName: "Gamemaster",
     adminPassword: "password",
     systemId: "dnd5e",
-    moduleId: "my-module"
+    moduleId: "my-module",
   });
   await page.close();
 });

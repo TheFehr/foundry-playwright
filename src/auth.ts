@@ -175,7 +175,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
           const noBtn = Array.from(dialog.querySelectorAll("button")).find(
             (b) =>
               b.textContent?.match(/no|decline|don't/i) ||
-              ((b as HTMLElement).dataset.action === "no"),
+              (b as HTMLElement).dataset.action === "no",
           );
           if (noBtn) (noBtn as HTMLElement).click();
         }

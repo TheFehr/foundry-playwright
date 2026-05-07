@@ -10,15 +10,15 @@
   ],
   "license": "MIT",
   "author": "TheFehrs",
+  "bin": {
+    "foundry-playwright": "./dist/cli/index.js"
+  },
   "files": [
     "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "foundry-playwright": "./dist/cli/index.js"
-  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
@@ -28,12 +28,18 @@
     "format": "oxfmt . --check",
     "format:fix": "oxfmt .",
     "verify:local": "tsx scripts/verify-local.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "@types/node": "^20.10.0",
     "dotenv": "^17.4.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.2",
     "oxfmt": "^0.48.0",
     "oxlint": "^1.63.0",
     "tsx": "^4.21.0",
@@ -43,7 +49,8 @@
   "peerDependencies": {
     "@playwright/test": "^1.40.0"
   },
-  "dependencies": {
-    "commander": "^14.0.3"
+  "lint-staged": {
+    "**/*.{ts,json,js,md,yml}": "npm run format:fix",
+    "{src,e2e,scripts}/**/*.{ts,js}": "oxlint"
   }
 }

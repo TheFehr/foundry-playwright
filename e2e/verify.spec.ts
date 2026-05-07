@@ -26,10 +26,9 @@ test.describe("Library Verification Suite", () => {
     }
     await page.waitForURL(/\/game/);
     await expect(page.locator("#loading")).toBeHidden({ timeout: 60000 });
-    await page.waitForFunction(
-      () => typeof window.game !== "undefined" && window.game.ready,
-      { timeout: 60000 },
-    );
+    await page.waitForFunction(() => typeof window.game !== "undefined" && window.game.ready, {
+      timeout: 60000,
+    });
     await page.evaluate(() => window.FP_VERIFY_RESET?.());
   });
 
@@ -66,9 +65,7 @@ test.describe("Library Verification Suite", () => {
   test("foundry.state: settings management", async ({ page, foundry }) => {
     const testVal = "val-" + Date.now();
     await foundry.state.setSetting("fake-module", "test-string", testVal);
-    const val = await page.evaluate(() =>
-      window.game.settings.get("fake-module", "test-string"),
-    );
+    const val = await page.evaluate(() => window.game.settings.get("fake-module", "test-string"));
     expect(val).toBe(testVal);
   });
 
@@ -87,7 +84,7 @@ test.describe("Library Verification Suite", () => {
 
   test("foundry.helpers: tour suppression", async ({ page, _foundry }) => {
     await page.evaluate(() => {
-      const tour = new ((window.game.modules.get("fake-module") as any).FakeTour)();
+      const tour = new (window.game.modules.get("fake-module") as any).FakeTour();
       tour.start();
     });
     await verifyResult(page, "tour-started", (data: any) => data.id === "test-tour");
@@ -151,9 +148,7 @@ test.describe("Library Verification Suite", () => {
     await simulateFoundryDrop(page, actualSelector, dropData);
 
     await expect(async () => {
-      const logs = await page.evaluate(
-        () => window.FP_VERIFY?.logs["actor-sheet-drop"] || [],
-      );
+      const logs = await page.evaluate(() => window.FP_VERIFY?.logs["actor-sheet-drop"] || []);
       expect(logs.length).toBeGreaterThan(0);
     }).toPass({ timeout: 15000 });
   });

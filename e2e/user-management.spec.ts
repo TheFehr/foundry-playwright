@@ -53,14 +53,8 @@ test.describe("User Management Verification", () => {
     console.log("Assigning actor...");
     const actorName = "User Actor";
     await foundry.state.createTestActor(actorName);
-    const actorId = await page.evaluate(
-      (name) => window.game.actors.getName(name)?.id,
-      actorName,
-    );
-    const userId = await page.evaluate(
-      (name) => window.game.users.getName(name)?.id,
-      testUserName,
-    );
+    const actorId = await page.evaluate((name) => window.game.actors.getName(name)?.id, actorName);
+    const userId = await page.evaluate((name) => window.game.users.getName(name)?.id, testUserName);
 
     if (!userId || !actorId) throw new Error("Failed to get user or actor ID");
 
