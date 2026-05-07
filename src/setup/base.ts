@@ -51,3 +51,84 @@ export interface SetupAdapter {
    */
   deleteWorldIfExists(page: Page, worldId: string): Promise<void>;
 }
+
+/**
+ * Interface for version-specific logic within the Foundry VTT game environment.
+ */
+export interface GameAdapter {
+  /** The major Foundry VTT version this adapter is for. */
+  version: number;
+
+  createDocument(page: Page, documentName: string, data: any, options: any): Promise<any>;
+  updateDocument(page: Page, uuid: string, delta: any): Promise<any>;
+  deleteDocuments(page: Page, documentName: string, ids: string[], options: any): Promise<void>;
+  getDocuments(page: Page, collection: string, query: any): Promise<any[]>;
+}
+
+/**
+ * Base implementation of GameAdapter with shared logic for most versions.
+ */
+export abstract class BaseGameAdapter implements GameAdapter {
+  abstract version: number;
+
+  async createDocument(page: Page, documentName: string, data: any, options: any): Promise<any> {
+    return page.evaluate(
+      async ({ documentName, data, options }) => {
+        const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
+        const collection = window.game[collectionName];
+        const cls = (collection as any)?.documentClass || window[documentName];
+        if (!cls) throw new Error(`Document class ${documentName} not found.`);
+        return await cls.create(data, options);
+      },
+      { documentName, data, options },
+    );
+  }
+
+  async updateDocument(page: Page, uuid: string, delta: any): Promise<any> {
+    return page.evaluate(
+      async ({ uuid, delta }) => {
+        const doc = window.fromUuidSync ? window.fromUuidSync(uuid) : null;
+        if (doc) return await doc.update(delta);
+
+        for (const collection of Object.values(window.game.collections || {})) {
+          const match = collection.getName(uuid);
+          if (match) return await match.update(delta);
+        }
+        throw new Error(`Document ${uuid} not found.`);
+      },
+      { uuid, delta },
+    );
+  }
+
+  async deleteDocuments(
+    page: Page,
+    documentName: string,
+    ids: string[],
+    options: any,
+  ): Promise<void> {
+    await page.evaluate(
+      async ({ documentName, ids, options }) => {
+        const cls = window[documentName];
+        if (!cls) throw new Error(`Document class ${documentName} not found.`);
+        await cls.deleteDocuments(ids, options);
+      },
+      { documentName, ids, options },
+    );
+  }
+
+  async getDocuments(page: Page, collection: string, query: Record<string, any>): Promise<any[]> {
+    return page.evaluate(
+      ({ collection, query }) => {
+        const coll = window.game[collection];
+        if (!coll) return [];
+        // Simple query matching
+        return coll
+          .filter((d: FoundryDocument) => {
+            return Object.entries(query).every(([k, v]) => (d as any)[k] === v);
+          })
+          .map((d: FoundryDocument) => d.toJSON());
+      },
+      { collection, query },
+    );
+  }
+}

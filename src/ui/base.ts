@@ -19,6 +19,14 @@ export interface UIAdapter {
    * @param tabName The name of the tab to switch to.
    */
   switchAppTab(page: Page, appSelector: string, tabName: string): Promise<void>;
+
+  /**
+   * Expands a collapsible section if it is currently collapsed.
+   * @param page The Playwright Page object.
+   * @param appSelector The selector for the application window.
+   * @param sectionName The name/label of the section.
+   */
+  handleCollapsibleSection(page: Page, appSelector: string, sectionName: string): Promise<void>;
 }
 
 /**
@@ -54,6 +62,23 @@ export class DefaultUIAdapter implements UIAdapter {
 
     if (!clicked) {
       throw new Error(`Could not find tab "${tabName}" in application ${appSelector}`);
+    }
+  }
+
+  async handleCollapsibleSection(
+    page: Page,
+    appSelector: string,
+    sectionName: string,
+  ): Promise<void> {
+    const app = page.locator(appSelector);
+    const section = app.locator(".form-group, .section, details").filter({ hasText: sectionName });
+
+    // Core Foundry doesn't have many collapsible sections by default,
+    // but we'll check for 'details' or custom classes
+    const details = section.locator("details").first();
+    if ((await details.count()) > 0) {
+      const isOpen = await details.evaluate((el) => (el as HTMLDetailsElement).open);
+      if (!isOpen) await details.locator("summary").click();
     }
   }
 }

@@ -196,6 +196,109 @@ export async function switchTab(page: Page, tabName: string) {
 }
 
 /**
+ * Waits for the Foundry VTT game to be fully ready (game.ready is true).
+ * @param page The Playwright Page object.
+ * @param timeout The timeout in milliseconds.
+ */
+export async function waitForReady(page: Page, timeout: number = 60000) {
+  console.log("[waitForReady] Waiting for game to be ready...");
+  await expect(page.locator("#loading")).toBeHidden({ timeout });
+  await page.waitForFunction(
+    () => typeof window.game !== "undefined" && window.game.ready,
+    { timeout },
+  );
+}
+
+/**
+ * Detects and handles the "Reload Application" dialog.
+ * @param page The Playwright Page object.
+ */
+export async function handleReload(page: Page) {
+  console.log("[handleReload] Waiting for reload dialog...");
+  const reloadDialog = page
+    .locator("dialog, foundry-app, .window-app, .application")
+    .filter({ hasText: /Reload|Refresh/i })
+    .last();
+
+  await reloadDialog.waitFor({ state: "visible", timeout: 10000 });
+  await reloadDialog.locator("button").filter({ hasText: /Yes|Confirm/i }).first().click();
+  await page.waitForLoadState("networkidle");
+}
+
+/**
+ * Fills a field in a Foundry VTT dialog based on its label.
+ * @param page The Playwright Page object.
+ * @param label The text label of the field.
+ * @param value The value to fill.
+ */
+export async function fillDialogField(page: Page, label: string, value: string) {
+  console.log(`[fillDialogField] Filling field "${label}" with "${value}"...`);
+  const field = page.locator(".form-group", { hasText: label }).locator("input, select, textarea");
+  await field.fill(value);
+}
+
+/**
+ * Automates the multi-step process of activating a module that may trigger
+ * dependency resolution and reload dialogs.
+ * @param page The Playwright Page object.
+ * @param moduleId The ID of the module to activate.
+ */
+export async function handleModuleActivationFlow(page: Page, moduleId: string) {
+  console.log(`[handleModuleActivationFlow] Activating module: ${moduleId}`);
+
+  // 1. Find the module row and checkbox
+  const moduleRow = page.locator(
+    `li.package[data-module-id="${moduleId}"], .package[data-module-id="${moduleId}"]`,
+  );
+  const checkbox = moduleRow.locator('input[type="checkbox"]');
+
+  // If already checked, return
+  if (await checkbox.isChecked()) {
+    console.log(`[handleModuleActivationFlow] Module ${moduleId} is already checked.`);
+    return;
+  }
+
+  await checkbox.click({ force: true });
+
+  // 2. Handle Dependency Resolution Dialog
+  const depDialog = page
+    .locator("dialog, foundry-app, .window-app, .application")
+    .filter({ hasText: /Dependency|Resolution/i })
+    .last();
+
+  try {
+    await depDialog.waitFor({ state: "visible", timeout: 3000 });
+    console.log("[handleModuleActivationFlow] Dependency dialog detected. Resolving...");
+    await depDialog
+      .locator("button")
+      .filter({ hasText: /Activate|Confirm|Yes/i })
+      .first()
+      .click();
+  } catch {
+    // No dependency dialog appeared, which is fine
+  }
+
+  // 3. Save and Reload
+  const saveBtn = page.locator('button:has-text("Save Module Settings"), button[name="submit"]').first();
+  if (await saveBtn.isVisible()) {
+    await saveBtn.click();
+    await handleReload(page);
+    await waitForReady(page);
+  }
+}
+
+/**
+ * Simulates dropping a compendium item onto a target.
+ * @param page The Playwright Page object.
+ * @param targetSelector The selector for the drop target (e.g., an actor sheet).
+ * @param uuid The UUID of the compendium item.
+ */
+export async function dropCompendiumItem(page: Page, targetSelector: string, uuid: string) {
+  const type = uuid.split(".")[0] === "Compendium" ? "Item" : uuid.split(".")[0];
+  return simulateFoundryDrop(page, targetSelector, { type, uuid });
+}
+
+/**
  * Waits for a Foundry VTT setting to reach an expected value.
  * @param page The Playwright Page object.
  * @param moduleId The ID of the module or "core".
@@ -215,7 +318,7 @@ export async function waitForSetting(
   );
   await page.waitForFunction(
     ({ moduleId, settingId, expectedValue }) => {
-      return (window as any).game.settings.get(moduleId, settingId) === expectedValue;
+      return window.game.settings.get(moduleId, settingId) === expectedValue;
     },
     { moduleId, settingId, expectedValue },
     { timeout },
@@ -245,7 +348,7 @@ export async function waitForActorFlag(
   await page.waitForFunction(
     ({ actorId, scope, flagKey, expectedValue }) => {
       const actor =
-        (window as any).game.actors.get(actorId) || (window as any).fromUuidSync(actorId);
+        window.game.actors.get(actorId) || window.fromUuidSync(actorId);
       return actor?.getFlag(scope, flagKey) === expectedValue;
     },
     { actorId, scope, flagKey, expectedValue },
@@ -274,7 +377,7 @@ export async function waitForActorData(
   await page.waitForFunction(
     ({ actorId, dataPath, expectedValue }) => {
       const actor =
-        (window as any).game.actors.get(actorId) || (window as any).fromUuidSync(actorId);
+        window.game.actors.get(actorId) || window.fromUuidSync(actorId);
       if (!actor) return false;
 
       // Simple helper to get nested property
@@ -311,7 +414,7 @@ export async function verifyResult(
   const alreadyFound = await page.evaluate(
     ({ key, predicateStr, extraData }) => {
       const predicate = new Function(`return ${predicateStr}`)();
-      const entries = (window as any).FP_VERIFY?.logs[key] || [];
+      const entries = window.FP_VERIFY?.logs[key] || [];
       return entries.some((e: any) => {
         try {
           return e && predicate(e, extraData);
@@ -333,7 +436,7 @@ export async function verifyResult(
       ({ key, predicateStr, extraData }) => {
         try {
           const predicate = new Function(`return ${predicateStr}`)();
-          const entries = (window as any).FP_VERIFY?.logs[key] || [];
+          const entries = window.FP_VERIFY?.logs[key] || [];
           return entries.some((e: any) => {
             try {
               return e && predicate(e, extraData);
@@ -361,7 +464,6 @@ export async function verifyResult(
 export async function clearFPVerify(page: Page) {
   console.log(`[clearFPVerify] Resetting verification logs...`);
   await page.evaluate(() => {
-    // @ts-ignore
     window.FP_VERIFY_RESET?.();
   });
 }

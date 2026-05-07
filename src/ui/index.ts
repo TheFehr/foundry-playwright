@@ -64,6 +64,13 @@ export class FoundryUI {
     const selector = `${this.adapter.getActorSheetSelector()}:has-text("${actorName}")`;
     await this.switchTab(selector, tabName);
   }
+
+  /**
+   * Expands a collapsible section if it is currently collapsed.
+   */
+  async handleCollapsibleSection(appSelector: string, sectionName: string) {
+    await this.adapter.handleCollapsibleSection(this.page, appSelector, sectionName);
+  }
 }
 
 export * from "./base.js";

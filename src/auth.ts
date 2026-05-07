@@ -1,6 +1,41 @@
 import { expect, Page } from "@playwright/test";
-import { switchTab, disableTour } from "./helpers.js";
+import { switchTab, disableTour, waitForReady } from "./helpers.js";
 import { getSetupAdapter } from "./setup/index.js";
+
+/**
+ * Navigates from within a world or the join screen back to the setup screen.
+ * @param page The Playwright Page object.
+ * @param adminPassword The admin password.
+ */
+export async function returnToSetup(page: Page, adminPassword?: string) {
+  console.log("[returnToSetup] Returning to setup screen...");
+  const url = page.url();
+
+  if (url.includes("/setup") || url.includes("/auth")) {
+    return;
+  }
+
+  const returnBtn = page.locator('button:has-text("Return to Setup"), button[name="shutdown"]');
+  if (await returnBtn.isVisible()) {
+    const adminPwInput = page.locator('input[name="adminPassword"]');
+    if ((await adminPwInput.isVisible()) && adminPassword) {
+      await adminPwInput.fill(adminPassword);
+    }
+
+    await Promise.all([
+      page
+        .waitForURL((u) => u.pathname.includes("/setup") || u.pathname.includes("/auth"), {
+          timeout: 15000,
+        })
+        .catch(() => null),
+      returnBtn.evaluate((el) => (el as HTMLElement).click()),
+    ]);
+  } else {
+    await page.goto("/setup");
+  }
+
+  await page.waitForLoadState("networkidle");
+}
 
 /**
  * Deletes a Foundry VTT world if it exists.
@@ -140,7 +175,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
           const noBtn = Array.from(dialog.querySelectorAll("button")).find(
             (b) =>
               b.textContent?.match(/no|decline|don't/i) ||
-              (b as HTMLElement).dataset.action === "no",
+              ((b as HTMLElement).dataset.action === "no"),
           );
           if (noBtn) (noBtn as HTMLElement).click();
         }
@@ -211,11 +246,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
 
   console.log("[foundrySetup] Waiting for game to be ready...");
   await expect(page).toHaveURL(/\/game/, { timeout: 60000 });
-  await expect(page.locator("#loading")).toBeHidden({ timeout: 60000 });
-  await page.waitForFunction(
-    () => typeof (window as any).game !== "undefined" && (window as any).game.ready,
-    { timeout: 60000 },
-  );
+  await waitForReady(page);
 
   // 6. Module Activation
   if (moduleId) {
@@ -224,7 +255,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
 
     for (const modId of moduleIds) {
       const isModuleActive = await page.evaluate(
-        (id) => !!(window as any).game.modules.get(id)?.active,
+        (id) => !!window.game.modules.get(id)?.active,
         modId,
       );
       if (!isModuleActive) {
@@ -261,10 +292,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
         .last();
       await reloadDialog.locator("button").filter({ hasText: /Yes/i }).click();
       await page.waitForURL(/\/game/, { timeout: 30000 });
-      await page.waitForFunction(
-        () => typeof (window as any).game !== "undefined" && (window as any).game.ready,
-        { timeout: 60000 },
-      );
+      await waitForReady(page);
     }
   }
   console.log("[foundrySetup] Setup complete.");
@@ -371,11 +399,6 @@ export async function loginAs(page: Page, userName: string, password?: string) {
   await page.locator('button[name="join"]').click();
   await page.waitForURL(/\/game/, { timeout: 60000 });
 
-  console.log("[loginAs] Waiting for game to be ready...");
-  await expect(page.locator("#loading")).toBeHidden({ timeout: 60000 });
-  await page.waitForFunction(
-    () => typeof (window as any).game !== "undefined" && (window as any).game.ready,
-    { timeout: 60000 },
-  );
+  await waitForReady(page);
   console.log(`[loginAs] Logged in as "${userName}".`);
 }

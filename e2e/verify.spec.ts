@@ -27,10 +27,10 @@ test.describe("Library Verification Suite", () => {
     await page.waitForURL(/\/game/);
     await expect(page.locator("#loading")).toBeHidden({ timeout: 60000 });
     await page.waitForFunction(
-      () => typeof (window as any).game !== "undefined" && (window as any).game.ready,
+      () => typeof window.game !== "undefined" && window.game.ready,
       { timeout: 60000 },
     );
-    await page.evaluate(() => (window as any).FP_VERIFY_RESET?.());
+    await page.evaluate(() => window.FP_VERIFY_RESET?.());
   });
 
   test.afterAll(async ({ browser }) => {
@@ -67,14 +67,14 @@ test.describe("Library Verification Suite", () => {
     const testVal = "val-" + Date.now();
     await foundry.state.setSetting("fake-module", "test-string", testVal);
     const val = await page.evaluate(() =>
-      (window as any).game.settings.get("fake-module", "test-string"),
+      window.game.settings.get("fake-module", "test-string"),
     );
     expect(val).toBe(testVal);
   });
 
   test("foundry.ui: Application V2 tab switching", async ({ page, foundry }) => {
     await page.evaluate(async () => {
-      const cls = (window as any).game.modules.get("fake-module").FakeAppV2;
+      const cls = (window.game.modules.get("fake-module") as any).FakeAppV2;
       const app = new cls();
       await app.render(true);
       await new Promise((r) => setTimeout(r, 500));
@@ -87,7 +87,7 @@ test.describe("Library Verification Suite", () => {
 
   test("foundry.helpers: tour suppression", async ({ page, _foundry }) => {
     await page.evaluate(() => {
-      const tour = new ((window as any).game.modules.get("fake-module").FakeTour)();
+      const tour = new ((window.game.modules.get("fake-module") as any).FakeTour)();
       tour.start();
     });
     await verifyResult(page, "tour-started", (data: any) => data.id === "test-tour");
@@ -111,11 +111,12 @@ test.describe("Library Verification Suite", () => {
   test("foundry.ui: drop simulation", async ({ page, foundry }) => {
     const actorName = "Drop Actor " + Date.now();
     await foundry.state.createTestActor(actorName);
-    await page.waitForFunction((name) => (window as any).game.actors.getName(name), actorName);
+    await page.waitForFunction((name) => window.game.actors.getName(name), actorName);
 
     console.log("Opening sheet...");
     await page.evaluate((name) => {
-      (window as any).game.actors.getName(name).sheet.render(true);
+      const actor = window.game.actors.getName(name);
+      if (actor) actor.sheet.render(true);
     }, actorName);
 
     // Fallback to ANY visible window if specific selectors fail
@@ -151,7 +152,7 @@ test.describe("Library Verification Suite", () => {
 
     await expect(async () => {
       const logs = await page.evaluate(
-        () => (window as any).FP_VERIFY?.logs["actor-sheet-drop"] || [],
+        () => window.FP_VERIFY?.logs["actor-sheet-drop"] || [],
       );
       expect(logs.length).toBeGreaterThan(0);
     }).toPass({ timeout: 15000 });

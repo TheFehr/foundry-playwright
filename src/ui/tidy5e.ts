@@ -22,4 +22,18 @@ export class Tidy5eUIAdapter extends DefaultUIAdapter {
     // In Tidy5e, the active state might be checked differently, but usually it's still a class
     await expect(tabItem).toHaveClass(/active|selected/);
   }
+
+  override async handleCollapsibleSection(
+    page: Page,
+    appSelector: string,
+    sectionName: string,
+  ): Promise<void> {
+    const app = page.locator(appSelector);
+    const section = app.locator(".tidy-collapsible").filter({ hasText: sectionName });
+
+    const isCollapsed = await section.evaluate((el) => el.classList.contains("collapsed"));
+    if (isCollapsed) {
+      await section.locator(".tidy-collapsible-header").click();
+    }
+  }
 }

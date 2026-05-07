@@ -1,5 +1,5 @@
 import { expect, Page } from "@playwright/test";
-import { SetupAdapter } from "./base.js";
+import { SetupAdapter, BaseGameAdapter } from "./base.js";
 import { switchTab } from "../helpers.js";
 
 /**
@@ -406,4 +406,14 @@ export class V14SetupAdapter implements SetupAdapter {
     await switchTab(page, tabName);
     await page.locator(verificationSelector).first().waitFor({ state: "visible", timeout: 30000 });
   }
+}
+
+/**
+ * Game adapter for Foundry VTT Version 14.
+ */
+export class V14GameAdapter extends BaseGameAdapter {
+  version = 14;
+
+  // In V14, some APIs might have changed (e.g., Document.create might return a promise differently)
+  // but for now, the base implementation is likely still valid.
 }

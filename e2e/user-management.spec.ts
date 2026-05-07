@@ -34,7 +34,7 @@ test.describe("User Management Verification", () => {
     await page.locator('select[name="userid"]').selectOption({ label: "Gamemaster" });
     await page.locator('button[name="join"]').click();
     await page.waitForURL(/\/game/);
-    await page.waitForFunction(() => (window as any).game?.ready);
+    await page.waitForFunction(() => window.game?.ready);
 
     const testUserName = "Test Player " + Date.now();
     const testPassword = "password123";
@@ -45,7 +45,7 @@ test.describe("User Management Verification", () => {
 
     // Verify user exists
     const userExists = await page.evaluate((name) => {
-      return !!(window as any).game.users.getName(name);
+      return !!window.game.users.getName(name);
     }, testUserName);
     expect(userExists).toBe(true);
 
@@ -54,19 +54,21 @@ test.describe("User Management Verification", () => {
     const actorName = "User Actor";
     await foundry.state.createTestActor(actorName);
     const actorId = await page.evaluate(
-      (name) => (window as any).game.actors.getName(name).id,
+      (name) => window.game.actors.getName(name)?.id,
       actorName,
     );
     const userId = await page.evaluate(
-      (name) => (window as any).game.users.getName(name).id,
+      (name) => window.game.users.getName(name)?.id,
       testUserName,
     );
+
+    if (!userId || !actorId) throw new Error("Failed to get user or actor ID");
 
     await foundry.state.assignActorToUser(userId, actorId);
 
     // Verify assignment
     const assignedActorId = await page.evaluate(
-      (uId) => (window as any).game.users.get(uId).character?.id,
+      (uId) => window.game.users.get(uId)?.character?.id,
       userId,
     );
     expect(assignedActorId).toBe(actorId);
@@ -78,7 +80,7 @@ test.describe("User Management Verification", () => {
 
     // Verify permission
     const isAllowed = await page.evaluate(() => {
-      return (window as any).game.settings.get("core", "permissions")["FILES_BROWSE"][1]; // 1 is PLAYER
+      return (window.game.settings.get("core", "permissions") as any)["FILES_BROWSE"][1]; // 1 is PLAYER
     });
     expect(isAllowed).toBe(true);
 
@@ -90,8 +92,8 @@ test.describe("User Management Verification", () => {
     await loginAs(playerPage, testUserName, testPassword);
 
     // Verify player is logged in
-    await playerPage.waitForFunction(() => (window as any).game?.ready);
-    const currentUserName = await playerPage.evaluate(() => (window as any).game.user.name);
+    await playerPage.waitForFunction(() => window.game?.ready);
+    const currentUserName = await playerPage.evaluate(() => window.game.user.name);
     expect(currentUserName).toBe(testUserName);
 
     await context.close();

@@ -20,6 +20,20 @@ export interface SystemAdapter {
    * @param currency The type of currency (e.g., "gp", "sp").
    */
   grantCurrency(page: Page, actorName: string, amount: number, currency?: string): Promise<void>;
+
+  /**
+   * Adds or removes members from a group actor.
+   * @param page The Playwright Page object.
+   * @param groupName The name of the group actor.
+   * @param memberNames The names of the members to add/remove.
+   * @param action Whether to "add" or "remove".
+   */
+  manageGroupMembers(
+    page: Page,
+    groupName: string,
+    memberNames: string[],
+    action: "add" | "remove",
+  ): Promise<void>;
 }
 
 /**
@@ -33,5 +47,12 @@ export abstract class BaseSystemAdapter implements SystemAdapter {
     actorName: string,
     amount: number,
     currency?: string,
+  ): Promise<void>;
+
+  abstract manageGroupMembers(
+    page: Page,
+    groupName: string,
+    memberNames: string[],
+    action: "add" | "remove",
   ): Promise<void>;
 }

@@ -7,6 +7,11 @@ export {
   clearFPVerify,
   simulateFoundryDrop,
   verifyResult,
+  waitForReady,
+  handleReload,
+  fillDialogField,
+  handleModuleActivationFlow,
+  dropCompendiumItem,
 } from "./helpers.js";
 export * from "./auth.js";
 export * from "./state.js";

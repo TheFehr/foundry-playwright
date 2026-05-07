@@ -1,5 +1,5 @@
 import { expect, Page } from "@playwright/test";
-import { SetupAdapter } from "./base.js";
+import { SetupAdapter, BaseGameAdapter } from "./base.js";
 import { switchTab } from "../helpers.js";
 
 /**
@@ -281,4 +281,11 @@ export class V13SetupAdapter implements SetupAdapter {
         .waitFor({ state: "visible", timeout: 30000 });
     }
   }
+}
+
+/**
+ * Game adapter for Foundry VTT Version 13.
+ */
+export class V13GameAdapter extends BaseGameAdapter {
+  version = 13;
 }

@@ -1,5 +1,6 @@
-import { Page } from "@playwright/test";
+import { Page, expect } from "@playwright/test";
 import { SystemAdapter, getSystemAdapter } from "./systems/index.js";
+import { GameAdapter, getGameAdapter } from "./setup/index.js";
 
 /**
  * Options for creating a document in Foundry VTT.
@@ -24,22 +25,34 @@ export enum UserRole {
 
 /**
  * Provides methods for direct state manipulation in Foundry VTT via page.evaluate.
+ * Delegates version-specific logic to a GameAdapter and system-specific logic to a SystemAdapter.
  */
 export class FoundryState {
-  private adapter: SystemAdapter;
+  private systemAdapter: SystemAdapter;
+  private gameAdapter: GameAdapter | null = null;
 
   constructor(
     private page: Page,
     systemId: string = "dnd5e",
   ) {
-    this.adapter = getSystemAdapter(systemId);
+    this.systemAdapter = getSystemAdapter(systemId);
+  }
+
+  /**
+   * Internal helper to get the versioned game adapter.
+   */
+  private async getAdapter(): Promise<GameAdapter> {
+    if (!this.gameAdapter) {
+      this.gameAdapter = await getGameAdapter(this.page);
+    }
+    return this.gameAdapter;
   }
 
   /**
    * Sets the system adapter to use.
    */
   setSystem(systemId: string) {
-    this.adapter = getSystemAdapter(systemId);
+    this.systemAdapter = getSystemAdapter(systemId);
   }
 
   /**
@@ -51,8 +64,7 @@ export class FoundryState {
   async createUser(name: string, role: UserRole = UserRole.PLAYER, password?: string) {
     return this.page.evaluate(
       async ({ name, role, password }) => {
-        // @ts-ignore
-        const cls = game.users.documentClass;
+        const cls = window.game.users.documentClass;
         return await cls.create({ name, role, password });
       },
       { name, role, password },
@@ -65,8 +77,7 @@ export class FoundryState {
    */
   async deleteUser(userId: string) {
     return this.page.evaluate(async (userId) => {
-      // @ts-ignore
-      const user = game.users.get(userId);
+      const user = window.game.users.get(userId);
       if (user) await user.delete();
     }, userId);
   }
@@ -79,8 +90,7 @@ export class FoundryState {
   async setUserRole(userId: string, role: UserRole) {
     return this.page.evaluate(
       async ({ userId, role }) => {
-        // @ts-ignore
-        const user = game.users.get(userId);
+        const user = window.game.users.get(userId);
         if (!user) throw new Error(`User ${userId} not found.`);
         return await user.update({ role });
       },
@@ -96,8 +106,7 @@ export class FoundryState {
   async assignActorToUser(userId: string, actorId: string) {
     return this.page.evaluate(
       async ({ userId, actorId }) => {
-        // @ts-ignore
-        const user = game.users.get(userId);
+        const user = window.game.users.get(userId);
         if (!user) throw new Error(`User ${userId} not found.`);
         return await user.update({ character: actorId });
       },
@@ -114,12 +123,10 @@ export class FoundryState {
   async setRolePermission(permission: string, role: UserRole, allowed: boolean) {
     return this.page.evaluate(
       async ({ permission, role, allowed }) => {
-        // @ts-ignore
-        const permissions = foundry.utils.deepClone(game.settings.get("core", "permissions"));
+        const permissions = window.foundry.utils.deepClone(window.game.settings.get("core", "permissions"));
         if (!permissions[permission]) permissions[permission] = {};
         permissions[permission][role] = allowed;
-        // @ts-ignore
-        return await game.settings.set("core", "permissions", permissions);
+        return await window.game.settings.set("core", "permissions", permissions);
       },
       { permission, role, allowed },
     );
@@ -127,6 +134,7 @@ export class FoundryState {
 
   /**
    * Creates a document in a Foundry VTT collection.
+   * Delegates to the version-specific GameAdapter.
    * @param documentName The name of the document class (e.g., "Actor", "Item", "Scene").
    * @param data The data for the new document.
    * @param options Options for creation.
@@ -136,17 +144,67 @@ export class FoundryState {
     data: any | any[],
     options: CreateDocumentOptions = {},
   ) {
-    return this.page.evaluate(
-      async ({ documentName, data, options }) => {
-        const collectionName = documentName.toLowerCase() + "s";
-        // @ts-ignore
-        const cls =
-          (window as any).game[collectionName]?.documentClass || (window as any)[documentName];
-        if (!cls) throw new Error(`Document class ${documentName} not found.`);
-        return await cls.create(data, options);
-      },
-      { documentName, data, options },
-    );
+    const adapter = await this.getAdapter();
+    return adapter.createDocument(this.page, documentName, data, options);
+  }
+
+  /**
+   * Updates a document in a Foundry VTT collection.
+   * Delegates to the version-specific GameAdapter.
+   * @param uuid The UUID or name of the document.
+   * @param delta The changes to apply.
+   */
+  async updateDocument(uuid: string, delta: any) {
+    const adapter = await this.getAdapter();
+    return adapter.updateDocument(this.page, uuid, delta);
+  }
+
+  /**
+   * Sets ownership levels for a document.
+   * @param uuid The UUID of the document.
+   * @param ownership Map of userId to ownership level (0-3).
+   */
+  async setDocumentOwnership(uuid: string, ownership: Record<string, number>) {
+    return this.updateDocument(uuid, { ownership });
+  }
+
+  /**
+   * Opens the sheet for a document.
+   * @param uuid The UUID or name of the document.
+   */
+  async openSheet(uuid: string) {
+    await this.page.evaluate((uuid) => {
+      const doc = window.fromUuidSync ? window.fromUuidSync(uuid) : null;
+      if (doc) {
+        doc.sheet.render(true);
+        return;
+      }
+      for (const collection of Object.values(window.game.collections || {})) {
+        const match = collection.getName(uuid);
+        if (match) {
+          match.sheet.render(true);
+          return;
+        }
+      }
+    }, uuid);
+
+    // Wait for a window with the document's name in the header
+    await expect(
+      this.page.locator("dialog, foundry-app, .window-app, .application").filter({ hasText: uuid }),
+    ).toBeVisible({ timeout: 15000 });
+  }
+
+  /**
+   * Closes the currently active sheet matching a selector or name.
+   */
+  async closeSheet(name?: string) {
+    const locator = name
+      ? this.page
+          .locator("dialog, foundry-app, .window-app, .application")
+          .filter({ hasText: name })
+      : this.page.locator("dialog, foundry-app, .window-app, .application").last();
+
+    await locator.locator('[data-action="close"], .header-button.close').first().click();
   }
 
   /**
@@ -170,8 +228,7 @@ export class FoundryState {
   async createCompendium(config: { label: string; name: string; type: string; package?: string }) {
     return this.page.evaluate(async (config) => {
       const { label, name, type, package: pkg = "world" } = config;
-      // @ts-ignore
-      return await foundry.documents.collections.CompendiumCollection.createCompendium({
+      return await window.foundry.documents.collections.CompendiumCollection.createCompendium({
         type,
         label,
         name,
@@ -188,10 +245,10 @@ export class FoundryState {
       ({ documentName, name, options }) => {
         let collection;
         if (options.pack) {
-          collection = (window as any).game.packs.get(options.pack);
+          collection = window.game.packs.get(options.pack);
         } else {
-          const collectionName = documentName.toLowerCase() + "s";
-          collection = (window as any).game[collectionName];
+          const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
+          collection = window.game[collectionName];
         }
 
         if (!collection) return null;
@@ -203,27 +260,27 @@ export class FoundryState {
 
   /**
    * Deletes all documents of a certain type that match a predicate (or all if no predicate).
-   * DANGEROUS: Use with caution.
+   * Delegates to the version-specific GameAdapter.
    */
   async clearCollection(documentName: string, options: { pack?: string } = {}) {
-    await this.page.evaluate(
-      async ({ documentName, options }) => {
+    const adapter = await this.getAdapter();
+    const ids = await this.page.evaluate(
+      ({ documentName, options }) => {
         let collection;
         if (options.pack) {
-          collection = (window as any).game.packs.get(options.pack);
+          collection = window.game.packs.get(options.pack);
         } else {
-          const collectionName = documentName.toLowerCase() + "s";
-          collection = (window as any).game[collectionName];
+          const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
+          collection = window.game[collectionName];
         }
-
-        if (!collection) return;
-
-        const ids = collection.map((d: any) => d.id);
-        const cls = (window as any)[documentName];
-        await cls.deleteDocuments(ids, options);
+        return collection ? collection.map((d: any) => d.id) : [];
       },
       { documentName, options },
     );
+
+    if (ids.length > 0) {
+      await adapter.deleteDocuments(this.page, documentName, ids, options);
+    }
   }
 
   /**
@@ -254,14 +311,14 @@ export class FoundryState {
    * Uses the configured system adapter.
    */
   async grantCurrency(actorName: string, amount: number, currency?: string) {
-    return this.adapter.grantCurrency(this.page, actorName, amount, currency);
+    return this.systemAdapter.grantCurrency(this.page, actorName, amount, currency);
   }
 
   /**
    * Returns the system-specific path for HP.
    */
   getHPPath() {
-    return this.adapter.getHPPath();
+    return this.systemAdapter.getHPPath();
   }
 
   /**
@@ -271,7 +328,7 @@ export class FoundryState {
     const hpPath = this.getHPPath();
     return this.page.evaluate(
       ({ actorName, hpPath, value }) => {
-        const actor = (window as any).game.actors.getName(actorName);
+        const actor = window.game.actors.getName(actorName);
         if (!actor) throw new Error(`Actor ${actorName} not found.`);
         return actor.update({ [hpPath]: value });
       },
@@ -287,7 +344,7 @@ export class FoundryState {
   async triggerHook(hookName: string, ...args: any[]) {
     return this.page.evaluate(
       ({ hookName, args }) => {
-        return (window as any).Hooks.call(hookName, ...args);
+        return window.Hooks.call(hookName, ...args);
       },
       { hookName, args },
     );
@@ -301,7 +358,7 @@ export class FoundryState {
   async emitSocket(eventName: string, data: any) {
     return this.page.evaluate(
       ({ eventName, data }) => {
-        return (window as any).game.socket.emit(eventName, data);
+        return window.game.socket.emit(eventName, data);
       },
       { eventName, data },
     );
@@ -314,25 +371,24 @@ export class FoundryState {
    */
   async waitForHook(hookName: string, timeout: number = 10000) {
     await this.page.evaluate((hookName) => {
-      (window as any)._hookLogs = (window as any)._hookLogs || {};
-      (window as any)._hookLogs[hookName] = (window as any)._hookLogs[hookName] || 0;
-      // @ts-ignore
-      Hooks.on(hookName, () => {
-        (window as any)._hookLogs[hookName]++;
+      window._hookLogs = window._hookLogs || {};
+      window._hookLogs[hookName] = window._hookLogs[hookName] || 0;
+      window.Hooks.on(hookName, () => {
+        window._hookLogs[hookName]++;
       });
     }, hookName);
 
     await this.page.waitForFunction(
       (name) => {
-        return (window as any)._hookLogs?.[name] > 0;
+        return window._hookLogs?.[name] > 0;
       },
       hookName,
       { timeout },
     );
 
     return this.page.evaluate((name) => {
-      const count = (window as any)._hookLogs[name];
-      (window as any)._hookLogs[name] = 0;
+      const count = window._hookLogs[name];
+      window._hookLogs[name] = 0;
       return [count]; // Return count as args for now to verify it was called
     }, hookName);
   }
@@ -344,24 +400,24 @@ export class FoundryState {
    */
   async waitForSocket(eventName: string, timeout: number = 10000) {
     await this.page.evaluate((eventName) => {
-      (window as any)._socketLogs = (window as any)._socketLogs || {};
-      (window as any)._socketLogs[eventName] = (window as any)._socketLogs[eventName] || 0;
-      (window as any).game.socket.on(eventName, () => {
-        (window as any)._socketLogs[eventName]++;
+      window._socketLogs = window._socketLogs || {};
+      window._socketLogs[eventName] = window._socketLogs[eventName] || 0;
+      window.game.socket.on(eventName, () => {
+        window._socketLogs[eventName]++;
       });
     }, eventName);
 
     await this.page.waitForFunction(
       (name) => {
-        return (window as any)._socketLogs?.[name] > 0;
+        return window._socketLogs?.[name] > 0;
       },
       eventName,
       { timeout },
     );
 
     return this.page.evaluate((name) => {
-      const count = (window as any)._socketLogs[name];
-      (window as any)._socketLogs[name] = 0;
+      const count = window._socketLogs[name];
+      window._socketLogs[name] = 0;
       return count;
     }, eventName);
   }
@@ -372,7 +428,7 @@ export class FoundryState {
   async setSetting(module: string, key: string, value: any) {
     return this.page.evaluate(
       ({ module, key, value }) => {
-        return (window as any).game.settings.set(module, key, value);
+        return window.game.settings.set(module, key, value);
       },
       { module, key, value },
     );

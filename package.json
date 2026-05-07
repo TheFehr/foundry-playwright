@@ -16,6 +16,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "foundry-playwright": "./dist/cli/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
@@ -39,5 +42,8 @@
   },
   "peerDependencies": {
     "@playwright/test": "^1.40.0"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
   }
 }
