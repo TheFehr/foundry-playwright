@@ -75,16 +75,7 @@ export class DockerFoundryOrchestrator {
     execSync(`docker pull ${image}`, { stdio: "inherit" });
 
     // 5. Run container
-    const dockerCmd = [
-      "docker run -d",
-      `--name ${this.config.containerName}`,
-      "--restart always",
-      `-p ${this.config.port}:30000`,
-      `--env-file "${envPath}"`,
-      `-v "${path.resolve(this.config.dataDir)}:/data"`,
-      `-v "${path.resolve(this.config.cacheDir)}:/data/container_cache"`,
-      image,
-    ].join(" ");
+    const dockerCmd = this.getRunCommand(envPath);
 
     console.log(
       `[DockerOrchestrator] Executing: docker run -d --name ${this.config.containerName} ... (using --env-file for security)`,
@@ -95,6 +86,24 @@ export class DockerFoundryOrchestrator {
     await this.waitForReady();
 
     return `http://localhost:${this.config.port}`;
+  }
+
+  /**
+   * Generates the docker run command.
+   * @internal
+   */
+  getRunCommand(envPath: string): string {
+    const image = `ghcr.io/felddy/foundryvtt:${this.config.version}`;
+    return [
+      "docker run -d",
+      `--name ${this.config.containerName}`,
+      "--restart always",
+      `-p ${this.config.port}:30000`,
+      `--env-file "${path.resolve(envPath)}"`,
+      `-v "${path.resolve(this.config.dataDir)}:/data"`,
+      `-v "${path.resolve(this.config.cacheDir)}:/data/container_cache"`,
+      image,
+    ].join(" ");
   }
 
   /**

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ ! -f "scripts/nudge.sh" ]; then
+  echo "Warning: scripts/nudge.sh not found, skipping health checks"
+  exit 0
+fi
+
+bash scripts/nudge.sh
