@@ -61,8 +61,12 @@ export interface FoundrySetupConfig {
   password?: string;
   /** The ID(s) of the module(s) to ensure is activated. */
   moduleId?: string | string[];
+  /** The manifest URL(s) of the module(s) to install. If provided, these will be installed before world creation. */
+  moduleManifest?: string | string[];
   /** The ID of the game system to use (e.g., "dnd5e"). Defaults to process.env.FOUNDRY_SYSTEM_ID. */
   systemId?: string;
+  /** The manifest URL of the game system to use. If provided, this will be used to install the system. */
+  systemManifest?: string;
   /** The label of the game system to use (e.g., "Dungeons & Dragons Fifth Edition"). */
   systemLabel?: string;
   /** Whether to delete the world if it already exists. Defaults to true. */
@@ -81,14 +85,16 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
     userName,
     password,
     moduleId,
+    moduleManifest,
     systemId = process.env.FOUNDRY_SYSTEM_ID,
+    systemManifest,
     systemLabel = "Dungeons & Dragons Fifth Edition",
     deleteIfExists = true,
   } = config;
 
-  if (!systemId) {
+  if (!systemId && !systemManifest) {
     throw new Error(
-      "systemId is required. Provide it in config or via FOUNDRY_SYSTEM_ID environment variable.",
+      "systemId or systemManifest is required. Provide it in config or via FOUNDRY_SYSTEM_ID environment variable.",
     );
   }
   if (!adminPassword) {
@@ -189,9 +195,19 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
       }
 
       // 3. System Installation
-      await adapter.installSystem(page, systemId, systemLabel);
+      if (systemManifest) {
+        await adapter.installSystemFromManifest(page, systemManifest);
+      } else if (systemId) {
+        await adapter.installSystem(page, systemId, systemLabel);
+      }
 
       // 4. Module Installation
+      if (moduleManifest) {
+        const manifests = Array.isArray(moduleManifest) ? moduleManifest : [moduleManifest];
+        for (const url of manifests) {
+          await adapter.installModuleFromManifest(page, url);
+        }
+      }
       if (moduleId) {
         const moduleIds = Array.isArray(moduleId) ? moduleId : [moduleId];
         await adapter.installModules(page, moduleIds);
@@ -200,6 +216,10 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
       // 5. World Management
       if (deleteIfExists) {
         await adapter.deleteWorldIfExists(page, worldId);
+      }
+
+      if (!systemId) {
+        throw new Error("[foundrySetup] systemId is required for world creation.");
       }
 
       await adapter.createWorld(page, worldId, systemLabel, systemId);

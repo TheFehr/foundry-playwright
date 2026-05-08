@@ -36,6 +36,20 @@ export interface SetupAdapter {
   installModules(page: Page, moduleIds: string[]): Promise<void>;
 
   /**
+   * Installs a game system from a direct manifest URL.
+   * @param page The Playwright Page object.
+   * @param manifestUrl The URL to the system.json manifest.
+   */
+  installSystemFromManifest(page: Page, manifestUrl: string): Promise<void>;
+
+  /**
+   * Installs a module from a direct manifest URL.
+   * @param page The Playwright Page object.
+   * @param manifestUrl The URL to the module.json manifest.
+   */
+  installModuleFromManifest(page: Page, manifestUrl: string): Promise<void>;
+
+  /**
    * Creates a new game world.
    * @param page The Playwright Page object.
    * @param worldId The ID for the new world.

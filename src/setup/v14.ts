@@ -1,6 +1,12 @@
 import { expect, Page } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
-import { switchTab } from "../helpers.js";
+import {
+  switchTab,
+  openSystemInstallDialog,
+  openModuleInstallDialog,
+  installSystemFromManifest,
+  installModuleFromManifest,
+} from "../helpers.js";
 
 /**
  * Setup adapter for Foundry VTT Version 14.
@@ -151,18 +157,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
   async installSystem(page: Page, systemId: string, _systemLabel: string): Promise<void> {
     console.log(`[V14SetupAdapter] Installing system: ${systemId}`);
-    await switchTab(page, "Systems");
-
-    const installBtn = page.locator('#setup-packages-systems button[data-action="installPackage"]');
-    await expect(installBtn).toBeVisible({ timeout: 10000 });
-    await installBtn.evaluate((el) => (el as HTMLElement).click());
-
-    console.log("[V14SetupAdapter] Waiting for installation dialog...");
-    const installDialog = page
-      .locator(".application, foundry-app, dialog")
-      .filter({ has: page.locator("#install-package-search-filter") })
-      .last();
-    await expect(installDialog).toBeVisible({ timeout: 20000 });
+    const installDialog = await openSystemInstallDialog(page);
 
     const filterBox = installDialog.locator("#install-package-search-filter");
     await filterBox.fill(systemId);
@@ -208,18 +203,7 @@ export class V14SetupAdapter implements SetupAdapter {
         .locator(`.package[data-package-id="${modId}"], [data-package-id="${modId}"]`)
         .first();
       if ((await moduleBox.count()) === 0 || (await moduleBox.isHidden())) {
-        const installBtn = page.locator(
-          '#setup-packages-modules button[data-action="installPackage"]',
-        );
-        await expect(installBtn).toBeVisible({ timeout: 10000 });
-        await installBtn.evaluate((el) => (el as HTMLElement).click());
-
-        console.log(`[V14SetupAdapter] Waiting for installation dialog for ${modId}...`);
-        const installDialog = page
-          .locator(".application, foundry-app, dialog")
-          .filter({ has: page.locator("#install-package-search-filter") })
-          .last();
-        await expect(installDialog).toBeVisible({ timeout: 20000 });
+        const installDialog = await openModuleInstallDialog(page);
 
         const filterBox = installDialog.locator("#install-package-search-filter");
         await filterBox.fill(modId);
@@ -256,6 +240,14 @@ export class V14SetupAdapter implements SetupAdapter {
         }
       }
     }
+  }
+
+  async installSystemFromManifest(page: Page, manifestUrl: string): Promise<void> {
+    await installSystemFromManifest(page, manifestUrl);
+  }
+
+  async installModuleFromManifest(page: Page, manifestUrl: string): Promise<void> {
+    await installModuleFromManifest(page, manifestUrl);
   }
 
   async createWorld(

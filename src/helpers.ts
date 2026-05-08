@@ -1,4 +1,4 @@
-import { expect, Page } from "@playwright/test";
+import { expect, Page, Locator } from "@playwright/test";
 
 /**
  * Aggressively removes Foundry VTT tours and overlays from the DOM and localStorage.
@@ -82,6 +82,115 @@ export async function disableTour(page: Page) {
   await page.addInitScript(removalScript);
   // Run immediately on the current page
   await page.evaluate(removalScript).catch(() => null);
+}
+
+/**
+ * Navigates to the Systems tab and opens the installation dialog.
+ * @param page The Playwright Page object.
+ */
+export async function openSystemInstallDialog(page: Page): Promise<Locator> {
+  console.log("[openSystemInstallDialog] Opening System Install Dialog...");
+  await switchTab(page, "Systems");
+
+  // V14 uses data-action="installPackage" inside #setup-packages-systems
+  // V13 uses a button with text "Install System"
+  const installBtn = page
+    .locator(
+      '#setup-packages-systems button[data-action="installPackage"], button:has-text("Install System")',
+    )
+    .first();
+
+  await expect(installBtn).toBeVisible({ timeout: 10000 });
+  await installBtn.evaluate((el) => (el as HTMLElement).click());
+
+  const dialog = page
+    .locator("dialog, .application, .window-app, foundry-app")
+    .filter({ hasText: /Install System/i })
+    .last();
+
+  await expect(dialog).toBeVisible({ timeout: 20000 });
+  return dialog;
+}
+
+/**
+ * Navigates to the Modules tab and opens the installation dialog.
+ * @param page The Playwright Page object.
+ */
+export async function openModuleInstallDialog(page: Page): Promise<Locator> {
+  console.log("[openModuleInstallDialog] Opening Module Install Dialog...");
+  await switchTab(page, "Modules");
+
+  // V14 uses data-action="installPackage" inside #setup-packages-modules
+  // V13 uses a button with text "Install Module"
+  const installBtn = page
+    .locator(
+      '#setup-packages-modules button[data-action="installPackage"], button:has-text("Install Module")',
+    )
+    .first();
+
+  await expect(installBtn).toBeVisible({ timeout: 10000 });
+  await installBtn.evaluate((el) => (el as HTMLElement).click());
+
+  const dialog = page
+    .locator("dialog, .application, .window-app, foundry-app")
+    .filter({ hasText: /Install Module/i })
+    .last();
+
+  await expect(dialog).toBeVisible({ timeout: 20000 });
+  return dialog;
+}
+
+/**
+ * Installs a system from a manifest URL.
+ * @param page The Playwright Page object.
+ * @param manifestUrl The URL to the system.json manifest.
+ */
+export async function installSystemFromManifest(page: Page, manifestUrl: string): Promise<void> {
+  console.log(`[installSystemFromManifest] Installing from: ${manifestUrl}`);
+  const dialog = await openSystemInstallDialog(page);
+  await installFromManifest(page, dialog, manifestUrl);
+}
+
+/**
+ * Installs a module from a manifest URL.
+ * @param page The Playwright Page object.
+ * @param manifestUrl The URL to the module.json manifest.
+ */
+export async function installModuleFromManifest(page: Page, manifestUrl: string): Promise<void> {
+  console.log(`[installModuleFromManifest] Installing from: ${manifestUrl}`);
+  const dialog = await openModuleInstallDialog(page);
+  await installFromManifest(page, dialog, manifestUrl);
+}
+
+/**
+ * Shared logic to fill manifest URL and click install in a package installation dialog.
+ * @param page The Playwright Page object.
+ * @param dialog The installation dialog Locator.
+ * @param manifestUrl The URL to the manifest.
+ */
+async function installFromManifest(
+  page: Page,
+  dialog: Locator,
+  manifestUrl: string,
+): Promise<void> {
+  // Foundry's manifest input is usually at the bottom
+  const manifestInput = dialog.locator('input[name="manifest"], #install-package-url');
+  await manifestInput.fill(manifestUrl);
+
+  const installBtn = dialog
+    .locator('button[data-action="installPackage"], button:has-text("Install")')
+    .last();
+  await installBtn.evaluate((el) => (el as HTMLElement).click());
+
+  // Use the progress bar / notification wait logic
+  await page
+    .locator(".notification.info, .notification.success, .progress-bar")
+    .filter({ hasText: /Downloading|Installing/i })
+    .waitFor({ state: "visible", timeout: 10000 })
+    .catch(() => null);
+
+  // Wait for it to disappear or success notification
+  await expect(page.locator(".progress-bar")).toBeHidden({ timeout: 60000 });
 }
 
 /**

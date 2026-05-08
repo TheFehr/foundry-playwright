@@ -1,6 +1,12 @@
 import { expect, Page } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
-import { switchTab } from "../helpers.js";
+import {
+  switchTab,
+  openSystemInstallDialog,
+  openModuleInstallDialog,
+  installSystemFromManifest,
+  installModuleFromManifest,
+} from "../helpers.js";
 
 /**
  * Setup adapter for Foundry VTT Version 13.
@@ -71,21 +77,7 @@ export class V13SetupAdapter implements SetupAdapter {
 
   async installSystem(page: Page, systemId: string, _systemLabel: string): Promise<void> {
     console.log(`[V13SetupAdapter] Installing system: ${systemId}`);
-    await switchTab(page, "Systems");
-
-    const installBtn = page
-      .locator('button, [role="button"]')
-      .filter({ hasText: /Install/i })
-      .filter({ hasText: /System/i })
-      .first();
-    await expect(installBtn).toBeVisible({ timeout: 10000 });
-    await installBtn.evaluate((el) => (el as HTMLElement).click());
-
-    const installDialog = page
-      .locator("dialog, .application, .window-app, foundry-app, section.window-app")
-      .filter({ hasText: /Install System/i })
-      .last();
-    await expect(installDialog).toBeVisible({ timeout: 20000 });
+    const installDialog = await openSystemInstallDialog(page);
 
     const filterBox = installDialog.getByRole("searchbox", { name: "Filter" });
     await filterBox.click({ clickCount: 3 });
@@ -123,19 +115,7 @@ export class V13SetupAdapter implements SetupAdapter {
         .locator(`[data-package-id="${modId}"], [data-module-id="${modId}"]`)
         .first();
       if ((await moduleBox.count()) === 0 || (await moduleBox.isHidden())) {
-        const installBtn = page
-          .locator('button, [role="button"]')
-          .filter({ hasText: /Install/i })
-          .filter({ hasText: /Module/i })
-          .first();
-        await expect(installBtn).toBeVisible({ timeout: 10000 });
-        await installBtn.evaluate((el) => (el as HTMLElement).click());
-
-        const installDialog = page
-          .locator("dialog, .application, .window-app, foundry-app, section.window-app")
-          .filter({ hasText: /Install Module/i })
-          .last();
-        await expect(installDialog).toBeVisible({ timeout: 20000 });
+        const installDialog = await openModuleInstallDialog(page);
 
         const filterBox = installDialog.getByRole("searchbox", { name: "Filter" });
         await filterBox.click({ clickCount: 3 });
@@ -164,6 +144,14 @@ export class V13SetupAdapter implements SetupAdapter {
         }
       }
     }
+  }
+
+  async installSystemFromManifest(page: Page, manifestUrl: string): Promise<void> {
+    await installSystemFromManifest(page, manifestUrl);
+  }
+
+  async installModuleFromManifest(page: Page, manifestUrl: string): Promise<void> {
+    await installModuleFromManifest(page, manifestUrl);
   }
 
   async createWorld(

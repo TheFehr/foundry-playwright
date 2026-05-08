@@ -1,6 +1,11 @@
 export * from "./fixtures.js";
 export {
   disableTour,
+  switchTab,
+  openSystemInstallDialog,
+  openModuleInstallDialog,
+  installSystemFromManifest,
+  installModuleFromManifest,
   waitForActorFlag,
   waitForActorData,
   waitForSetting,

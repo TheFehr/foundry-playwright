@@ -152,4 +152,29 @@ test.describe("Library Verification Suite", () => {
       expect(logs.length).toBeGreaterThan(0);
     }).toPass({ timeout: 15000 });
   });
+
+  test("foundry.setup: manifest-based installation UI", async ({ page }) => {
+    // This test verifies the UI flow of manifest installation
+    // We return to setup and try to open the dialog
+    const { returnToSetup, openModuleInstallDialog } = await import("../src/index.js");
+    await returnToSetup(page, adminPassword);
+
+    const dialog = await openModuleInstallDialog(page);
+    await expect(dialog).toBeVisible();
+
+    const manifestUrl = "https://raw.githubusercontent.com/foundryvtt/dnd5e/master/system.json";
+    const manifestInput = dialog.locator('input[name="manifest"], #install-package-url');
+    await manifestInput.fill(manifestUrl);
+
+    const installBtn = dialog
+      .locator('button[data-action="installPackage"], button:has-text("Install")')
+      .last();
+    await expect(installBtn).toBeEnabled();
+
+    // We don't actually click install here to avoid network dependencies and state pollution
+    // but we've verified the path to it is open and the helpers work.
+    const closeBtn = dialog.locator('button[data-action="close"], .header-button.close');
+    await closeBtn.click();
+    await expect(dialog).toBeHidden();
+  });
 });
