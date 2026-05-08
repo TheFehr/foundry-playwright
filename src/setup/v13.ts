@@ -218,21 +218,25 @@ export class V13SetupAdapter implements SetupAdapter {
   async deleteWorldIfExists(page: Page, worldId: string): Promise<void> {
     console.log(`[V13SetupAdapter] Deleting world if exists: ${worldId}`);
     await switchTab(page, "Worlds");
-    const worldBox = page.locator(`li.package.world[data-package-id="${worldId}"]`);
+    const worldBox = page.locator(`[data-package-id="${worldId}"]`).first();
 
-    if ((await worldBox.count()) === 1) {
+    if ((await worldBox.count()) === 1 && (await worldBox.isVisible())) {
       const stopButton = worldBox.locator('[data-action="worldStop"]');
       if ((await stopButton.count()) === 1 && (await stopButton.isVisible())) {
         await stopButton.click();
-        await expect(worldBox.locator('[data-action="worldLaunch"]')).toBeVisible();
+        await expect(worldBox.locator('[data-action="worldLaunch"]')).toBeVisible({
+          timeout: 10000,
+        });
       }
 
-      await worldBox.click({ button: "right" });
-      const deleteOption = page.locator(".context-item").filter({ hasText: "Delete World" });
+      await worldBox.dispatchEvent("contextmenu");
+      const deleteOption = page.locator("li.context-item, .context-item").filter({
+        hasText: /Delete World/i,
+      });
       await deleteOption.click();
 
       const dialog = page
-        .locator("dialog,div,section,form")
+        .locator("dialog, .application, .window-app")
         .filter({ hasText: new RegExp(`Delete World: ${worldId}`, "i") })
         .last();
       await expect(dialog).toBeVisible();
@@ -240,7 +244,7 @@ export class V13SetupAdapter implements SetupAdapter {
       const confirmCode = await dialog.locator(".reference").innerText();
       await dialog.getByRole("textbox").fill(confirmCode);
       await dialog.getByRole("button", { name: "Yes" }).click();
-      await expect(worldBox).toBeHidden();
+      await expect(worldBox).toBeHidden({ timeout: 15000 });
     }
   }
 

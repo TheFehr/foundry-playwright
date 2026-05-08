@@ -11,19 +11,19 @@ export async function getSetupAdapter(page: Page): Promise<SetupAdapter> {
   // Sniff version from game object or DOM
   const version = await page.evaluate(() => {
     // 1. Definitive source: game.version (in game)
-    const v = window.game?.version;
+    const v = window.game?.version || window.game?.release?.generation;
     if (v) {
-      if (v.startsWith("14")) return 14;
-      if (v.startsWith("13")) return 13;
+      if (String(v).startsWith("14")) return 14;
+      if (String(v).startsWith("13")) return 13;
     }
 
     // 2. Sniff from DOM (on setup screen)
+    // V14 uses the <foundry-app> web component for its setup interface.
+    // V13 uses a traditional <body> with classes like "setup".
     const isV14 =
       document.querySelector("foundry-app") !== null ||
-      document.querySelector('script[src*="foundry.mjs"][type="module"]') !== null || // V14 uses ES modules more extensively
       document.body.classList.contains("v14") ||
-      // Check for V14-specific CSS variables or structures
-      getComputedStyle(document.documentElement).getPropertyValue("--foundry-app-width") !== "";
+      (window as any).foundry?.applications?.api?.ApplicationV2 !== undefined;
 
     if (isV14) return 14;
 

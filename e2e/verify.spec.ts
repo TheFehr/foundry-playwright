@@ -5,7 +5,7 @@ test.describe("Library Verification Suite", () => {
   const worldId = "verify-world";
   const adminPassword = process.env.FOUNDRY_ADMIN_KEY || "password";
 
-  test.beforeAll(async ({ browser, _baseURL }) => {
+  test.beforeAll(async ({ browser }) => {
     test.setTimeout(600000);
     const page = await browser.newPage();
     await foundrySetup(page, {
@@ -82,7 +82,7 @@ test.describe("Library Verification Suite", () => {
     await verifyResult(page, "app-v2-tab-click", (data: any) => data.tab === "advanced");
   });
 
-  test("foundry.helpers: tour suppression", async ({ page, _foundry }) => {
+  test("foundry.helpers: tour suppression", async ({ page, foundry: _foundry }) => {
     await page.evaluate(() => {
       const tour = new (window.game.modules.get("fake-module") as any).FakeTour();
       tour.start();

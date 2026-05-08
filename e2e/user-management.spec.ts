@@ -82,6 +82,10 @@ test.describe("User Management Verification", () => {
     console.log("Logging in as new user...");
     const context = await browser.newContext();
     const playerPage = await context.newPage();
+
+    const { disableTour } = await import("../src/helpers.js");
+    await disableTour(playerPage);
+
     await playerPage.goto("/join");
     await loginAs(playerPage, testUserName, testPassword);
 

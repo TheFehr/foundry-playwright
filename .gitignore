@@ -9,7 +9,8 @@ blob-report
 
 # Cache and Local Environment
 .foundry_cache
-.foundry_data_tmp_*
+.foundry_test_data/*
+!.foundry_test_data/.gitkeep
 foundry_data/
 .env
 

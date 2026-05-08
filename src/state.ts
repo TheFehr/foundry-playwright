@@ -28,15 +28,13 @@ export enum UserRole {
  * Delegates version-specific logic to a GameAdapter and system-specific logic to a SystemAdapter.
  */
 export class FoundryState {
-  private systemAdapter: SystemAdapter;
+  private systemAdapter: SystemAdapter | null = null;
   private gameAdapter: GameAdapter | null = null;
 
   constructor(
     private page: Page,
-    systemId: string = "dnd5e",
-  ) {
-    this.systemAdapter = getSystemAdapter(systemId);
-  }
+    private systemId: string = "dnd5e",
+  ) {}
 
   /**
    * Internal helper to get the versioned game adapter.
@@ -49,10 +47,21 @@ export class FoundryState {
   }
 
   /**
+   * Internal helper to get the versioned system adapter.
+   */
+  private async getSystemAdapter(): Promise<SystemAdapter> {
+    if (!this.systemAdapter) {
+      this.systemAdapter = await getSystemAdapter(this.page, this.systemId);
+    }
+    return this.systemAdapter;
+  }
+
+  /**
    * Sets the system adapter to use.
    */
   setSystem(systemId: string) {
-    this.systemAdapter = getSystemAdapter(systemId);
+    this.systemId = systemId;
+    this.systemAdapter = null;
   }
 
   /**
@@ -313,21 +322,23 @@ export class FoundryState {
    * Uses the configured system adapter.
    */
   async grantCurrency(actorName: string, amount: number, currency?: string) {
-    return this.systemAdapter.grantCurrency(this.page, actorName, amount, currency);
+    const adapter = await this.getSystemAdapter();
+    return adapter.grantCurrency(this.page, actorName, amount, currency);
   }
 
   /**
    * Returns the system-specific path for HP.
    */
-  getHPPath() {
-    return this.systemAdapter.getHPPath();
+  async getHPPath() {
+    const adapter = await this.getSystemAdapter();
+    return adapter.getHPPath();
   }
 
   /**
    * Sets the HP for an actor.
    */
   async setHP(actorName: string, value: number) {
-    const hpPath = this.getHPPath();
+    const hpPath = await this.getHPPath();
     return this.page.evaluate(
       ({ actorName, hpPath, value }) => {
         const actor = window.game.actors.getName(actorName);

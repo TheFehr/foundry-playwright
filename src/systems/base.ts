@@ -8,6 +8,12 @@ export interface SystemAdapter {
   id: string;
 
   /**
+   * Returns true if this adapter is compatible with the given system version.
+   * @param version The system version (e.g., "4.0.0").
+   */
+  isCompatible(version: string): boolean;
+
+  /**
    * Returns the path to the HP value in the actor's system data.
    */
   getHPPath(): string;
@@ -41,6 +47,11 @@ export interface SystemAdapter {
  */
 export abstract class BaseSystemAdapter implements SystemAdapter {
   abstract id: string;
+
+  isCompatible(_version: string): boolean {
+    return true;
+  }
+
   abstract getHPPath(): string;
   abstract grantCurrency(
     page: Page,

@@ -38,6 +38,8 @@ export const test = base.extend<FoundryFixtures>({
     // Aggressively suppress tours for every test page
     await disableTour(page);
 
+    const deprecations: string[] = [];
+
     page.on("console", (msg) => {
       const text = msg.text();
       const type = msg.type();
@@ -58,6 +60,14 @@ export const test = base.extend<FoundryFixtures>({
         // Log all warnings to host console for visibility
         console.warn(`Browser Warning: ${text}`);
 
+        // Track deprecations
+        if (
+          text.toLowerCase().includes("deprecated") ||
+          text.toLowerCase().includes("deprecation")
+        ) {
+          deprecations.push(text);
+        }
+
         // Fail only on severe migration errors
         if (
           text.includes("Cannot read properties of null") ||
@@ -71,6 +81,14 @@ export const test = base.extend<FoundryFixtures>({
 
     try {
       await use(page);
+
+      // Report deprecations at the end of a successful test run
+      if (deprecations.length > 0) {
+        const uniqueDeprecations = Array.from(new Set(deprecations));
+        throw new Error(
+          `Deprecation Warnings detected during test:\n${uniqueDeprecations.join("\n")}`,
+        );
+      }
     } catch (error) {
       // If a test fails, try to dump FP_VERIFY logs for debugging
       const verifyData = await page

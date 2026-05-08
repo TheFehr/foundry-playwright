@@ -26,7 +26,11 @@ program
 
     try {
       if (docker) {
-        const tmpDataDir = path.join(process.cwd(), `.foundry_data_tmp_${Date.now()}`);
+        const tmpDataDir = path.join(
+          process.cwd(),
+          ".foundry_test_data",
+          `.foundry_data_tmp_${Date.now()}`,
+        );
         orchestrator = new DockerFoundryOrchestrator({
           version,
           adminKey: process.env.FOUNDRY_ADMIN_KEY || "password",
