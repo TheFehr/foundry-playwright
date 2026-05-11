@@ -3,6 +3,7 @@ import "dotenv/config";
 import path from "path";
 import fs from "fs";
 import { DockerFoundryOrchestrator } from "../src/docker.js";
+import { Command } from "commander";
 
 /**
  * Local Verification Script
@@ -15,6 +16,7 @@ async function verifyVersion(
   system: string,
   isDocker: boolean,
   updateRegistry: boolean,
+  keepContainer: boolean,
 ) {
   console.log(`\n--- Verifying Version: ${version} (System: ${system}) ---`);
 
@@ -79,13 +81,27 @@ async function verifyVersion(
       env,
     });
 
+    // 4. Capture versions for the report
+    console.log("[verifyVersion] Capturing system and module versions...");
+    let meta = {
+      foundry: version,
+      system: { id: system, version: "unknown" },
+    };
+
+    const metaPath = path.join(process.cwd(), ".foundry_metadata.json");
+    if (fs.existsSync(metaPath)) {
+      meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+      fs.unlinkSync(metaPath); // Clean up
+    }
+
     console.log(`--- Verification Successful for ${version} ---`);
 
     // Generate Report
     const reportPath = path.join(process.cwd(), `verification-report-${version}.md`);
     const reportContent = `# Verification Report: ${version}
 - **Date:** ${new Date().toISOString()}
-- **System:** ${system}
+- **Foundry Version:** ${meta.foundry}
+- **System:** ${meta.system.id} (v${meta.system.version})
 - **Status:** PASS
 - **Docker:** ${isDocker ? "Yes" : "No"}
 `;
@@ -102,13 +118,21 @@ async function verifyVersion(
       registry.pending = registry.pending.filter((v: any) => v.version !== version);
 
       // Add to verified if not exists
-      if (!registry.verified.find((v: any) => v.version === version)) {
-        registry.verified.push({
-          version: version,
-          timestamp: new Date().toISOString(),
-          status: "stable",
-          notes: `Verified locally with ${system}.`,
-        });
+      const existingIdx = registry.verified.findIndex((v: any) => v.version === version);
+      const entry = {
+        version: version,
+        timestamp: new Date().toISOString(),
+        status: "stable",
+        notes: `Verified locally with ${meta.system.id} v${meta.system.version}.`,
+        metadata: {
+          system: meta.system,
+        },
+      };
+
+      if (existingIdx !== -1) {
+        registry.verified[existingIdx] = entry;
+      } else {
+        registry.verified.push(entry);
       }
 
       fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
@@ -120,66 +144,102 @@ async function verifyVersion(
     console.error(error.message);
     return false;
   } finally {
-    if (orchestrator && !process.argv.includes("--keep-container")) {
+    if (orchestrator && !keepContainer) {
       await orchestrator.stopAndRemove();
     }
   }
 }
 
-async function run() {
-  console.log("--- Starting Local Verification ---");
+const program = new Command();
 
-  const args = process.argv.slice(2);
-  const isDocker = args.includes("--docker");
-  const updateRegistry = args.includes("--update-registry");
-  const allPending = args.includes("--all-pending");
+program
+  .name("verify-local")
+  .description("Orchestrates local verification of Foundry VTT versions using Docker.")
+  .version("0.1.0", "-v, --cli-version")
+  .option("--docker", "Run tests using a temporary Docker container", false)
+  .option("--version <version>", "The specific Foundry VTT version to verify")
+  .option(
+    "--system <id>",
+    "The system ID to use for verification",
+    process.env.FOUNDRY_SYSTEM_ID || "dnd5e",
+  )
+  .option("--all-pending", "Verify all versions currently marked as pending in the registry", false)
+  .option(
+    "--re-verify",
+    "Force re-verification of all versions marked as stable in the registry",
+    false,
+  )
+  .option("--all", "Verify all versions (pending and stable) in the registry", false)
+  .option("--update-registry", "Update verified-versions.json on successful verification", false)
+  .option(
+    "--keep-container",
+    "Do not stop and remove the Docker container after verification",
+    false,
+  )
+  .action(async (options) => {
+    console.log("--- Starting Local Verification ---");
 
-  let systemArg = process.env.FOUNDRY_SYSTEM_ID || "dnd5e";
-  const systemIdx = args.indexOf("--system");
-  if (systemIdx !== -1 && args[systemIdx + 1]) {
-    systemArg = args[systemIdx + 1];
-  }
+    // 1. Build the library once
+    console.log("Building library...");
+    execSync("npm run build", { stdio: "inherit" });
 
-  // 1. Build the library once
-  console.log("Building library...");
-  execSync("npm run build", { stdio: "inherit" });
+    let versions: string[] = [];
 
-  let versions: string[] = [];
+    if (options.allPending || options.reVerify || options.all) {
+      const registryPath = path.join(process.cwd(), "verified-versions.json");
+      if (fs.existsSync(registryPath)) {
+        const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
 
-  if (allPending) {
-    const registryPath = path.join(process.cwd(), "verified-versions.json");
-    if (fs.existsSync(registryPath)) {
-      const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
-      versions = registry.pending.map((p: any) => p.version);
-      console.log(`Found ${versions.length} pending versions in registry.`);
+        if (options.allPending || options.all) {
+          const pending = registry.pending.map((p: any) => p.version);
+          versions.push(...pending);
+          if (pending.length > 0) console.log(`Targeting ${pending.length} pending versions.`);
+        }
+
+        if (options.reVerify || options.all) {
+          const verified = registry.verified.map((v: any) => v.version);
+          versions.push(...verified);
+          if (verified.length > 0)
+            console.log(`Targeting ${verified.length} verified versions for re-verification.`);
+        }
+      } else {
+        console.error("Registry file not found.");
+        process.exit(1);
+      }
     } else {
-      console.error("Registry file not found.");
+      const versionArg = options.version || process.env.FOUNDRY_VERSION || "13";
+      versions = [versionArg];
+    }
+
+    // Remove duplicates
+    versions = [...new Set(versions)];
+
+    if (versions.length === 0) {
+      console.log("No versions matched the criteria. Nothing to verify.");
+      return;
+    }
+
+    const results: { version: string; success: boolean }[] = [];
+
+    for (const version of versions) {
+      const success = await verifyVersion(
+        version,
+        options.system,
+        options.docker,
+        options.updateRegistry,
+        options.keepContainer,
+      );
+      results.push({ version, success });
+    }
+
+    console.log("\n--- Verification Summary ---");
+    results.forEach((r) => {
+      console.log(`${r.version}: ${r.success ? "PASS" : "FAIL"}`);
+    });
+
+    if (results.some((r) => !r.success)) {
       process.exit(1);
     }
-  } else {
-    let versionArg = process.env.FOUNDRY_VERSION || "13";
-    const versionIdx = args.indexOf("--version");
-    if (versionIdx !== -1 && args[versionIdx + 1]) {
-      versionArg = args[versionIdx + 1];
-    }
-    versions = [versionArg];
-  }
-
-  const results: { version: string; success: boolean }[] = [];
-
-  for (const version of versions) {
-    const success = await verifyVersion(version, systemArg, isDocker, updateRegistry);
-    results.push({ version, success });
-  }
-
-  console.log("\n--- Verification Summary ---");
-  results.forEach((r) => {
-    console.log(`${r.version}: ${r.success ? "PASS" : "FAIL"}`);
   });
 
-  if (results.some((r) => !r.success)) {
-    process.exit(1);
-  }
-}
-
-run();
+program.parse(process.argv);
