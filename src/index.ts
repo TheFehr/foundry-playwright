@@ -18,6 +18,7 @@ export {
   handleModuleActivationFlow,
   dropCompendiumItem,
 } from "./helpers.js";
+export * from "./types/index.js";
 export * from "./auth.js";
 export * from "./state.js";
 export * from "./systems/index.js";

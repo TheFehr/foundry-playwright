@@ -5,51 +5,142 @@ import { V14SetupAdapter, V14GameAdapter } from "./v14.js";
 
 /**
  * Detects the Foundry VTT version and returns the appropriate setup adapter.
- * @param page The Playwright Page object.
+ * Prioritizes explicit version input from parameters or environment variables.
  */
-export async function getSetupAdapter(page: Page): Promise<SetupAdapter> {
-  // Sniff version from game object or DOM
-  const version = await page.evaluate(() => {
-    // 1. Definitive source: game.version (in game)
-    const v = window.game?.version || window.game?.release?.generation;
-    if (v) {
-      if (String(v).startsWith("14")) return 14;
-      if (String(v).startsWith("13")) return 13;
-    }
+export async function getSetupAdapter(
+  page: Page,
+  versionOverride?: string | number,
+): Promise<SetupAdapter> {
+  // 1. Prioritize explicit input
+  const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
+  if (explicitVersion) {
+    const v = String(explicitVersion);
+    if (v.startsWith("14")) return new V14SetupAdapter();
+    if (v.startsWith("13")) return new V13SetupAdapter();
+    console.warn(
+      `[getSetupAdapter] Explicit version "${v}" provided but not explicitly supported. Falling back to detection.`,
+    );
+  }
 
-    // 2. Sniff from DOM (on setup screen)
-    // V14 uses the <foundry-app> web component for its setup interface.
-    // V13 uses a traditional <body> with classes like "setup".
-    const isV14 =
-      document.querySelector("foundry-app") !== null ||
-      document.body.classList.contains("v14") ||
-      (window as any).foundry?.applications?.api?.ApplicationV2 !== undefined;
+  console.log("[getSetupAdapter] Detecting Foundry version...");
 
-    if (isV14) return 14;
+  // Wait for definitive detection
+  const detectedVersion = await page
+    .waitForFunction(
+      () => {
+        // 1. Check for Version String (Most reliable if available)
+        const v =
+          (window as any).game?.version ||
+          (window as any).game?.release?.generation ||
+          (window as any).foundry?.utils?.vttVersion;
+        if (v) {
+          const vs = String(v);
+          if (vs.startsWith("14")) return 14;
+          if (vs.startsWith("13")) return 13;
+        }
 
-    // Default to 13
-    return 13;
-  });
+        // 2. Check for V14 definitive markers (ApplicationV2 shell)
+        const isV14 =
+          (window as any).foundry?.applications?.api?.ApplicationV2 !== undefined ||
+          document.querySelector("foundry-app") !== null ||
+          document.body.classList.contains("v14");
 
-  console.log(`[getSetupAdapter] Detected Foundry VTT version: ${version}`);
+        if (isV14) return 14;
 
-  if (version === 14) return new V14SetupAdapter();
+        // 3. Check for V13 definitive markers
+        // V13 uses traditional body classes and does NOT have foundry-app
+        const isV13 =
+          (document.body.classList.contains("setup") ||
+            document.body.classList.contains("join") ||
+            document.body.classList.contains("game")) &&
+          document.querySelector("foundry-app") === null;
+
+        if (isV13) return 13;
+
+        // 4. Script-based fallback (V12- used foundry.js, V13+ uses foundry.mjs)
+        const scripts = Array.from(document.querySelectorAll("script")).map((s) => s.src);
+        if (scripts.some((s) => s.includes("foundry.mjs"))) {
+          // If it's foundry.mjs but didn't match V14 markers yet, it might be V13
+          // or V14 hasn't fully loaded its shell. We wait.
+          return null;
+        }
+        if (scripts.some((s) => s.includes("scripts/foundry.js"))) return 13; // V12/V13 early? Actually V13 is mjs.
+
+        return null; // Not detectable yet
+      },
+      {},
+      { timeout: 30000 },
+    )
+    .then((h) => h.jsonValue())
+    .catch(async () => {
+      const diag = await page.evaluate(() => {
+        return {
+          url: window.location.href,
+          html: document.body.innerHTML.substring(0, 500),
+          foundry: !!(window as any).foundry,
+          vttVersion: (window as any).foundry?.utils?.vttVersion,
+          scripts: Array.from(document.querySelectorAll("script")).map((s) => s.src),
+        };
+      });
+      console.warn(
+        `[getSetupAdapter] Detection timed out at ${diag.url}. Diag: ${JSON.stringify(diag)}`,
+      );
+
+      // Fallback logic in catch block
+      if (diag.vttVersion) {
+        if (String(diag.vttVersion).startsWith("14")) return 14;
+        if (String(diag.vttVersion).startsWith("13")) return 13;
+      }
+
+      if (diag.url.includes("/players") || diag.url.includes("/create")) return 14;
+      if (diag.scripts.some((s) => s.includes("foundry.mjs"))) {
+        // If we are here, we timed out. If it has foundry.mjs and NO foundry-app, it's likely 13.
+        const hasFoundryApp = await page.evaluate(
+          () => document.querySelector("foundry-app") !== null,
+        );
+        return hasFoundryApp ? 14 : 13;
+      }
+      return 13; // Default to 13
+    });
+
+  if (detectedVersion === 14) return new V14SetupAdapter();
   return new V13SetupAdapter();
 }
 
 /**
  * Detects the Foundry VTT version and returns the appropriate game adapter.
- * @param page The Playwright Page object.
  */
-export async function getGameAdapter(page: Page): Promise<GameAdapter> {
-  const version = await page.evaluate(() => {
-    const v = window.game?.version || window.game?.release?.generation;
-    if (v) {
-      if (String(v).startsWith("14")) return 14;
-      if (String(v).startsWith("13")) return 13;
-    }
-    return 13;
-  });
+export async function getGameAdapter(
+  page: Page,
+  versionOverride?: string | number,
+): Promise<GameAdapter> {
+  // 1. Prioritize explicit input
+  const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
+  if (explicitVersion) {
+    const v = String(explicitVersion);
+    if (v.startsWith("14")) return new V14GameAdapter();
+    if (v.startsWith("13")) return new V13GameAdapter();
+  }
+
+  const version = await page
+    .waitForFunction(
+      () => {
+        const v =
+          (window as any).game?.version ||
+          (window as any).game?.release?.generation ||
+          (window as any).foundry?.utils?.vttVersion;
+        if (v) {
+          if (String(v).startsWith("14")) return 14;
+          if (String(v).startsWith("13")) return 13;
+        }
+        if ((window as any).foundry?.applications?.api?.ApplicationV2 !== undefined) return 14;
+        return null;
+      },
+      {},
+      { timeout: 30000 },
+    )
+    .then((h) => h.jsonValue())
+    .catch(() => 13);
 
   if (version === 14) return new V14GameAdapter();
   return new V13GameAdapter();
