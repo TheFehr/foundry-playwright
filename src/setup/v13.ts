@@ -1,18 +1,70 @@
 import { expect, Page } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
-import {
-  switchTab,
-  openSystemInstallDialog,
-  openModuleInstallDialog,
-  installSystemFromManifest,
-  installModuleFromManifest,
-} from "../helpers.js";
 
 /**
  * Setup adapter for Foundry VTT Version 13.
  */
 export class V13SetupAdapter implements SetupAdapter {
   version = 13;
+
+  async switchTab(page: Page, tabName: string): Promise<void> {
+    const tabMap: Record<string, string> = {
+      Worlds: "worlds",
+      "Game Worlds": "worlds",
+      Systems: "systems",
+      "Game Systems": "systems",
+      Modules: "modules",
+      "Add-on Modules": "modules",
+      Configuration: "config",
+      "Update Software": "update",
+    };
+
+    const dataTab = tabMap[tabName] || tabName.toLowerCase();
+    console.log(`[V13SetupAdapter] Switching to setup tab: ${tabName} (${dataTab})`);
+
+    // Ensure navigation is visible
+    const nav = page.locator("nav, .navigation, #setup-packages-modules").first();
+    await nav.waitFor({ state: "attached", timeout: 20000 });
+
+    const tabLocator = page
+      .locator("nav h2, .navigation h2, h2, #setup-packages-modules h2")
+      .filter({ hasText: new RegExp(tabName, "i") })
+      .first();
+
+    console.log(`[V13SetupAdapter] Waiting for tab locator visibility for "${tabName}"...`);
+    await expect(tabLocator).toBeVisible({ timeout: 20000 });
+
+    const tabText = await tabLocator.innerText();
+    console.log(`[V13SetupAdapter] Found tab: "${tabText}". Clicking...`);
+
+    // Click and wait for active class
+    await tabLocator.evaluate((el: Element) => (el as HTMLElement).click());
+
+    await page.waitForFunction(
+      ({ name, dt }) => {
+        const h2 = Array.from(document.querySelectorAll("nav h2, .navigation h2, h2")).find(
+          (el) =>
+            el.textContent?.toLowerCase().includes(name.toLowerCase()) ||
+            el.textContent?.toLowerCase().includes(dt.toLowerCase()),
+        );
+        return h2?.classList.contains("active");
+      },
+      { name: tabName, dt: dataTab },
+      { timeout: 10000 },
+    );
+
+    // Wait for content section visibility
+    await page.waitForFunction(
+      (dt) => {
+        const section = document.querySelector(`#setup-packages-${dt}`);
+        return section && !section.getAttribute("style")?.includes("display: none");
+      },
+      dataTab,
+      { timeout: 10000 },
+    );
+
+    console.log(`[V13SetupAdapter] Tab ${tabName} is now active.`);
+  }
 
   async handleEULA(page: Page): Promise<void> {
     console.log("[V13SetupAdapter] Handling EULA...");
@@ -38,7 +90,7 @@ export class V13SetupAdapter implements SetupAdapter {
 
     const eulaButton = page.locator("button").filter({ hasText: /agree|sign|accept/i });
     if ((await eulaButton.count()) > 0) {
-      await eulaButton.first().evaluate((el) => (el as HTMLElement).click());
+      await eulaButton.first().evaluate((el: Element) => (el as HTMLElement).click());
 
       try {
         await page.waitForURL((u) => !u.pathname.includes("/license"), { timeout: 20000 });
@@ -77,7 +129,18 @@ export class V13SetupAdapter implements SetupAdapter {
 
   async installSystem(page: Page, systemId: string, _systemLabel: string): Promise<void> {
     console.log(`[V13SetupAdapter] Installing system: ${systemId}`);
-    const installDialog = await openSystemInstallDialog(page);
+    await this.switchTab(page, "Systems");
+
+    // Check if already installed
+    const localPackage = page
+      .locator(`#setup-packages-systems [data-package-id="${systemId}"]`)
+      .first();
+    if (await localPackage.isVisible()) {
+      console.log(`[V13SetupAdapter] System ${systemId} is already installed.`);
+      return;
+    }
+
+    const installDialog = await this.openSystemInstallDialog(page);
 
     const filterBox = installDialog.getByRole("searchbox", { name: "Filter" });
     await filterBox.click({ clickCount: 3 });
@@ -94,7 +157,7 @@ export class V13SetupAdapter implements SetupAdapter {
       .locator('button[data-action="installPackage"], button:has-text("Install")')
       .first();
     if ((await installButton.count()) > 0) {
-      await installButton.evaluate((el) => (el as HTMLElement).click());
+      await installButton.evaluate((el: Element) => (el as HTMLElement).click());
       await this.waitForInstallation(
         page,
         installDialog,
@@ -108,14 +171,14 @@ export class V13SetupAdapter implements SetupAdapter {
 
   async installModules(page: Page, moduleIds: string[]): Promise<void> {
     console.log(`[V13SetupAdapter] Installing modules: ${moduleIds.join(", ")}`);
-    await switchTab(page, "Modules");
+    await this.switchTab(page, "Modules");
 
     for (const modId of moduleIds) {
       const moduleBox = page
         .locator(`[data-package-id="${modId}"], [data-module-id="${modId}"]`)
         .first();
       if ((await moduleBox.count()) === 0 || (await moduleBox.isHidden())) {
-        const installDialog = await openModuleInstallDialog(page);
+        const installDialog = await this.openModuleInstallDialog(page);
 
         const filterBox = installDialog.getByRole("searchbox", { name: "Filter" });
         await filterBox.click({ clickCount: 3 });
@@ -132,7 +195,7 @@ export class V13SetupAdapter implements SetupAdapter {
           .locator('button[data-action="installPackage"], button:has-text("Install")')
           .first();
         if ((await installButton.count()) > 0) {
-          await installButton.evaluate((el) => (el as HTMLElement).click());
+          await installButton.evaluate((el: Element) => (el as HTMLElement).click());
           await this.waitForInstallation(
             page,
             installDialog,
@@ -154,27 +217,72 @@ export class V13SetupAdapter implements SetupAdapter {
     await installModuleFromManifest(page, manifestUrl);
   }
 
+  async openSystemInstallDialog(page: Page): Promise<any> {
+    console.log("[V13SetupAdapter] Opening System Install Dialog...");
+    await this.switchTab(page, "Systems");
+
+    const installBtn = page
+      .locator("button:visible")
+      .filter({ hasText: /Install System/i })
+      .first();
+
+    await expect(installBtn).toBeVisible({ timeout: 10000 });
+    await installBtn.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const dialog = page
+      .locator("dialog, #install-package, .application.category-browser, foundry-app")
+      .filter({ hasText: /Install System|Install Package/i })
+      .last();
+
+    await expect(dialog).toBeVisible({ timeout: 30000 });
+    return dialog;
+  }
+
+  async openModuleInstallDialog(page: Page): Promise<any> {
+    console.log("[V13SetupAdapter] Opening Module Install Dialog...");
+    await this.switchTab(page, "Modules");
+
+    const installBtn = page
+      .locator("button:visible")
+      .filter({ hasText: /Install Module/i })
+      .first();
+
+    await expect(installBtn).toBeVisible({ timeout: 10000 });
+    await installBtn.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const dialog = page
+      .locator("dialog, #install-package, .application.category-browser, foundry-app")
+      .filter({ hasText: /Install Module|Install Package|Install System/i })
+      .last();
+
+    await expect(dialog).toBeVisible({ timeout: 30000 });
+    return dialog;
+  }
+
   async createWorld(
     page: Page,
     worldId: string,
     systemLabel: string,
-    _systemId: string,
+    systemId: string,
   ): Promise<void> {
     console.log(`[V13SetupAdapter] Creating world: ${worldId}`);
-    await switchTab(page, "Worlds");
+    await this.switchTab(page, "Worlds");
 
     const createBtn = page
       .locator("button")
       .filter({ hasText: /Create World/i })
       .first();
-    await createBtn.evaluate((el) => (el as HTMLElement).click());
+    console.log("[V13SetupAdapter] Clicking Create World button...");
+    await createBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
     // Target the specific world-config form
     const createDialog = page
-      .locator("form#world-config, dialog, .application")
-      .filter({ hasText: /World|Create/i })
+      .locator("form#world-config, .application, .window-app")
+      .filter({ hasText: /World Configuration|Create World/i })
       .last();
-    await expect(createDialog).toBeVisible({ timeout: 15000 });
+
+    await createDialog.waitFor({ state: "visible", timeout: 20000 });
+    console.log("[V13SetupAdapter] World creation dialog is visible.");
 
     const titleInput = createDialog.locator(
       'input[name="title"], input[name*="title" i], input[placeholder*="Title" i]',
@@ -191,13 +299,23 @@ export class V13SetupAdapter implements SetupAdapter {
     const systemSelect = createDialog.locator(
       'select[name="system"], select[name*="system" i], select.system-select',
     );
-    await systemSelect.first().selectOption({ label: systemLabel });
+
+    // Attempt to select by label, then fallback to value (id)
+    try {
+      await systemSelect.first().selectOption({ label: systemLabel }, { timeout: 5000 });
+    } catch {
+      console.warn(
+        `[V13SetupAdapter] Failed to select system by label "${systemLabel}". Trying ID "${systemId}"...`,
+      );
+      // We use systemId passed from createWorld call
+      await systemSelect.first().selectOption({ value: systemId });
+    }
 
     const submitBtn = createDialog
       .locator('button[type="submit"], button')
       .filter({ hasText: /Create World|Create/i })
       .first();
-    await submitBtn.evaluate((el) => (el as HTMLElement).click());
+    await submitBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
     // Wait for the specific form to be removed
     await expect(page.locator("form#world-config")).toBeHidden({ timeout: 20000 });
@@ -205,7 +323,7 @@ export class V13SetupAdapter implements SetupAdapter {
 
   async deleteWorldIfExists(page: Page, worldId: string): Promise<void> {
     console.log(`[V13SetupAdapter] Deleting world if exists: ${worldId}`);
-    await switchTab(page, "Worlds");
+    await this.switchTab(page, "Worlds");
     const worldBox = page.locator(`[data-package-id="${worldId}"]`).first();
 
     if ((await worldBox.count()) === 1 && (await worldBox.isVisible())) {
@@ -265,8 +383,8 @@ export class V13SetupAdapter implements SetupAdapter {
         .waitFor({ state: "visible", timeout: 30000 });
     } catch {
       console.log("[V13SetupAdapter] Package not immediately visible. Refreshing tab...");
-      await switchTab(page, "Worlds"); // Transition away and back
-      await switchTab(page, tabName);
+      await this.switchTab(page, "Worlds"); // Transition away and back
+      await this.switchTab(page, tabName);
       await page
         .locator(verificationSelector)
         .first()
