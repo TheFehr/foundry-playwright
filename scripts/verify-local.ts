@@ -96,7 +96,7 @@ async function verifyVersion(
 
     console.log(`--- Verification Successful for ${version} ---`);
 
-    // Generate Report
+    // Generate Individual Report
     const reportPath = path.join(process.cwd(), `verification-report-${version}.md`);
     const reportContent = `# Verification Report: ${version}
 - **Date:** ${new Date().toISOString()}
@@ -107,6 +107,62 @@ async function verifyVersion(
 `;
     fs.writeFileSync(reportPath, reportContent);
     console.log(`Report generated: ${reportPath}`);
+
+    // Update Cumulative Summary Report
+    const summaryPath = path.join(process.cwd(), "verification-report.md");
+    let summaryContent =
+      "# Verification Summary Report\n\n| Version | System | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- |\n";
+
+    let existingResults: any[] = [];
+    if (fs.existsSync(summaryPath)) {
+      const lines = fs.readFileSync(summaryPath, "utf8").split("\n");
+      // Extract existing table rows (skipping header and divider)
+      const rows = lines.filter(
+        (l) => l.startsWith("|") && !l.includes("Version | System") && !l.includes(":---"),
+      );
+      existingResults = rows.map((r) => {
+        const parts = r
+          .split("|")
+          .map((p) => p.trim())
+          .filter((p) => p !== "");
+        return {
+          version: parts[0],
+          system: parts[1],
+          status: parts[2],
+          date: parts[3],
+          docker: parts[4],
+        };
+      });
+    }
+
+    // Update or add current result
+    const currentResult = {
+      version: version,
+      system: `${meta.system.id} (v${meta.system.version})`,
+      status: "PASS",
+      date: new Date().toISOString().split("T")[0], // YYYY-MM-DD for table brevity
+      docker: isDocker ? "Yes" : "No",
+    };
+
+    const existingIdx = existingResults.findIndex((r) => r.version === version);
+    if (existingIdx !== -1) {
+      existingResults[existingIdx] = currentResult;
+    } else {
+      existingResults.push(currentResult);
+    }
+
+    // Sort by version descending
+    existingResults.sort((a, b) =>
+      b.version.localeCompare(a.version, undefined, { numeric: true }),
+    );
+
+    // Rebuild summary content
+    existingResults.forEach((r) => {
+      summaryContent += `| ${r.version} | ${r.system} | ${r.status} | ${r.date} | ${r.docker} |\n`;
+    });
+
+    fs.writeFileSync(summaryPath, summaryContent);
+    console.log(`Summary updated: ${summaryPath}`);
 
     // Registry Update
     if (updateRegistry) {
