@@ -1,5 +1,5 @@
 import { Page } from "@playwright/test";
-import { disableTour, waitForReady } from "./helpers.js";
+import { disableTour, waitForReady, validateStack } from "./helpers.js";
 import { getSetupAdapter } from "./setup/index.js";
 
 /**
@@ -267,6 +267,9 @@ export async function foundrySetup(page: Page, config: any = {}) {
 
   console.log("[foundrySetup] Waiting for game to be ready...");
   await waitForReady(page);
+
+  // RFC 0008: Validate the stack against the registry
+  await validateStack(page, version).catch(() => null);
 
   // 7. Module Activation via Server-Side Settings (RFC 0008 strategy)
   if (moduleId) {

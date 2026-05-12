@@ -14,11 +14,14 @@ import { Command } from "commander";
 async function verifyVersion(
   version: string,
   system: string,
+  modules: string[],
   isDocker: boolean,
   updateRegistry: boolean,
   keepContainer: boolean,
 ) {
-  console.log(`\n--- Verifying Version: ${version} (System: ${system}) ---`);
+  console.log(
+    `\n--- Verifying Version: ${version} (System: ${system}, Modules: ${modules.join(", ") || "none"}) ---`,
+  );
 
   const foundryUrl = process.env.FOUNDRY_URL || "http://localhost:30000";
   let orchestrator: DockerFoundryOrchestrator | null = null;
@@ -66,6 +69,7 @@ async function verifyVersion(
       FOUNDRY_VERSION: version,
       FOUNDRY_SYSTEM_ID: system,
       FOUNDRY_UI_ADAPTER: process.env.FOUNDRY_UI_ADAPTER || system,
+      FOUNDRY_MODULE_IDS: modules.join(","),
     };
 
     // Pass through common Playwright flags
@@ -86,6 +90,7 @@ async function verifyVersion(
     let meta = {
       foundry: version,
       system: { id: system, version: "unknown" },
+      modules: [] as { id: string; version: string }[],
     };
 
     const metaPath = path.join(process.cwd(), ".foundry_metadata.json");
@@ -102,6 +107,7 @@ async function verifyVersion(
 - **Date:** ${new Date().toISOString()}
 - **Foundry Version:** ${meta.foundry}
 - **System:** ${meta.system.id} (v${meta.system.version})
+${meta.modules.length > 0 ? `- **Modules:**\n${meta.modules.map((m) => `  - ${m.id} (v${m.version})`).join("\n")}` : "- **Modules:** None"}
 - **Status:** PASS
 - **Docker:** ${isDocker ? "Yes" : "No"}
 `;
@@ -111,12 +117,11 @@ async function verifyVersion(
     // Update Cumulative Summary Report
     const summaryPath = path.join(process.cwd(), "verification-report.md");
     let summaryContent =
-      "# Verification Summary Report\n\n| Version | System | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- |\n";
+      "# Verification Summary Report\n\n| Version | System | Modules | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n";
 
     let existingResults: any[] = [];
     if (fs.existsSync(summaryPath)) {
       const lines = fs.readFileSync(summaryPath, "utf8").split("\n");
-      // Extract existing table rows (skipping header and divider)
       const rows = lines.filter(
         (l) => l.startsWith("|") && !l.includes("Version | System") && !l.includes(":---"),
       );
@@ -128,67 +133,76 @@ async function verifyVersion(
         return {
           version: parts[0],
           system: parts[1],
-          status: parts[2],
-          date: parts[3],
-          docker: parts[4],
+          modules: parts[2],
+          status: parts[3],
+          date: parts[4],
+          docker: parts[5],
         };
       });
     }
 
-    // Update or add current result
     const currentResult = {
       version: version,
       system: `${meta.system.id} (v${meta.system.version})`,
+      modules: meta.modules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
       status: "PASS",
-      date: new Date().toISOString().split("T")[0], // YYYY-MM-DD for table brevity
+      date: new Date().toISOString().split("T")[0],
       docker: isDocker ? "Yes" : "No",
     };
 
-    const existingIdx = existingResults.findIndex((r) => r.version === version);
+    const existingIdx = existingResults.findIndex(
+      (r) => r.version === version && r.system.startsWith(meta.system.id),
+    );
     if (existingIdx !== -1) {
       existingResults[existingIdx] = currentResult;
     } else {
       existingResults.push(currentResult);
     }
 
-    // Sort by version descending
     existingResults.sort((a, b) =>
       b.version.localeCompare(a.version, undefined, { numeric: true }),
     );
 
-    // Rebuild summary content
     existingResults.forEach((r) => {
-      summaryContent += `| ${r.version} | ${r.system} | ${r.status} | ${r.date} | ${r.docker} |\n`;
+      summaryContent += `| ${r.version} | ${r.system} | ${r.modules} | ${r.status} | ${r.date} | ${r.docker} |\n`;
     });
 
     fs.writeFileSync(summaryPath, summaryContent);
     console.log(`Summary updated: ${summaryPath}`);
 
-    // Registry Update
+    // Registry Update (Root-level array migration)
     if (updateRegistry) {
       console.log(`Updating verified-versions.json for ${version}...`);
       const registryPath = path.join(process.cwd(), "verified-versions.json");
-      const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      let registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
 
-      // Remove from pending
-      registry.pending = registry.pending.filter((v: any) => v.version !== version);
+      // In case of migration from old object schema
+      if (!Array.isArray(registry)) {
+        console.warn("Registry is not an array. Performing migration...");
+        registry = [];
+      }
 
-      // Add to verified if not exists
-      const existingIdx = registry.verified.findIndex((v: any) => v.version === version);
+      // Record non-fake modules for the matrix
+      const realModules = meta.modules.filter((m) => m.id !== "fake-module");
+
       const entry = {
-        version: version,
+        fvtt: version,
+        system: meta.system.id,
+        systemVersion: meta.system.version,
+        modules: realModules.length > 0 ? realModules : undefined,
+        status: "stable" as const,
         timestamp: new Date().toISOString(),
-        status: "stable",
         notes: `Verified locally with ${meta.system.id} v${meta.system.version}.`,
-        metadata: {
-          system: meta.system,
-        },
       };
 
+      // Match entry by fvtt and system
+      const existingIdx = registry.findIndex(
+        (e: any) => e.fvtt === version && e.system === meta.system.id,
+      );
       if (existingIdx !== -1) {
-        registry.verified[existingIdx] = entry;
+        registry[existingIdx] = entry;
       } else {
-        registry.verified.push(entry);
+        registry.push(entry);
       }
 
       fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
@@ -219,13 +233,14 @@ program
     "The system ID to use for verification",
     process.env.FOUNDRY_SYSTEM_ID || "dnd5e",
   )
-  .option("--all-pending", "Verify all versions currently marked as pending in the registry", false)
+  .option("--modules <ids>", "Comma-separated module IDs to install and verify", "")
+  .option("--all-pending", "Verify all pairings currently marked as pending in the registry", false)
   .option(
     "--re-verify",
-    "Force re-verification of all versions marked as stable in the registry",
+    "Force re-verification of all pairings marked as stable in the registry",
     false,
   )
-  .option("--all", "Verify all versions (pending and stable) in the registry", false)
+  .option("--all", "Verify all pairings (pending and stable) in the registry", false)
   .option("--update-registry", "Update verified-versions.json on successful verification", false)
   .option(
     "--keep-container",
@@ -239,24 +254,38 @@ program
     console.log("Building library...");
     execSync("npm run build", { stdio: "inherit" });
 
-    let versions: string[] = [];
+    const modules = options.modules ? options.modules.split(",").map((m: string) => m.trim()) : [];
+    let targets: { version: string; system: string; modules: string[] }[] = [];
 
     if (options.allPending || options.reVerify || options.all) {
       const registryPath = path.join(process.cwd(), "verified-versions.json");
       if (fs.existsSync(registryPath)) {
         const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+        const list = Array.isArray(registry) ? registry : [];
 
         if (options.allPending || options.all) {
-          const pending = registry.pending.map((p: any) => p.version);
-          versions.push(...pending);
-          if (pending.length > 0) console.log(`Targeting ${pending.length} pending versions.`);
+          const pending = list.filter((e: any) => e.status === "pending");
+          targets.push(
+            ...pending.map((e: any) => ({
+              version: e.fvtt,
+              system: e.system,
+              modules: e.modules?.map((m: any) => m.id) || [],
+            })),
+          );
+          if (pending.length > 0) console.log(`Targeting ${pending.length} pending pairings.`);
         }
 
         if (options.reVerify || options.all) {
-          const verified = registry.verified.map((v: any) => v.version);
-          versions.push(...verified);
-          if (verified.length > 0)
-            console.log(`Targeting ${verified.length} verified versions for re-verification.`);
+          const stable = list.filter((e: any) => e.status === "stable");
+          targets.push(
+            ...stable.map((e: any) => ({
+              version: e.fvtt,
+              system: e.system,
+              modules: e.modules?.map((m: any) => m.id) || [],
+            })),
+          );
+          if (stable.length > 0)
+            console.log(`Targeting ${stable.length} stable pairings for re-verification.`);
         }
       } else {
         console.error("Registry file not found.");
@@ -264,33 +293,31 @@ program
       }
     } else {
       const versionArg = options.version || process.env.FOUNDRY_VERSION || "13";
-      versions = [versionArg];
+      targets = [{ version: versionArg, system: options.system, modules }];
     }
 
-    // Remove duplicates
-    versions = [...new Set(versions)];
-
-    if (versions.length === 0) {
+    if (targets.length === 0) {
       console.log("No versions matched the criteria. Nothing to verify.");
       return;
     }
 
-    const results: { version: string; success: boolean }[] = [];
+    const results: { key: string; success: boolean }[] = [];
 
-    for (const version of versions) {
+    for (const target of targets) {
       const success = await verifyVersion(
-        version,
-        options.system,
+        target.version,
+        target.system,
+        target.modules,
         options.docker,
         options.updateRegistry,
         options.keepContainer,
       );
-      results.push({ version, success });
+      results.push({ key: `${target.version} (${target.system})`, success });
     }
 
     console.log("\n--- Verification Summary ---");
     results.forEach((r) => {
-      console.log(`${r.version}: ${r.success ? "PASS" : "FAIL"}`);
+      console.log(`${r.key}: ${r.success ? "PASS" : "FAIL"}`);
     });
 
     if (results.some((r) => !r.success)) {

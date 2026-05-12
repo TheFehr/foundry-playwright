@@ -1,29 +1,34 @@
-{
-  "verified": [
-    {
-      "version": "13.351.0",
-      "timestamp": "2026-05-11T17:47:20.053Z",
-      "status": "stable",
-      "notes": "Verified locally with dnd5e v5.3.3.",
-      "metadata": {
-        "system": {
-          "id": "dnd5e",
-          "version": "5.3.3"
-        }
-      }
-    },
-    {
-      "version": "14.360.0",
-      "timestamp": "2026-05-11T17:45:31.871Z",
-      "status": "stable",
-      "notes": "Verified locally with dnd5e v5.3.3.",
-      "metadata": {
-        "system": {
-          "id": "dnd5e",
-          "version": "5.3.3"
-        }
-      }
-    }
-  ],
-  "pending": []
-}
+[
+  {
+    "fvtt": "13.351.0",
+    "system": "dnd5e",
+    "systemVersion": "5.3.3",
+    "status": "stable",
+    "timestamp": "2026-05-11T17:47:20.053Z",
+    "notes": "Verified locally."
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "dnd5e",
+    "systemVersion": "5.3.3",
+    "status": "stable",
+    "timestamp": "2026-05-11T17:45:31.871Z",
+    "notes": "Verified locally."
+  },
+  {
+    "fvtt": "13.351.0",
+    "system": "pf2e",
+    "systemVersion": "8.1.2",
+    "status": "pending",
+    "timestamp": "2026-05-12T21:38:23.239Z",
+    "notes": "Automated detection: newer system version available."
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "pf2e",
+    "systemVersion": "8.1.2",
+    "status": "pending",
+    "timestamp": "2026-05-12T21:38:23.240Z",
+    "notes": "Automated detection: newer system version available."
+  }
+]

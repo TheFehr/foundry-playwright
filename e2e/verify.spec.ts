@@ -65,12 +65,17 @@ test.describe("Library Verification Suite", () => {
   test("export: version metadata", async ({ page }) => {
     const meta = await page.evaluate(() => {
       const game = (window as any).game;
+      const modules = Array.from(game.modules.values())
+        .filter((m: any) => m.active)
+        .map((m: any) => ({ id: m.id, version: m.version }));
+
       return {
         foundry: game.version || game.release?.generation,
         system: {
           id: game.system.id,
           version: game.system.version,
         },
+        modules,
       };
     });
     const fs = await import("node:fs");

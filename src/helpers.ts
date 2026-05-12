@@ -1,4 +1,76 @@
 import { expect, Page, Locator } from "@playwright/test";
+import path from "path";
+import fs from "fs";
+
+/**
+ * Loads the verification registry from verified-versions.json.
+ */
+export function getVerificationRegistry(): any[] {
+  try {
+    const registryPath = path.join(process.cwd(), "verified-versions.json");
+    if (fs.existsSync(registryPath)) {
+      return JSON.parse(fs.readFileSync(registryPath, "utf8"));
+    }
+  } catch (e) {
+    console.warn("[getVerificationRegistry] Failed to load registry:", e);
+  }
+  return [];
+}
+
+/**
+ * Validates the current Foundry/System/Module stack against the registry.
+ */
+export async function validateStack(page: Page, targetVersion?: string | number) {
+  const registry = getVerificationRegistry();
+  if (registry.length === 0) return;
+
+  const current = await page.evaluate(() => {
+    const g = (window as any).game;
+    const foundry = g.version || g.release?.generation;
+    const system = g.system.id;
+    const systemVersion = g.system.version;
+    const modules = Array.from(g.modules.values())
+      .filter((m: any) => m.active && m.id !== "fake-module")
+      .map((m: any) => ({ id: m.id, version: m.version }));
+
+    return { foundry, system, systemVersion, modules };
+  });
+
+  const fvtt = String(targetVersion || current.foundry);
+
+  // Find entries for this FVTT + System
+  const matches = registry.filter((e) => fvtt.startsWith(e.fvtt) && e.system === current.system);
+
+  if (matches.length === 0) {
+    console.warn(
+      `\n[VALIDATION] ⚠️ Untested Stack: FVTT ${fvtt} + ${current.system} is not in the verified registry.`,
+    );
+    return "untested";
+  }
+
+  // Check for specific version match or incompatibility
+  const exactMatch = matches.find((m) => m.systemVersion === current.systemVersion);
+
+  if (exactMatch) {
+    if (exactMatch.status === "incompatible") {
+      console.error(
+        `\n[VALIDATION] ❌ INCOMPATIBLE STACK DETECTED!\n` +
+          `FVTT ${fvtt} + ${current.system} v${current.systemVersion} is marked as INCOMPATIBLE.\n` +
+          `Notes: ${exactMatch.notes}\n`,
+      );
+      return "incompatible";
+    }
+    console.log(
+      `[VALIDATION] ✅ Stable Stack: FVTT ${fvtt} + ${current.system} v${current.systemVersion} is verified.`,
+    );
+    return "stable";
+  }
+
+  console.warn(
+    `\n[VALIDATION] ⚠️ Untested Version: FVTT ${fvtt} + ${current.system} is verified, but not with version v${current.systemVersion}.`,
+  );
+  return "untested";
+}
 
 /**
  * Aggressively removes Foundry VTT tours and overlays from the DOM and localStorage.

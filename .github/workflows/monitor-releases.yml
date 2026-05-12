@@ -1,4 +1,4 @@
-name: Monitor Foundry Releases
+name: Monitor Releases
 
 on:
   schedule:
@@ -6,46 +6,67 @@ on:
   workflow_dispatch: # Allow manual trigger
 
 jobs:
-  check-version:
+  monitor:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       issues: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch Latest Version
-        id: fetch-version
-        run: |
-          # Simple scrape of the releases page
-          LATEST=$(curl -s https://foundryvtt.com/releases/ | grep -oP 'Version \d+\.\d+' | head -1 | awk '{print $2}')
-          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
 
-      - name: Check if already verified
-        id: check-verified
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Monitor Script
+        run: npx tsx scripts/monitor-releases.ts
+
+      - name: Commit Changes
+        id: commit
         run: |
-          LATEST="${{ steps.fetch-version.outputs.latest }}"
-          if grep -q "\"version\": \"$LATEST\"" verified-versions.json; then
-            echo "new_version=false" >> $GITHUB_OUTPUT
+          if git diff --exit-code verified-versions.json; then
+            echo "updated=false" >> $GITHUB_OUTPUT
           else
-            echo "new_version=true" >> $GITHUB_OUTPUT
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add verified-versions.json
+            git commit -m "chore(registry): update pending verification matrix"
+            git push
+            echo "updated=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Issue if New Version Detected
-        if: steps.check-verified.outputs.new_version == 'true'
+      - name: Create Issues for Pending
+        if: steps.commit.outputs.updated == 'true'
         uses: actions/github-script@v9
         with:
           script: |
-            const version = "${{ steps.fetch-version.outputs.latest }}";
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Verification Required: FoundryVTT ${version}`,
-              body: `A new version of FoundryVTT (${version}) has been detected. 
-              
-              Please perform local verification:
-              1. Pull latest changes.
-              2. Run \`npm run verify:local\`.
-              3. Update \`verified-versions.json\` and commit.`,
-              labels: ['verification-required']
-            });
+            const fs = require('fs');
+            const registry = JSON.parse(fs.readFileSync('verified-versions.json', 'utf8'));
+            const pending = registry.filter(e => e.status === 'pending');
+
+            for (const entry of pending) {
+                const title = `Verification Required: FVTT ${entry.fvtt} + ${entry.system} v${entry.systemVersion}`;
+                
+                // Check if issue already exists
+                const issues = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  labels: 'verification-required'
+                });
+                
+                if (!issues.data.some(i => i.title === title)) {
+                  await github.rest.issues.create({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title: title,
+                    body: `A new compatibility stack has been added to the pending list.\n\n**FVTT:** ${entry.fvtt}\n**System:** ${entry.system} v${entry.systemVersion}\n\nPlease run:\n\`npm run verify:local -- --docker --all-pending\``,
+                    labels: ['verification-required']
+                  });
+                }
+            }
