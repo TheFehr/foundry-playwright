@@ -1,13 +1,29 @@
 {
-  "verified": [],
-  "pending": [
+  "verified": [
     {
       "version": "13.351.0",
-      "notes": "Latest stable V13 release."
+      "timestamp": "2026-05-11T17:47:20.053Z",
+      "status": "stable",
+      "notes": "Verified locally with dnd5e v5.3.3.",
+      "metadata": {
+        "system": {
+          "id": "dnd5e",
+          "version": "5.3.3"
+        }
+      }
     },
     {
       "version": "14.360.0",
-      "notes": "Latest stable V14 release."
+      "timestamp": "2026-05-11T17:45:31.871Z",
+      "status": "stable",
+      "notes": "Verified locally with dnd5e v5.3.3.",
+      "metadata": {
+        "system": {
+          "id": "dnd5e",
+          "version": "5.3.3"
+        }
+      }
     }
-  ]
+  ],
+  "pending": []
 }
