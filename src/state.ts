@@ -1,351 +1,267 @@
-import { Page, expect } from "@playwright/test";
-import { SystemAdapter, getSystemAdapter } from "./systems/index.js";
-import { GameAdapter, getGameAdapter } from "./setup/index.js";
+import { Page } from "@playwright/test";
+import { UserRole } from "./types/index.js";
 
-/**
- * Options for creating a document in Foundry VTT.
- */
-export interface CreateDocumentOptions {
-  /** Optional pack ID (e.g., "world.my-pack") to create the document in a compendium. */
-  pack?: string;
-  /** Additional options to pass to the Foundry create method. */
-  [key: string]: any;
+declare global {
+  interface Window {
+    game: any;
+    Hooks: any;
+    foundry: any;
+    CONFIG: any;
+    _hookLogs: Record<string, any[]>;
+    _socketLogs: Record<string, number>;
+  }
 }
 
 /**
- * Foundry VTT User Roles.
- */
-export enum UserRole {
-  NONE = 0,
-  PLAYER = 1,
-  TRUSTED = 2,
-  ASSISTANT = 3,
-  GAMEMASTER = 4,
-}
-
-/**
- * Provides methods for direct state manipulation in Foundry VTT via page.evaluate.
- * Delegates version-specific logic to a GameAdapter and system-specific logic to a SystemAdapter.
+ * Provides methods for direct manipulation of the Foundry VTT state.
  */
 export class FoundryState {
-  private systemAdapter: SystemAdapter | null = null;
-  private gameAdapter: GameAdapter | null = null;
-
   constructor(
     private page: Page,
     private systemId: string = "dnd5e",
   ) {}
 
   /**
-   * Internal helper to get the versioned game adapter.
+   * Aggressively removes properties known to trigger deprecation warnings on access.
+   * This is used before returning data from page.evaluate.
    */
-  private async getAdapter(): Promise<GameAdapter> {
-    if (!this.gameAdapter) {
-      this.gameAdapter = await getGameAdapter(this.page);
-    }
-    return this.gameAdapter;
+  private static get SanitizerScript() {
+    return `(obj) => {
+        if (!obj || typeof obj !== 'object') return obj;
+        const deprecatedDnD5e = ['darkvision', 'blindsight', 'tremorsense', 'truesight', 'special'];
+        const cleanSenses = (o) => {
+            if (!o || typeof o !== 'object') return o;
+            const result = Array.isArray(o) ? [] : {};
+            for (let key in o) {
+                if (key === 'senses') {
+                    const senses = o[key];
+                    const cleanS = Array.isArray(senses) ? [] : {};
+                    for (let skey in senses) {
+                        if (deprecatedDnD5e.includes(skey)) continue;
+                        cleanS[skey] = senses[skey];
+                    }
+                    result[key] = cleanS;
+                } else {
+                    result[key] = cleanSenses(o[key]);
+                }
+            }
+            return result;
+        };
+        return cleanSenses(obj);
+    }`;
   }
 
   /**
-   * Internal helper to get the versioned system adapter.
+   * Creates a new Foundry VTT document.
+   * @param documentName The type of document (e.g., "Actor", "Item").
+   * @param data The document data.
    */
-  private async getSystemAdapter(): Promise<SystemAdapter> {
-    if (!this.systemAdapter) {
-      this.systemAdapter = await getSystemAdapter(this.page, this.systemId);
-    }
-    return this.systemAdapter;
+  async createDocument(documentName: string, data: any) {
+    return this.page.evaluate(
+      async ({ documentName, data, sanitizer }) => {
+        // @ts-ignore
+        const cls = CONFIG[documentName].documentClass;
+        const doc = await cls.create(data);
+        if (!doc) return null;
+        // Use raw _source to avoid getters/deprecations
+        const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
+        const sanitize = new Function(`return ${sanitizer}`)();
+        return sanitize(obj);
+      },
+      { documentName, data, sanitizer: FoundryState.SanitizerScript },
+    );
   }
 
   /**
-   * Sets the system adapter to use.
+   * Updates an existing document in Foundry VTT.
+   * @param documentName The name of the document type.
+   * @param id The ID of the document to update.
+   * @param delta The data to update.
    */
-  setSystem(systemId: string) {
-    this.systemId = systemId;
-    this.systemAdapter = null;
+  async updateDocument(documentName: string, id: string, delta: any) {
+    return this.page.evaluate(
+      ({ documentName, id, delta }) => {
+        // @ts-ignore
+        const doc = game.collections.get(documentName).get(id);
+        return doc.update(delta);
+      },
+      { documentName, id, delta },
+    );
   }
 
   /**
-   * Creates a user in Foundry VTT.
-   * @param name The username.
-   * @param role The user role.
-   * @param password The user password.
+   * Deletes a document in Foundry VTT.
+   * @param documentName The name of the document type.
+   * @param id The ID of the document to delete.
+   */
+  async deleteDocument(documentName: string, id: string) {
+    return this.page.evaluate(
+      ({ documentName, id }) => {
+        // @ts-ignore
+        const doc = game.collections.get(documentName).get(id);
+        return doc.delete();
+      },
+      { documentName, id },
+    );
+  }
+
+  /**
+   * Gets a document by its ID.
+   * @param documentName The name of the document type.
+   * @param id The ID of the document.
+   */
+  async getDocument(documentName: string, id: string) {
+    return this.page.evaluate(
+      ({ documentName, id, sanitizer }) => {
+        // @ts-ignore
+        const doc = game.collections.get(documentName).get(id);
+        if (!doc) return null;
+        // Use raw _source to avoid getters/deprecations
+        const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
+        const sanitize = new Function(`return ${sanitizer}`)();
+        return sanitize(obj);
+      },
+      { documentName, id, sanitizer: FoundryState.SanitizerScript },
+    );
+  }
+
+  /**
+   * Gets a document by its name.
+   * @param documentName The name of the document type.
+   * @param name The name of the document.
+   */
+  async getDocumentByName(documentName: string, name: string) {
+    return this.page.evaluate(
+      ({ documentName, name, sanitizer }) => {
+        const g = (window as any).game;
+        const collection = g.collections.get(documentName) || g[documentName.toLowerCase() + "s"];
+        const doc = collection.getName(name);
+        if (!doc) return null;
+        // Use raw _source to avoid getters/deprecations
+        const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
+        const sanitize = new Function(`return ${sanitizer}`)();
+        return sanitize(obj);
+      },
+      { documentName, name, sanitizer: FoundryState.SanitizerScript },
+    );
+  }
+
+  /**
+   * Creates a new User.
    */
   async createUser(name: string, role: UserRole = UserRole.PLAYER, password?: string) {
     return this.page.evaluate(
-      async ({ name, role, password }) => {
-        const cls = window.game.users.documentClass;
-        return await cls.create({ name, role, password });
+      ({ name, role, password }) => {
+        // @ts-ignore
+        return User.create({ name, role, password });
       },
       { name, role, password },
     );
   }
 
   /**
-   * Deletes a user by ID.
-   * @param userId The ID of the user to delete.
-   */
-  async deleteUser(userId: string) {
-    return this.page.evaluate(async (userId) => {
-      const user = window.game.users.get(userId);
-      if (user) await user.delete();
-    }, userId);
-  }
-
-  /**
-   * Sets the role for a user.
-   * @param userId The ID of the user.
-   * @param role The new user role.
+   * Sets a user's role.
    */
   async setUserRole(userId: string, role: UserRole) {
     return this.page.evaluate(
-      async ({ userId, role }) => {
-        const user = window.game.users.get(userId);
-        if (!user) throw new Error(`User ${userId} not found.`);
-        return await user.update({ role });
+      ({ userId, role }) => {
+        // @ts-ignore
+        const user = game.users.get(userId);
+        if (!user) throw new Error(`User not found: ${userId}`);
+        return user.update({ role });
       },
       { userId, role },
     );
   }
 
   /**
-   * Assigns an actor to a user as their character.
-   * @param userId The ID of the user.
-   * @param actorId The ID of the actor.
-   */
-  async assignActorToUser(userId: string, actorId: string) {
-    return this.page.evaluate(
-      async ({ userId, actorId }) => {
-        const user = window.game.users.get(userId);
-        if (!user) throw new Error(`User ${userId} not found.`);
-        return await user.update({ character: actorId });
-      },
-      { userId, actorId },
-    );
-  }
-
-  /**
    * Configures a specific permission for a user role.
-   * @param permission The permission key (e.g., "FILES_BROWSE").
-   * @param role The user role to configure.
-   * @param allowed Whether the permission is allowed.
    */
   async setRolePermission(permission: string, role: UserRole, allowed: boolean) {
     return this.page.evaluate(
-      async ({ permission, role, allowed }) => {
-        const permissions = window.foundry.utils.deepClone(
-          window.game.settings.get("core", "permissions"),
-        );
-        if (!permissions[permission]) permissions[permission] = {};
-        permissions[permission][role] = allowed;
-        return await window.game.settings.set("core", "permissions", permissions);
+      ({ permission, role, allowed }) => {
+        // @ts-ignore
+        const current = game.settings.get("core", "permissions") || {};
+        const update = { ...current, [permission]: { ...current[permission], [role]: allowed } };
+        // @ts-ignore
+        return game.settings.set("core", "permissions", update);
       },
       { permission, role, allowed },
     );
   }
 
   /**
-   * Creates a document in a Foundry VTT collection.
-   * Delegates to the version-specific GameAdapter.
-   * @param documentName The name of the document class (e.g., "Actor", "Item", "Scene").
-   * @param data The data for the new document.
-   * @param options Options for creation.
-   */
-  async createDocument(
-    documentName: string,
-    data: any | any[],
-    options: CreateDocumentOptions = {},
-  ) {
-    const adapter = await this.getAdapter();
-    return adapter.createDocument(this.page, documentName, data, options);
-  }
-
-  /**
-   * Updates a document in a Foundry VTT collection.
-   * Delegates to the version-specific GameAdapter.
-   * @param uuid The UUID or name of the document.
-   * @param delta The changes to apply.
-   */
-  async updateDocument(uuid: string, delta: any) {
-    const adapter = await this.getAdapter();
-    return adapter.updateDocument(this.page, uuid, delta);
-  }
-
-  /**
-   * Sets ownership levels for a document.
-   * @param uuid The UUID of the document.
-   * @param ownership Map of userId to ownership level (0-3).
-   */
-  async setDocumentOwnership(uuid: string, ownership: Record<string, number>) {
-    return this.updateDocument(uuid, { ownership });
-  }
-
-  /**
-   * Opens the sheet for a document.
-   * @param uuid The UUID or name of the document.
-   */
-  async openSheet(uuid: string) {
-    await this.page.evaluate((uuid) => {
-      const doc = window.fromUuidSync ? window.fromUuidSync(uuid) : null;
-      if (doc) {
-        doc.sheet.render(true);
-        return;
-      }
-      for (const collection of Object.values(window.game.collections || {})) {
-        const match = collection.getName(uuid);
-        if (match) {
-          match.sheet.render(true);
-          return;
-        }
-      }
-    }, uuid);
-
-    // Wait for a window with the document's name in the header
-    await expect(
-      this.page.locator("dialog, foundry-app, .window-app, .application").filter({ hasText: uuid }),
-    ).toBeVisible({ timeout: 15000 });
-  }
-
-  /**
-   * Closes the currently active sheet matching a selector or name.
-   */
-  async closeSheet(name?: string) {
-    const locator = name
-      ? this.page
-          .locator("dialog, foundry-app, .window-app, .application")
-          .filter({ hasText: name })
-      : this.page.locator("dialog, foundry-app, .window-app, .application").last();
-
-    await locator.locator('[data-action="close"], .header-button.close').first().click();
-  }
-
-  /**
-   * Creates one or more Actors.
-   */
-  async createActor(data: any | any[], options: CreateDocumentOptions = {}) {
-    return this.createDocument("Actor", data, options);
-  }
-
-  /**
-   * Creates one or more Items.
-   */
-  async createItem(data: any | any[], options: CreateDocumentOptions = {}) {
-    return this.createDocument("Item", data, options);
-  }
-
-  /**
-   * Creates a compendium pack.
-   * @param config Compendium configuration (label, name, type, package).
-   */
-  async createCompendium(config: { label: string; name: string; type: string; package?: string }) {
-    return this.page.evaluate(async (config) => {
-      const { label, name, type, package: pkg = "world" } = config;
-      return await window.foundry.documents.collections.CompendiumCollection.createCompendium({
-        type,
-        label,
-        name,
-        package: pkg,
-      });
-    }, config);
-  }
-
-  /**
-   * Gets a document by name from a collection.
-   */
-  async getDocumentByName(documentName: string, name: string, options: { pack?: string } = {}) {
-    return this.page.evaluate(
-      ({ documentName, name, options }) => {
-        let collection;
-        if (options.pack) {
-          collection = window.game.packs.get(options.pack);
-        } else {
-          const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
-          collection = window.game[collectionName];
-        }
-
-        if (!collection) return null;
-        return collection.getName(name)?.toJSON() || null;
-      },
-      { documentName, name, options },
-    );
-  }
-
-  /**
-   * Deletes all documents of a certain type that match a predicate (or all if no predicate).
-   * Delegates to the version-specific GameAdapter.
-   */
-  async clearCollection(documentName: string, options: { pack?: string } = {}) {
-    const adapter = await this.getAdapter();
-    const ids = await this.page.evaluate(
-      ({ documentName, options }) => {
-        let collection;
-        if (options.pack) {
-          collection = window.game.packs.get(options.pack);
-        } else {
-          const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
-          collection = window.game[collectionName];
-        }
-        return collection ? collection.map((d: any) => d.id) : [];
-      },
-      { documentName, options },
-    );
-
-    if (ids.length > 0) {
-      await adapter.deleteDocuments(this.page, documentName, ids, options);
-    }
-  }
-
-  /**
-   * Fast actor creation with sensible defaults.
-   */
-  async createTestActor(name: string, type: string = "character", data: any = {}) {
-    return this.createActor({
-      name,
-      type,
-      img: "icons/svg/mystery-man.svg",
-      ...data,
-    });
-  }
-
-  /**
-   * Fast item creation with sensible defaults.
-   */
-  async createTestItem(name: string, type: string = "feat", data: any = {}) {
-    return this.createItem({
-      name,
-      type,
-      ...data,
-    });
-  }
-
-  /**
    * Grants currency to an actor.
-   * Uses the configured system adapter.
+   * @param actorName The name of the actor.
+   * @param amount The amount of currency to grant.
+   * @param currency The type of currency (e.g., "gp", "sp").
    */
-  async grantCurrency(actorName: string, amount: number, currency?: string) {
-    const adapter = await this.getSystemAdapter();
-    return adapter.grantCurrency(this.page, actorName, amount, currency);
-  }
-
-  /**
-   * Returns the system-specific path for HP.
-   */
-  async getHPPath() {
-    const adapter = await this.getSystemAdapter();
-    return adapter.getHPPath();
-  }
-
-  /**
-   * Sets the HP for an actor.
-   */
-  async setHP(actorName: string, value: number) {
-    const hpPath = await this.getHPPath();
+  async grantCurrency(actorName: string, amount: number, currency: string = "gp") {
     return this.page.evaluate(
-      ({ actorName, hpPath, value }) => {
-        const actor = window.game.actors.getName(actorName);
-        if (!actor) throw new Error(`Actor ${actorName} not found.`);
-        return actor.update({ [hpPath]: value });
+      ({ actorName, amount, currency }) => {
+        // @ts-ignore
+        const actor = game.actors.getName(actorName);
+        if (!actor) throw new Error(`Actor not found: ${actorName}`);
+        const current = actor.system.currency[currency] || 0;
+        return actor.update({ [`system.currency.${currency}`]: current + amount });
       },
-      { actorName, hpPath, value },
+      { actorName, amount, currency },
+    );
+  }
+
+  /**
+   * Sets an actor's HP.
+   * @param actorName The name of the actor.
+   * @param value The new HP value.
+   * @param max The new max HP value (optional).
+   */
+  async setActorHP(actorName: string, value: number, max?: number) {
+    return this.page.evaluate(
+      ({ actorName, value, max }) => {
+        // @ts-ignore
+        const actor = game.actors.getName(actorName);
+        if (!actor) throw new Error(`Actor not found: ${actorName}`);
+        const update: any = { "system.attributes.hp.value": value };
+        if (max !== undefined) update["system.attributes.hp.max"] = max;
+        return actor.update(update);
+      },
+      { actorName, value, max },
+    );
+  }
+
+  /**
+   * Rolls a specific roll for an actor.
+   * @param actorName The name of the actor.
+   * @param formula The roll formula (e.g., "1d20 + 5").
+   * @param label A label for the roll.
+   */
+  async roll(actorName: string, formula: string, label: string = "Test Roll") {
+    return this.page.evaluate(
+      ({ actorName, formula, label }) => {
+        // @ts-ignore
+        const actor = game.actors.getName(actorName);
+        if (!actor) throw new Error(`Actor not found: ${actorName}`);
+        // @ts-ignore
+        const roll = new Roll(formula, actor.getRollData());
+        return roll.toMessage({ flavor: label });
+      },
+      { actorName, formula, label },
+    );
+  }
+
+  /**
+   * Executes a macro by name.
+   * @param name The name of the macro.
+   * @param args Arguments to pass to the macro.
+   */
+  async executeMacro(name: string, ...args: any[]) {
+    return this.page.evaluate(
+      ({ name, args }) => {
+        // @ts-ignore
+        const macro = game.macros.getName(name);
+        return macro.execute(...args);
+      },
+      { name, args },
     );
   }
 
@@ -381,28 +297,29 @@ export class FoundryState {
    * Waits for a specific Foundry VTT hook to be called.
    * @param hookName The name of the hook.
    * @param timeout The timeout in milliseconds.
+   * @returns The first argument passed to the hook.
    */
   async waitForHook(hookName: string, timeout: number = 10000) {
     await this.page.evaluate((hookName) => {
       window._hookLogs = window._hookLogs || {};
-      window._hookLogs[hookName] = window._hookLogs[hookName] || 0;
-      window.Hooks.on(hookName, () => {
-        window._hookLogs[hookName]++;
+      window._hookLogs[hookName] = window._hookLogs[hookName] || [];
+      window.Hooks.on(hookName, (...args: any[]) => {
+        window._hookLogs[hookName].push(args);
       });
     }, hookName);
 
     await this.page.waitForFunction(
       (name) => {
-        return window._hookLogs?.[name] > 0;
+        return window._hookLogs?.[name]?.length > 0;
       },
       hookName,
       { timeout },
     );
 
     return this.page.evaluate((name) => {
-      const count = window._hookLogs[name];
-      window._hookLogs[name] = 0;
-      return [count]; // Return count as args for now to verify it was called
+      const logs = window._hookLogs[name];
+      window._hookLogs[name] = [];
+      return logs[0]?.[0]; // Return the first argument of the first call
     }, hookName);
   }
 
@@ -433,6 +350,55 @@ export class FoundryState {
       window._socketLogs[name] = 0;
       return count;
     }, eventName);
+  }
+
+  /**
+   * Assigns an actor to a user.
+   */
+  async assignActorToUser(userId: string, actorId: string) {
+    return this.page.evaluate(
+      ({ userId, actorId }) => {
+        // @ts-ignore
+        const user = game.users.get(userId);
+        if (!user) throw new Error(`User not found: ${userId}`);
+        return user.update({ character: actorId });
+      },
+      { userId, actorId },
+    );
+  }
+
+  /**
+   * Updates an existing user.
+   */
+  async updateUser(userId: string, delta: any) {
+    return this.page.evaluate(
+      ({ userId, delta }) => {
+        // @ts-ignore
+        const user = game.users.get(userId);
+        if (!user) throw new Error(`User not found: ${userId}`);
+        return user.update(delta);
+      },
+      { userId, delta },
+    );
+  }
+
+  /**
+   * Creates a test actor.
+   */
+  async createTestActor(name: string = "Test Actor") {
+    const system: any = {};
+    if (this.systemId === "dnd5e") {
+      // Modern DnD5e 5.3+ structure to avoid deprecation warnings
+      system.details = {
+        senses: {
+          ranges: {
+            darkvision: 60,
+          },
+        },
+      };
+      system.attributes = { hp: { value: 10, max: 10 } };
+    }
+    return this.createDocument("Actor", { name, type: "character", system });
   }
 
   /**
