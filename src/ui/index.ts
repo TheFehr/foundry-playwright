@@ -71,6 +71,14 @@ export class FoundryUI {
   async handleCollapsibleSection(appSelector: string, sectionName: string) {
     await this.adapter.handleCollapsibleSection(this.page, appSelector, sectionName);
   }
+
+  /**
+   * Simulates a drag-and-drop event in Foundry VTT.
+   */
+  async simulateDrop(targetSelector: string, data: any) {
+    const { simulateFoundryDrop } = await import("../helpers.js");
+    await simulateFoundryDrop(this.page, targetSelector, data);
+  }
 }
 
 export * from "./base.js";

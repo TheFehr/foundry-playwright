@@ -8,6 +8,13 @@ export interface SetupAdapter {
   version: number;
 
   /**
+   * Switches between tabs on the setup screen.
+   * @param page The Playwright Page object.
+   * @param tabName The logical name of the tab (e.g., "Worlds", "Systems").
+   */
+  switchTab(page: Page, tabName: string): Promise<void>;
+
+  /**
    * Handles the End User License Agreement screen if it appears.
    * @param page The Playwright Page object.
    */
@@ -48,6 +55,18 @@ export interface SetupAdapter {
    * @param manifestUrl The URL to the module.json manifest.
    */
   installModuleFromManifest(page: Page, manifestUrl: string): Promise<void>;
+
+  /**
+   * Opens the system installation dialog.
+   * @param page The Playwright Page object.
+   */
+  openSystemInstallDialog(page: Page): Promise<any>;
+
+  /**
+   * Opens the module installation dialog.
+   * @param page The Playwright Page object.
+   */
+  openModuleInstallDialog(page: Page): Promise<any>;
 
   /**
    * Creates a new game world.
@@ -105,7 +124,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
         if (doc) return await doc.update(delta);
 
         for (const collection of Object.values(window.game.collections || {})) {
-          const match = collection.getName(uuid);
+          const match = (collection as any).getName ? (collection as any).getName(uuid) : null;
           if (match) return await match.update(delta);
         }
         throw new Error(`Document ${uuid} not found.`);
@@ -140,7 +159,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
           .filter((d: FoundryDocument) => {
             return Object.entries(query).every(([k, v]) => (d as any)[k] === v);
           })
-          .map((d: FoundryDocument) => d.toJSON());
+          .map((d: FoundryDocument) => (d as any).toObject?.() || d.toJSON());
       },
       { collection, query },
     );

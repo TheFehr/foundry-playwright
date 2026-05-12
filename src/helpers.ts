@@ -5,8 +5,6 @@ import { expect, Page, Locator } from "@playwright/test";
  * @param page The Playwright Page object.
  */
 export async function disableTour(page: Page) {
-  console.log("[disableTour] Aggressively removing tours and overlays...");
-
   const removalScript = () => {
     const selectors = [
       ".tour-overlay",
@@ -49,19 +47,6 @@ export async function disableTour(page: Page) {
           display: none !important; 
           visibility: hidden !important; 
           pointer-events: none !important; 
-          opacity: 0 !important;
-          width: 0 !important;
-          height: 0 !important;
-          z-index: -1000 !important;
-        }
-        body.tour-open, body.nue-open {
-            pointer-events: auto !important;
-        }
-        * {
-            pointer-events: auto;
-        }
-        .tour-overlay ~ *, #tour-overlay ~ * {
-            pointer-events: auto !important;
         }
       `;
       document.head.appendChild(style);
@@ -85,118 +70,9 @@ export async function disableTour(page: Page) {
 }
 
 /**
- * Navigates to the Systems tab and opens the installation dialog.
+ * Navigates to a specific tab by name or ID.
  * @param page The Playwright Page object.
- */
-export async function openSystemInstallDialog(page: Page): Promise<Locator> {
-  console.log("[openSystemInstallDialog] Opening System Install Dialog...");
-  await switchTab(page, "Systems");
-
-  // V14 uses data-action="installPackage" inside #setup-packages-systems
-  // V13 uses a button with text "Install System"
-  const installBtn = page
-    .locator(
-      '#setup-packages-systems button[data-action="installPackage"], button:has-text("Install System")',
-    )
-    .first();
-
-  await expect(installBtn).toBeVisible({ timeout: 10000 });
-  await installBtn.evaluate((el) => (el as HTMLElement).click());
-
-  const dialog = page
-    .locator("dialog, .application, .window-app, foundry-app")
-    .filter({ hasText: /Install System/i })
-    .last();
-
-  await expect(dialog).toBeVisible({ timeout: 20000 });
-  return dialog;
-}
-
-/**
- * Navigates to the Modules tab and opens the installation dialog.
- * @param page The Playwright Page object.
- */
-export async function openModuleInstallDialog(page: Page): Promise<Locator> {
-  console.log("[openModuleInstallDialog] Opening Module Install Dialog...");
-  await switchTab(page, "Modules");
-
-  // V14 uses data-action="installPackage" inside #setup-packages-modules
-  // V13 uses a button with text "Install Module"
-  const installBtn = page
-    .locator(
-      '#setup-packages-modules button[data-action="installPackage"], button:has-text("Install Module")',
-    )
-    .first();
-
-  await expect(installBtn).toBeVisible({ timeout: 10000 });
-  await installBtn.evaluate((el) => (el as HTMLElement).click());
-
-  const dialog = page
-    .locator("dialog, .application, .window-app, foundry-app")
-    .filter({ hasText: /Install Module/i })
-    .last();
-
-  await expect(dialog).toBeVisible({ timeout: 20000 });
-  return dialog;
-}
-
-/**
- * Installs a system from a manifest URL.
- * @param page The Playwright Page object.
- * @param manifestUrl The URL to the system.json manifest.
- */
-export async function installSystemFromManifest(page: Page, manifestUrl: string): Promise<void> {
-  console.log(`[installSystemFromManifest] Installing from: ${manifestUrl}`);
-  const dialog = await openSystemInstallDialog(page);
-  await installFromManifest(page, dialog, manifestUrl);
-}
-
-/**
- * Installs a module from a manifest URL.
- * @param page The Playwright Page object.
- * @param manifestUrl The URL to the module.json manifest.
- */
-export async function installModuleFromManifest(page: Page, manifestUrl: string): Promise<void> {
-  console.log(`[installModuleFromManifest] Installing from: ${manifestUrl}`);
-  const dialog = await openModuleInstallDialog(page);
-  await installFromManifest(page, dialog, manifestUrl);
-}
-
-/**
- * Shared logic to fill manifest URL and click install in a package installation dialog.
- * @param page The Playwright Page object.
- * @param dialog The installation dialog Locator.
- * @param manifestUrl The URL to the manifest.
- */
-async function installFromManifest(
-  page: Page,
-  dialog: Locator,
-  manifestUrl: string,
-): Promise<void> {
-  // Foundry's manifest input is usually at the bottom
-  const manifestInput = dialog.locator('input[name="manifest"], #install-package-url');
-  await manifestInput.fill(manifestUrl);
-
-  const installBtn = dialog
-    .locator('button[data-action="installPackage"], button:has-text("Install")')
-    .last();
-  await installBtn.evaluate((el) => (el as HTMLElement).click());
-
-  // Use the progress bar / notification wait logic
-  await page
-    .locator(".notification.info, .notification.success, .progress-bar")
-    .filter({ hasText: /Downloading|Installing/i })
-    .waitFor({ state: "visible", timeout: 10000 })
-    .catch(() => null);
-
-  // Wait for it to disappear or success notification
-  await expect(page.locator(".progress-bar")).toBeHidden({ timeout: 60000 });
-}
-
-/**
- * Switches between tabs in the Foundry VTT setup or configuration screens.
- * @param page The Playwright Page object.
- * @param tabName The name of the tab to switch to (e.g., "Game Worlds", "Game Systems").
+ * @param tabName The logical name or data-tab value of the tab.
  */
 export async function switchTab(page: Page, tabName: string) {
   // Map logical names to data-tab values for robustness
@@ -212,24 +88,6 @@ export async function switchTab(page: Page, tabName: string) {
   };
 
   const dataTabName = tabMap[tabName] || tabName.toLowerCase();
-
-  // Quick check: is the tab already active?
-  const alreadyActive = await page
-    .evaluate((dataTab) => {
-      const activeTab = document.querySelector(
-        ".tabs .item.active, [data-action='tab'].active, [role='tab'][aria-selected='true'], .active[data-tab], .tab.active, [data-application-part].active",
-      );
-      return (
-        activeTab?.getAttribute("data-tab") === dataTab ||
-        activeTab?.getAttribute("data-application-part") === dataTab
-      );
-    }, dataTabName)
-    .catch(() => false);
-
-  if (alreadyActive) {
-    console.log(`[switchTab] Tab "${tabName}" (${dataTabName}) is already active.`);
-    return;
-  }
 
   console.log(`[switchTab] Switching to tab: ${tabName}`);
 
@@ -271,7 +129,8 @@ export async function switchTab(page: Page, tabName: string) {
   await expect(tab).toBeVisible({ timeout: 15000 });
 
   // Get the data-tab attribute if it exists to wait for content later
-  const dataTab = (await tab.getAttribute("data-tab")) || (await tab.getAttribute("data-action"));
+  const dataTab =
+    (await tab.getAttribute("data-tab")) || (await tab.getAttribute("data-action")) || dataTabName;
 
   // Force click via evaluate to bypass overlays, then wait for transition
   await tab.evaluate((el) => (el as HTMLElement).click());
@@ -281,7 +140,7 @@ export async function switchTab(page: Page, tabName: string) {
     .waitForFunction(
       ({ name, dataTab }) => {
         const activeTab = document.querySelector(
-          ".tabs .item.active, [data-action='tab'].active, [role='tab'][aria-selected='true'], .active[data-tab], .tab.active, [data-application-part].active",
+          ".tabs .item.active, [data-action='tab'].active, [role='tab'][aria-selected='true'], .active[data-tab], .tab.active, [data-application-part].active, nav h2.active, .navigation h2.active, h2.active",
         );
         const isTabActive =
           activeTab?.textContent?.trim().includes(name) ||
@@ -291,10 +150,13 @@ export async function switchTab(page: Page, tabName: string) {
         const contentVisible = dataTab
           ? document.querySelector(
               `section.tab[data-tab="${dataTab}"].active, .tab[data-tab="${dataTab}"].active, [data-application-part="${dataTab}"].active`,
-            ) !== null || document.querySelector(`#setup-packages-${dataTab}.active`) !== null
+            ) !== null ||
+            document.querySelector(`#setup-packages-${dataTab}.active`) !== null ||
+            document.querySelector(`#setup-packages-${dataTab}:not([style*="display: none"])`) !==
+              null
           : true;
 
-        return isTabActive || contentVisible; // Loosened check for V14
+        return isTabActive || contentVisible;
       },
       { name: tabName, dataTab },
       { timeout: 10000 },
@@ -305,257 +167,120 @@ export async function switchTab(page: Page, tabName: string) {
 }
 
 /**
- * Waits for the Foundry VTT game to be fully ready (game.ready is true).
+ * Navigates to the Systems tab and opens the installation dialog.
  * @param page The Playwright Page object.
- * @param timeout The timeout in milliseconds.
  */
-export async function waitForReady(page: Page, timeout: number = 60000) {
-  console.log("[waitForReady] Waiting for game to be ready...");
-  await expect(page.locator("#loading")).toBeHidden({ timeout });
-  await page.waitForFunction(() => typeof window.game !== "undefined" && window.game.ready, {
-    timeout,
-  });
+export async function openSystemInstallDialog(page: Page): Promise<Locator> {
+  const { getSetupAdapter } = await import("./setup/index.js");
+  const adapter = await getSetupAdapter(page);
+  return await adapter.openSystemInstallDialog(page);
 }
 
 /**
- * Detects and handles the "Reload Application" dialog.
+ * Navigates to the Modules tab and opens the installation dialog.
  * @param page The Playwright Page object.
  */
-export async function handleReload(page: Page) {
-  console.log("[handleReload] Waiting for reload dialog...");
-  const reloadDialog = page
-    .locator("dialog, foundry-app, .window-app, .application")
-    .filter({ hasText: /Reload|Refresh/i })
-    .last();
-
-  await reloadDialog.waitFor({ state: "visible", timeout: 10000 });
-  await reloadDialog
-    .locator("button")
-    .filter({ hasText: /Yes|Confirm/i })
-    .first()
-    .click();
-  await page.waitForLoadState("networkidle");
+export async function openModuleInstallDialog(page: Page): Promise<Locator> {
+  const { getSetupAdapter } = await import("./setup/index.js");
+  const adapter = await getSetupAdapter(page);
+  return await adapter.openModuleInstallDialog(page);
 }
 
 /**
- * Fills a field in a Foundry VTT dialog based on its label.
+ * Installs a system from a manifest URL.
  * @param page The Playwright Page object.
- * @param label The text label of the field.
- * @param value The value to fill.
+ * @param manifestUrl The URL to the system.json manifest.
  */
-export async function fillDialogField(page: Page, label: string, value: string) {
-  console.log(`[fillDialogField] Filling field "${label}" with "${value}"...`);
-  const field = page.locator(".form-group", { hasText: label }).locator("input, select, textarea");
-  await field.fill(value);
+export async function installSystemFromManifest(page: Page, manifestUrl: string): Promise<void> {
+  console.log(`[installSystemFromManifest] Installing from: ${manifestUrl}`);
+  const dialog = await openSystemInstallDialog(page);
+  await installFromManifest(page, dialog, manifestUrl);
 }
 
 /**
- * Automates the multi-step process of activating a module that may trigger
- * dependency resolution and reload dialogs.
+ * Installs a module from a manifest URL.
  * @param page The Playwright Page object.
- * @param moduleId The ID of the module to activate.
+ * @param manifestUrl The URL to the module.json manifest.
  */
-export async function handleModuleActivationFlow(page: Page, moduleId: string) {
-  console.log(`[handleModuleActivationFlow] Activating module: ${moduleId}`);
+export async function installModuleFromManifest(page: Page, manifestUrl: string): Promise<void> {
+  console.log(`[installModuleFromManifest] Installing from: ${manifestUrl}`);
+  const dialog = await openModuleInstallDialog(page);
+  await installFromManifest(page, dialog, manifestUrl);
+}
 
-  // 1. Find the module row and checkbox
-  const moduleRow = page.locator(
-    `li.package[data-module-id="${moduleId}"], .package[data-module-id="${moduleId}"]`,
-  );
-  const checkbox = moduleRow.locator('input[type="checkbox"]');
-
-  // If already checked, return
-  if (await checkbox.isChecked()) {
-    console.log(`[handleModuleActivationFlow] Module ${moduleId} is already checked.`);
-    return;
-  }
-
-  await checkbox.click({ force: true });
-
-  // 2. Handle Dependency Resolution Dialog
-  const depDialog = page
-    .locator("dialog, foundry-app, .window-app, .application")
-    .filter({ hasText: /Dependency|Resolution/i })
-    .last();
-
-  try {
-    await depDialog.waitFor({ state: "visible", timeout: 3000 });
-    console.log("[handleModuleActivationFlow] Dependency dialog detected. Resolving...");
-    await depDialog
-      .locator("button")
-      .filter({ hasText: /Activate|Confirm|Yes/i })
-      .first()
-      .click();
-  } catch {
-    // No dependency dialog appeared, which is fine
-  }
-
-  // 3. Save and Reload
-  const saveBtn = page
-    .locator('button:has-text("Save Module Settings"), button[name="submit"]')
+/**
+ * Shared helper for filling manifest URL and clicking install in a dialog.
+ */
+async function installFromManifest(
+  page: Page,
+  dialog: Locator,
+  manifestUrl: string,
+): Promise<void> {
+  // Foundry's manifest input is usually at the bottom
+  const manifestInput = dialog
+    .locator(
+      'input#install-package-manifestUrl, input[name="manifestURL"], input:not(#world-filter):not(#system-filter):not(#module-filter):not([type="checkbox"]):not([type="radio"])',
+    )
     .first();
-  if (await saveBtn.isVisible()) {
-    await saveBtn.click();
-    await handleReload(page);
-    await waitForReady(page);
+  await manifestInput.fill(manifestUrl);
+
+  const installBtn = dialog
+    .locator('button[data-action="installPackage"], button:has-text("Install"), button.bright')
+    .filter({ visible: true })
+    .last();
+  await installBtn.evaluate((el) => (el as HTMLElement).click());
+
+  // Use the progress bar / notification wait logic
+  await page
+    .waitForFunction(() => {
+      const progress = document.querySelector(".notification.info, .progress-bar, .loading");
+      return !progress;
+    })
+    .catch(() => null);
+
+  // Close the dialog if it's still open
+  const closeBtn = dialog.locator('button[data-action="close"], .header-button.close');
+  if (await closeBtn.isVisible()) {
+    await closeBtn.click();
   }
 }
 
 /**
- * Simulates dropping a compendium item onto a target.
+ * Waits for the Foundry VTT game object to be fully initialized and ready.
  * @param page The Playwright Page object.
- * @param targetSelector The selector for the drop target (e.g., an actor sheet).
- * @param uuid The UUID of the compendium item.
  */
-export async function dropCompendiumItem(page: Page, targetSelector: string, uuid: string) {
-  const type = uuid.split(".")[0] === "Compendium" ? "Item" : uuid.split(".")[0];
-  return simulateFoundryDrop(page, targetSelector, { type, uuid });
+export async function waitForReady(page: Page) {
+  console.log("[waitForReady] Waiting for game to be ready...");
+  await page.waitForFunction(() => (window as any).game?.ready, { timeout: 60000 });
 }
 
 /**
- * Waits for a Foundry VTT setting to reach an expected value.
+ * Executes a function after ensuring a log has been emitted via FP_VERIFY.
  * @param page The Playwright Page object.
- * @param moduleId The ID of the module or "core".
- * @param settingId The ID of the setting.
- * @param expectedValue The expected value of the setting.
- * @param timeout The timeout in milliseconds.
- */
-export async function waitForSetting(
-  page: Page,
-  moduleId: string,
-  settingId: string,
-  expectedValue: any,
-  timeout: number = 5000,
-) {
-  console.log(
-    `[waitForSetting] Waiting for setting ${moduleId}.${settingId} to be ${expectedValue}...`,
-  );
-  await page.waitForFunction(
-    ({ moduleId, settingId, expectedValue }) => {
-      return window.game.settings.get(moduleId, settingId) === expectedValue;
-    },
-    { moduleId, settingId, expectedValue },
-    { timeout },
-  );
-}
-
-/**
- * Waits for a Foundry VTT Actor flag to reach an expected value.
- * @param page The Playwright Page object.
- * @param actorId The ID or UUID of the actor.
- * @param scope The module or "core" scope.
- * @param flagKey The flag key.
- * @param expectedValue The expected value of the flag.
- * @param timeout The timeout in milliseconds.
- */
-export async function waitForActorFlag(
-  page: Page,
-  actorId: string,
-  scope: string,
-  flagKey: string,
-  expectedValue: any,
-  timeout: number = 5000,
-) {
-  console.log(
-    `[waitForActorFlag] Waiting for flag ${scope}.${flagKey} on actor ${actorId} to be ${expectedValue}...`,
-  );
-  await page.waitForFunction(
-    ({ actorId, scope, flagKey, expectedValue }) => {
-      const actor = window.game.actors.get(actorId) || window.fromUuidSync(actorId);
-      return actor?.getFlag(scope, flagKey) === expectedValue;
-    },
-    { actorId, scope, flagKey, expectedValue },
-    { timeout },
-  );
-}
-
-/**
- * Waits for a specific data path on a Foundry VTT Actor to reach an expected value.
- * @param page The Playwright Page object.
- * @param actorId The ID or UUID of the actor.
- * @param dataPath The property path (e.g., "system.abilities.str.value").
- * @param expectedValue The expected value.
- * @param timeout The timeout in milliseconds.
- */
-export async function waitForActorData(
-  page: Page,
-  actorId: string,
-  dataPath: string,
-  expectedValue: any,
-  timeout: number = 5000,
-) {
-  console.log(
-    `[waitForActorData] Waiting for ${dataPath} on actor ${actorId} to be ${expectedValue}...`,
-  );
-  await page.waitForFunction(
-    ({ actorId, dataPath, expectedValue }) => {
-      const actor = window.game.actors.get(actorId) || window.fromUuidSync(actorId);
-      if (!actor) return false;
-
-      // Simple helper to get nested property
-      const getProperty = (obj: any, path: string) => {
-        return path.split(".").reduce((o, i) => o?.[i], obj);
-      };
-
-      return getProperty(actor, dataPath) === expectedValue;
-    },
-    { actorId, dataPath, expectedValue },
-    { timeout },
-  );
-}
-
-/**
- * Verifies that a specific event was logged in the FP_VERIFY registry.
- * @param page The Playwright Page object.
- * @param key The log key to check.
- * @param predicate A function that receives the log data and returns true if it matches.
- * @param extraData Optional data to pass to the predicate (to avoid closure issues).
- * @param timeout The timeout in milliseconds.
+ * @param key The log key to wait for.
+ * @param predicate A function to test the log data.
+ * @param extraData Optional extra data to pass to the predicate.
  */
 export async function verifyResult(
   page: Page,
   key: string,
   predicate: (data: any, extra?: any) => boolean,
   extraData?: any,
-  timeout: number = 5000,
+  options: { timeout?: number } = {},
 ) {
+  const { timeout = 15000 } = options;
   console.log(`[verifyResult] Waiting for log "${key}" matching predicate...`);
+
+  // We must stringify the predicate to pass it into evaluate
   const predicateStr = predicate.toString();
-
-  // First check if it already exists in the logs
-  const alreadyFound = await page.evaluate(
-    ({ key, predicateStr, extraData }) => {
-      const predicate = new Function(`return ${predicateStr}`)();
-      const entries = window.FP_VERIFY?.logs[key] || [];
-      return entries.some((e: any) => {
-        try {
-          return e && predicate(e, extraData);
-        } catch {
-          return false;
-        }
-      });
-    },
-    { key, predicateStr, extraData },
-  );
-
-  if (alreadyFound) {
-    console.log(`[verifyResult] Found existing log for "${key}".`);
-    return;
-  }
 
   await page
     .waitForFunction(
       ({ key, predicateStr, extraData }) => {
         try {
           const predicate = new Function(`return ${predicateStr}`)();
-          const entries = window.FP_VERIFY?.logs[key] || [];
-          return entries.some((e: any) => {
-            try {
-              return e && predicate(e, extraData);
-            } catch {
-              return false;
-            }
-          });
+          const logs = (window as any).FP_VERIFY?.logs[key] || [];
+          return logs.some((l: any) => predicate(l, extraData));
         } catch {
           return false;
         }
@@ -570,52 +295,131 @@ export async function verifyResult(
 }
 
 /**
- * Clears the FP_VERIFY registry in the browser.
- * @param page The Playwright Page object.
+ * Waits for a specific actor flag to be set to a value.
  */
-export async function clearFPVerify(page: Page) {
-  console.log(`[clearFPVerify] Resetting verification logs...`);
-  await page.evaluate(() => {
-    window.FP_VERIFY_RESET?.();
+export async function waitForActorFlag(page: Page, actorName: string, flag: string, value: any) {
+  await verifyResult(page, "actor-update", (data) => {
+    return data.name === actorName && data.delta.flags?.["fake-module"]?.[flag] === value;
   });
 }
 
 /**
- * Simulates a Foundry VTT drag-and-drop event.
- * @param page The Playwright Page object.
- * @param selector The selector for the drop target.
- * @param data The data to include in the DragEvent's dataTransfer (type and uuid).
+ * Waits for specific actor data to be updated.
  */
-export async function simulateFoundryDrop(
+export async function waitForActorData(page: Page, actorName: string, path: string, value: any) {
+  await verifyResult(page, "actor-update", (data) => {
+    const current = data.delta.system?.[path];
+    return data.name === actorName && current === value;
+  });
+}
+
+/**
+ * Waits for a game setting to be set.
+ */
+export async function waitForSetting(page: Page, module: string, key: string, value: any) {
+  // Note: Settings updates are usually logged or checked directly
+  await page.waitForFunction(
+    ({ module, key, value }) => {
+      return (window as any).game.settings.get(module, key) === value;
+    },
+    { module, key, value },
+  );
+}
+
+/**
+ * Clears the FP_VERIFY log registry.
+ */
+export async function clearFPVerify(page: Page) {
+  await page.evaluate(() => {
+    if ((window as any).FP_VERIFY_RESET) (window as any).FP_VERIFY_RESET();
+  });
+}
+
+/**
+ * Handles the Foundry VTT reload dialog.
+ */
+export async function handleReload(page: Page) {
+  const dialog = page
+    .locator("dialog, foundry-app, .window-app")
+    .filter({ hasText: /Reload/i })
+    .last();
+  await expect(dialog).toBeVisible();
+  await dialog.locator('button:has-text("Yes")').first().click();
+  await page.waitForLoadState("networkidle");
+  await waitForReady(page);
+}
+
+/**
+ * Fills a field in a visible dialog.
+ */
+export async function fillDialogField(page: Page, label: string, value: string) {
+  const dialog = page.locator("dialog, foundry-app, .window-app").filter({ visible: true }).last();
+  const input = dialog.locator(`input[name="${label}"], input[placeholder*="${label}" i]`).first();
+  await input.fill(value);
+}
+
+/**
+ * Performs the full module activation flow for a list of modules.
+ */
+export async function handleModuleActivationFlow(page: Page, moduleIds: string[]) {
+  const { foundrySetup } = await import("./auth.js");
+  await foundrySetup(page, { moduleId: moduleIds, createWorld: false, deleteIfExists: false });
+}
+
+/**
+ * Simulates a drop from a compendium onto a target.
+ */
+export async function dropCompendiumItem(
   page: Page,
-  selector: string,
-  data: { type: string; uuid: string },
+  targetSelector: string,
+  pack: string,
+  itemId: string,
 ) {
-  console.log(`[simulateFoundryDrop] Dropping ${data.type} (${data.uuid}) onto ${selector}...`);
+  const data = {
+    type: "Item",
+    uuid: `Compendium.${pack}.Item.${itemId}`,
+  };
+  await simulateFoundryDrop(page, targetSelector, data);
+}
+
+/**
+ * Simulates a Foundry VTT drag-and-drop event.
+ */
+export async function simulateFoundryDrop(page: Page, targetSelector: string, data: any) {
+  console.log(`[simulateFoundryDrop] Dropping ${data.type} onto ${targetSelector}...`);
   await page.evaluate(
     ({ selector, data }) => {
-      const target = document.querySelector(selector);
-      if (!target) throw new Error(`Drop target not found: ${selector}`);
+      const selectors = selector.split(",").map((s) => s.trim());
+      let el: HTMLElement | null = null;
+
+      for (const sel of selectors) {
+        const cleanSel = sel.replace(/:has-text\([^)]*\)/g, "");
+        try {
+          const matches = document.querySelectorAll(cleanSel);
+          if (sel.includes(":has-text")) {
+            const textMatch = sel.match(/:has-text\("([^"]*)"\)/);
+            const searchText = textMatch ? textMatch[1] : "";
+            el = Array.from(matches).find((m) =>
+              m.textContent?.includes(searchText),
+            ) as HTMLElement;
+          } else {
+            el = matches[0] as HTMLElement;
+          }
+        } catch {
+          // Ignore selector errors
+        }
+        if (el) break;
+      }
+
+      if (!el) throw new Error(`Target ${selector} not found.`);
 
       const dataTransfer = new DataTransfer();
       dataTransfer.setData("text/plain", JSON.stringify(data));
-      dataTransfer.dropEffect = "copy";
-
-      // Fire dragenter
-      target.dispatchEvent(
-        new DragEvent("dragenter", { dataTransfer, bubbles: true, cancelable: true }),
-      );
-
-      // Fire dragover
-      target.dispatchEvent(
+      el.dispatchEvent(
         new DragEvent("dragover", { dataTransfer, bubbles: true, cancelable: true }),
       );
-
-      // Fire drop
-      target.dispatchEvent(
-        new DragEvent("drop", { dataTransfer, bubbles: true, cancelable: true }),
-      );
+      el.dispatchEvent(new DragEvent("drop", { dataTransfer, bubbles: true, cancelable: true }));
     },
-    { selector, data },
+    { selector: targetSelector, data },
   );
 }

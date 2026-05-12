@@ -69,10 +69,23 @@ export class DockerFoundryOrchestrator {
     // 3. Stop/Remove existing container if it exists
     this.stopAndRemove();
 
-    // 4. Pull image
+    // 4. Pull image if missing
     const image = `ghcr.io/felddy/foundryvtt:${this.config.version}`;
-    console.log(`[DockerOrchestrator] Pulling image: ${image}`);
-    execSync(`docker pull ${image}`, { stdio: "inherit" });
+    const imageExists = execSync(`docker images -q ${image}`, { encoding: "utf8" }).trim() !== "";
+
+    if (!imageExists) {
+      console.log(`[DockerOrchestrator] Image ${image} not found locally. Pulling...`);
+      execSync(`docker pull ${image}`, { stdio: "inherit" });
+    } else {
+      console.log(`[DockerOrchestrator] Image ${image} already exists locally.`);
+      // Optional: try to pull to update, but ignore failures
+      try {
+        console.log(`[DockerOrchestrator] Attempting to update image ${image}...`);
+        execSync(`docker pull ${image}`, { stdio: "ignore" });
+      } catch {
+        console.warn(`[DockerOrchestrator] Failed to update image ${image}, using local version.`);
+      }
+    }
 
     // 5. Run container
     const dockerCmd = this.getRunCommand(envPath);
