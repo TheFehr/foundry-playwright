@@ -1,5 +1,9 @@
 import { expect, Page } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
+import {
+  installSystemFromManifest as helperInstallSystemFromManifest,
+  installModuleFromManifest as helperInstallModuleFromManifest,
+} from "../helpers.js";
 
 /**
  * Setup adapter for Foundry VTT Version 13.
@@ -210,11 +214,11 @@ export class V13SetupAdapter implements SetupAdapter {
   }
 
   async installSystemFromManifest(page: Page, manifestUrl: string): Promise<void> {
-    await installSystemFromManifest(page, manifestUrl);
+    await helperInstallSystemFromManifest(page, manifestUrl);
   }
 
   async installModuleFromManifest(page: Page, manifestUrl: string): Promise<void> {
-    await installModuleFromManifest(page, manifestUrl);
+    await helperInstallModuleFromManifest(page, manifestUrl);
   }
 
   async openSystemInstallDialog(page: Page): Promise<any> {
