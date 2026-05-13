@@ -101,19 +101,6 @@ async function verifyVersion(
 
     console.log(`--- Verification Successful for ${version} ---`);
 
-    // Generate Individual Report
-    const reportPath = path.join(process.cwd(), `verification-report-${version}.md`);
-    const reportContent = `# Verification Report: ${version}
-- **Date:** ${new Date().toISOString()}
-- **Foundry Version:** ${meta.foundry}
-- **System:** ${meta.system.id} (v${meta.system.version})
-${meta.modules.length > 0 ? `- **Modules:**\n${meta.modules.map((m) => `  - ${m.id} (v${m.version})`).join("\n")}` : "- **Modules:** None"}
-- **Status:** PASS
-- **Docker:** ${isDocker ? "Yes" : "No"}
-`;
-    fs.writeFileSync(reportPath, reportContent);
-    console.log(`Report generated: ${reportPath}`);
-
     // Update Cumulative Summary Report
     const summaryPath = path.join(process.cwd(), "verification-report.md");
     let summaryContent =
