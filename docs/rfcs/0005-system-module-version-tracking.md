@@ -2,7 +2,7 @@
 
 ## 1. The "What"
 
-An expansion to the existing verification framework to automatically capture and track the exact versions of the game system, active modules, and the `@thefehrs/foundry-playwright` library itself during a successful local verification run. Additionally, this data will be automatically compiled into a human-readable Markdown report.
+An expansion to the existing verification framework to automatically capture and track the exact versions of the game system, active modules, and the `@thefehr/foundry-playwright` library itself during a successful local verification run. Additionally, this data will be automatically compiled into a human-readable Markdown report.
 
 ## 2. The "Why"
 

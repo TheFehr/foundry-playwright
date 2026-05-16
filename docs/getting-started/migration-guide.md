@@ -1,6 +1,6 @@
 # Migration Guide: Adopting foundry-playwright
 
-This guide explains how to migrate your existing Foundry VTT module or system testing setup to use `@thefehrs/foundry-playwright`.
+This guide explains how to migrate your existing Foundry VTT module or system testing setup to use `@thefehr/foundry-playwright`.
 
 ## Step 1: Initialization
 
@@ -38,7 +38,7 @@ If your module source is in the project root, you can create a symlink in `e2e/`
 Instead of manual login boilerplate, use the `useFoundry` helper at the top of your test files:
 
 ```typescript
-import { test, expect, useFoundry } from "@thefehrs/foundry-playwright";
+import { test, expect, useFoundry } from "@thefehr/foundry-playwright";
 
 // This sets up the world, system, and activates your module
 useFoundry(test, {

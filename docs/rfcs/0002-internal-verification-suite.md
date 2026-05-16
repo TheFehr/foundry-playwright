@@ -2,7 +2,7 @@
 
 ## Goal
 
-Establish an industrial-grade internal verification suite that tests the `@thefehrs/foundry-playwright` library against specialized "Mock Modules". This suite ensures that every helper, adapter, and state manipulation utility is verified against a controlled, deterministic Foundry VTT environment.
+Establish an industrial-grade internal verification suite that tests the `@thefehr/foundry-playwright` library against specialized "Mock Modules". This suite ensures that every helper, adapter, and state manipulation utility is verified against a controlled, deterministic Foundry VTT environment.
 
 ## 1. Dual-Tier Verification Strategy
 

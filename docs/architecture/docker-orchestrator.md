@@ -2,7 +2,7 @@
 
 ## The "What"
 
-A set of reusable utilities and a CLI built into `@thefehrs/foundry-playwright` that allows developers to spin up version-specific FoundryVTT instances in Docker containers for their own local test runs and development.
+A set of reusable utilities and a CLI built into `@thefehr/foundry-playwright` that allows developers to spin up version-specific FoundryVTT instances in Docker containers for their own local test runs and development.
 
 ## The "Why"
 
@@ -32,7 +32,7 @@ The library will include a CLI tool that developers can use in their `package.js
 For more control, developers can use the orchestrator directly in their `playwright.config.ts`:
 
 ```typescript
-import { DockerFoundryOrchestrator } from "@thefehrs/foundry-playwright";
+import { DockerFoundryOrchestrator } from "@thefehr/foundry-playwright";
 
 export default defineConfig({
   globalSetup: async () => {
@@ -57,7 +57,7 @@ export default defineConfig({
 
 ### 4. Developer Workflow
 
-1. **Install:** `npm install @thefehrs/foundry-playwright`.
+1. **Install:** `npm install @thefehr/foundry-playwright`.
 2. **Config:** Add credentials to `.env`.
 3. **Run:** Execute tests through the orchestrator.
 4. **Benefit:** A perfectly clean, version-accurate Foundry instance every time.

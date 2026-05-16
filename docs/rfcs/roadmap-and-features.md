@@ -2,7 +2,7 @@
 
 ## V1.0.0 (Current Project Needs)
 
-The goal for V1.0.0 is to extract and formalize the logic currently used in `thefehrs-learning-manager`.
+The goal for V1.0.0 is to extract and formalize the logic currently used in `thefehr-learning-manager`.
 
 ### 1. Document Management (via `page.evaluate`)
 

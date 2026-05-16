@@ -1,4 +1,4 @@
-# @thefehrs/foundry-playwright
+# @thefehr/foundry-playwright
 
 A robust, multi-version E2E testing library for FoundryVTT modules and systems, powered by Playwright.
 
@@ -39,7 +39,7 @@ The easiest way to get started is by using the CLI to bootstrap your project:
 
 ```bash
 # Install the library
-npm install --save-dev @thefehrs/foundry-playwright
+npm install --save-dev @thefehr/foundry-playwright
 
 # Initialize the test suite
 npx foundry-playwright init
@@ -52,7 +52,7 @@ This will create a `playwright.config.ts`, an `e2e` directory with a sample test
 Use the `useFoundry` helper to handle the complex authentication and world setup:
 
 ```typescript
-import { test, expect, useFoundry } from "@thefehrs/foundry-playwright";
+import { test, expect, useFoundry } from "@thefehr/foundry-playwright";
 
 // Automatically boots Foundry and sets up the environment
 useFoundry(test, {

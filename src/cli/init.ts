@@ -82,7 +82,7 @@ export default defineConfig({
 
   const sampleTestPath = path.join(e2eDir, "basic.spec.ts");
   if (!fs.existsSync(sampleTestPath)) {
-    const sampleTestContent = `import { test, expect, useFoundry } from "@thefehrs/foundry-playwright";
+    const sampleTestContent = `import { test, expect, useFoundry } from "@thefehr/foundry-playwright";
 
 /**
  * This helper ensures that the Foundry VTT instance is fully set up

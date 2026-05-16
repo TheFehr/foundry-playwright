@@ -2,7 +2,7 @@
 
 ## The "What"
 
-A phased roadmap for moving the identified components out of `thefehrs-learning-manager` into a new standalone repository, publishing the resulting package, and refactoring the original project to use the new dependency.
+A phased roadmap for moving the identified components out of `thefehr-learning-manager` into a new standalone repository, publishing the resulting package, and refactoring the original project to use the new dependency.
 
 ## The "Why"
 
@@ -16,7 +16,7 @@ Directly ripping out code and switching to a new library is risky. We need a str
 
 ### Phase 1: Repository & Environment Setup (The Foundation)
 
-1.  **New Repo:** Initialize `@thefehrs/foundry-playwright` with TypeScript, Playwright, and Vitest (for unit testing the library's non-browser logic).
+1.  **New Repo:** Initialize `@thefehr/foundry-playwright` with TypeScript, Playwright, and Vitest (for unit testing the library's non-browser logic).
 2.  **Infrastructure:** Set up a `package.json` with appropriate peer dependencies (`@playwright/test`) and a build script (ESM).
 
 ### Phase 2: Incremental Porting (The Migration)
@@ -35,7 +35,7 @@ Directly ripping out code and switching to a new library is risky. We need a str
 ### Phase 4: Integration & Refactoring (The Swap)
 
 1.  **Beta Release:** Publish a `0.1.0-beta` version of the package.
-2.  **Add Dependency:** Run `npm install --save-dev @thefehrs/foundry-playwright` in `thefehrs-learning-manager`.
+2.  **Add Dependency:** Run `npm install --save-dev @thefehr/foundry-playwright` in `thefehr-learning-manager`.
 3.  **Refactor Fixtures:**
     - Update `e2e/fixtures.ts` to extend the library's base `test`.
     - Delete duplicate logic.
@@ -44,6 +44,6 @@ Directly ripping out code and switching to a new library is risky. We need a str
 
 ### Phase 5: Verification & Cleanup (The Finalization)
 
-1.  **Run E2E Suite:** Ensure all 100% of existing tests in `thefehrs-learning-manager` pass with the new library.
+1.  **Run E2E Suite:** Ensure all 100% of existing tests in `thefehr-learning-manager` pass with the new library.
 2.  **Documentation:** Complete the README and API documentation in the library repo.
 3.  **Final Release:** Publish `1.0.0`.

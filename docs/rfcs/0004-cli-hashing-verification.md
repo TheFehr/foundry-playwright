@@ -2,7 +2,7 @@
 
 ## 1. The "What"
 
-A command-line interface (CLI) for `@thefehrs/foundry-playwright` that allows module developers to opt-in to a source-code verification system. This system tracks the SHA-256 hashes of "verified" source files and provides a CI mechanism to ensure no unverified code changes are merged into the repository.
+A command-line interface (CLI) for `@thefehr/foundry-playwright` that allows module developers to opt-in to a source-code verification system. This system tracks the SHA-256 hashes of "verified" source files and provides a CI mechanism to ensure no unverified code changes are merged into the repository.
 
 ## 2. The "Why"
 

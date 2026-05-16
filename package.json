@@ -1,5 +1,5 @@
 {
-  "name": "@thefehrs/foundry-playwright",
+  "name": "@thefehr/foundry-playwright",
   "version": "0.2.1",
   "description": "A robust, multi-version E2E testing library for FoundryVTT modules and systems, powered by Playwright.",
   "keywords": [
@@ -8,8 +8,16 @@
     "playwright",
     "testing"
   ],
+  "homepage": "https://github.com/TheFehr/foundry-playwright#readme",
+  "bugs": {
+    "url": "https://github.com/TheFehr/foundry-playwright/issues"
+  },
   "license": "MIT",
-  "author": "TheFehrs",
+  "author": "TheFehr",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheFehr/foundry-playwright.git"
+  },
   "bin": {
     "foundry-playwright": "./dist/cli/index.js"
   },

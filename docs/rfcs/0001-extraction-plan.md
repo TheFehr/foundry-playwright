@@ -2,9 +2,9 @@
 
 ## Goal
 
-Extract the generic FoundryVTT E2E testing utilities, fixtures, and setup logic from `thefehrs-learning-manager` into a standalone, reusable NPM package. This will allow other FoundryVTT module developers to benefit from a robust Playwright-based testing foundation.
+Extract the generic FoundryVTT E2E testing utilities, fixtures, and setup logic from `thefehr-learning-manager` into a standalone, reusable NPM package. This will allow other FoundryVTT module developers to benefit from a robust Playwright-based testing foundation.
 
-## Proposed Package: `@thefehrs/foundry-playwright`
+## Proposed Package: `@thefehr/foundry-playwright`
 
 ### 1. Components to Extract & Expand
 
@@ -67,9 +67,9 @@ Extract the generic FoundryVTT E2E testing utilities, fixtures, and setup logic 
 3.  **Abstractions:** Use a `FoundryConfig` object to handle module IDs, system-specific paths, and credentials.
 4.  **Publishing:** Set up a CI pipeline to publish the package to NPM.
 
-### 3. Integration into `thefehrs-learning-manager`
+### 3. Integration into `thefehr-learning-manager`
 
-1.  **Dependency:** Add `@thefehrs/foundry-playwright` as a `devDependency`.
+1.  **Dependency:** Add `@thefehr/foundry-playwright` as a `devDependency`.
 2.  **Refactor `e2e/fixtures.ts`:** Extend the library's base `test` fixture.
 3.  **Refactor `e2e/global-setup.ts`:** Replace custom setup logic with `foundrySetup`.
 4.  **Clean up `e2e/helpers.ts`:** Remove generic functions.
