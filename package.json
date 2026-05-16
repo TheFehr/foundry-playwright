@@ -1,6 +1,6 @@
 {
   "name": "@thefehrs/foundry-playwright",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A robust, multi-version E2E testing library for FoundryVTT modules and systems, powered by Playwright.",
   "keywords": [
     "e2e",
