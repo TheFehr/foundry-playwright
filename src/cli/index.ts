@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { DockerFoundryOrchestrator } from "../docker.js";
+import { initAction } from "./init.js";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -11,6 +12,8 @@ program
   .name("foundry-playwright")
   .description("CLI for Foundry VTT E2E testing with Playwright")
   .version("0.1.0");
+
+program.command("init").description("Initialize a new Foundry E2E test project").action(initAction);
 
 program
   .command("test")

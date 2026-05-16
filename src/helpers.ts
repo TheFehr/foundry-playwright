@@ -18,6 +18,21 @@ export function getVerificationRegistry(): any[] {
 }
 
 /**
+ * Helper to automatically set up a Foundry VTT instance before all tests in a file.
+ * Reduces boilerplate in spec files.
+ * @param test The Playwright test object.
+ * @param config Foundry setup configuration.
+ */
+export function useFoundry(test: any, config: any = {}) {
+  test.beforeAll(async ({ browser }: { browser: any }) => {
+    const page = await browser.newPage();
+    const { foundrySetup } = await import("./auth.js");
+    await foundrySetup(page, config);
+    await page.close();
+  });
+}
+
+/**
  * Validates the current Foundry/System/Module stack against the registry.
  */
 export async function validateStack(page: Page, targetVersion?: string | number) {

@@ -28,6 +28,7 @@
     "format": "oxfmt . --check",
     "format:fix": "oxfmt .",
     "verify:local": "tsx scripts/verify-local.ts",
+    "release": "release-it",
     "prepublishOnly": "npm run build",
     "prepare": "husky"
   },
@@ -36,12 +37,14 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
+    "@release-it/conventional-changelog": "^11.0.0",
     "@types/node": "^20.10.0",
     "dotenv": "^17.4.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.2",
     "oxfmt": "^0.48.0",
     "oxlint": "^1.63.0",
+    "release-it": "^20.0.1",
     "tsx": "^4.21.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"

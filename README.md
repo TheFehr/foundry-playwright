@@ -30,39 +30,50 @@ This repository is currently in the **Extraction & Initialization** phase. Detai
 - **Docker Orchestration:** Automated setup and teardown of version-specific Foundry instances via CLI or programmatic orchestrator.
 - **State Manipulation:** Fast, UI-less data injection via direct Foundry API and socket calls (`createActor`, `updateDocument`, `grantCurrency`).
 - **UI Helpers:** Robust tab switching, aggressive tour suppression, and dialog automation.
-- **System Adapters:** Pluggable logic for `dnd5e` and `pf2e`.
 
 ## Getting Started
 
-### Installation
+### Quick Start (Initialization)
+
+The easiest way to get started is by using the CLI to bootstrap your project:
 
 ```bash
+# Install the library
 npm install --save-dev @thefehrs/foundry-playwright
+
+# Initialize the test suite
+npx foundry-playwright init
 ```
 
-### CLI Usage
+This will create a `playwright.config.ts`, an `e2e` directory with a sample test, and add a `test:e2e` script to your `package.json`.
 
-The library provides a CLI to run tests with a Docker-orchestrated Foundry instance.
+### Writing Your First Test
 
-```bash
-# Run tests against Foundry V14
-npx foundry-playwright test --version 14.360.0 --docker --playwright "npx playwright test"
-```
-
-### Programmatic Setup
+Use the `useFoundry` helper to handle the complex authentication and world setup:
 
 ```typescript
-import { test, foundrySetup } from "@thefehrs/foundry-playwright";
+import { test, expect, useFoundry } from "@thefehrs/foundry-playwright";
 
-test.beforeAll(async ({ browser }) => {
-  const page = await browser.newPage();
-  await foundrySetup(page, {
-    worldId: "test-world",
-    userName: "Gamemaster",
-    adminPassword: "password",
-    systemId: "dnd5e",
-    moduleId: "my-module",
-  });
-  await page.close();
+// Automatically boots Foundry and sets up the environment
+useFoundry(test, {
+  worldId: "test-world",
+  systemId: "dnd5e",
+  moduleId: "my-module-id",
+});
+
+test("Foundry is ready", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveTitle(/Foundry VTT/);
 });
 ```
+
+### Running Tests
+
+```bash
+# Run tests with a Docker-orchestrated Foundry instance
+npm run test:e2e
+```
+
+For more detailed instructions, see the [Migration Guide](docs/getting-started/migration-guide.md).
+
+## Core Features
