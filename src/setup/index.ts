@@ -1,4 +1,4 @@
-import { Page } from "@playwright/test";
+import { FoundryPage } from "../types/index.js";
 import { SetupAdapter, GameAdapter } from "./base.js";
 import { V13SetupAdapter, V13GameAdapter } from "./v13.js";
 import { V14SetupAdapter, V14GameAdapter } from "./v14.js";
@@ -8,15 +8,15 @@ import { V14SetupAdapter, V14GameAdapter } from "./v14.js";
  * Prioritizes explicit version input from parameters or environment variables.
  */
 export async function getSetupAdapter(
-  page: Page,
+  page: FoundryPage,
   versionOverride?: string | number,
 ): Promise<SetupAdapter> {
   // 1. Prioritize explicit input
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
     const v = String(explicitVersion);
-    if (v.startsWith("14")) return new V14SetupAdapter();
-    if (v.startsWith("13")) return new V13SetupAdapter();
+    if (v.startsWith("14")) return new V14SetupAdapter(page);
+    if (v.startsWith("13")) return new V13SetupAdapter(page);
     console.warn(
       `[getSetupAdapter] Explicit version "${v}" provided but not explicitly supported. Falling back to detection.`,
     );
@@ -103,23 +103,23 @@ export async function getSetupAdapter(
       return 13; // Default to 13
     });
 
-  if (detectedVersion === 14) return new V14SetupAdapter();
-  return new V13SetupAdapter();
+  if (detectedVersion === 14) return new V14SetupAdapter(page);
+  return new V13SetupAdapter(page);
 }
 
 /**
  * Detects the Foundry VTT version and returns the appropriate game adapter.
  */
 export async function getGameAdapter(
-  page: Page,
+  page: FoundryPage,
   versionOverride?: string | number,
 ): Promise<GameAdapter> {
   // 1. Prioritize explicit input
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
     const v = String(explicitVersion);
-    if (v.startsWith("14")) return new V14GameAdapter();
-    if (v.startsWith("13")) return new V13GameAdapter();
+    if (v.startsWith("14")) return new V14GameAdapter(page);
+    if (v.startsWith("13")) return new V13GameAdapter(page);
   }
 
   const version = await page
@@ -142,8 +142,8 @@ export async function getGameAdapter(
     .then((h) => h.jsonValue())
     .catch(() => 13);
 
-  if (version === 14) return new V14GameAdapter();
-  return new V13GameAdapter();
+  if (version === 14) return new V14GameAdapter(page);
+  return new V13GameAdapter(page);
 }
 
 export * from "./base.js";

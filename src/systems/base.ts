@@ -1,69 +1,117 @@
-import { Page } from "@playwright/test";
+import { FoundryPage } from "../types/index.js";
 
 /**
- * Interface for system-specific logic in Foundry VTT.
+ * Interface for system-specific state manipulation logic.
  */
-export interface SystemAdapter {
-  /** The unique ID of the game system (e.g., "dnd5e", "pf2e"). */
-  id: string;
-
-  /**
-   * Returns true if this adapter is compatible with the given system version.
-   * @param version The system version (e.g., "4.0.0").
-   */
-  isCompatible(version: string): boolean;
-
-  /**
-   * Returns the path to the HP value in the actor's system data.
-   */
-  getHPPath(): string;
+export interface SystemStateAdapter {
+  /** The system ID this adapter handles. */
+  readonly id: string;
 
   /**
    * Grants currency to an actor.
-   * @param page The Playwright Page object.
-   * @param actorName The name of the actor.
-   * @param amount The amount of currency to grant.
-   * @param currency The type of currency (e.g., "gp", "sp").
    */
-  grantCurrency(page: Page, actorName: string, amount: number, currency?: string): Promise<void>;
+  grantCurrency(
+    page: FoundryPage,
+    actorName: string,
+    amount: number,
+    currency: string,
+  ): Promise<any>;
 
   /**
-   * Adds or removes members from a group actor.
-   * @param page The Playwright Page object.
-   * @param groupName The name of the group actor.
-   * @param memberNames The names of the members to add/remove.
-   * @param action Whether to "add" or "remove".
+   * Provides the system-specific data structure for a test actor.
    */
-  manageGroupMembers(
-    page: Page,
-    groupName: string,
-    memberNames: string[],
-    action: "add" | "remove",
-  ): Promise<void>;
+  getTestActorData(name: string): { type: string; system: any };
+
+  /**
+   * Sets an actor's HP.
+   */
+  setActorHP(page: FoundryPage, actorName: string, value: number, max?: number): Promise<any>;
+
+  /**
+   * Returns the log key and a predicate to verify a currency update in verifyResult.
+   */
+  getCurrencyVerifyParams(
+    actorName: string,
+    amount: number,
+    currency: string,
+  ): { key: string; predicate: (data: any, extra?: any) => boolean };
 }
 
 /**
- * Base class for system adapters with default implementations where possible.
+ * Base implementation of SystemStateAdapter with default (often DnD5e-like) logic.
  */
-export abstract class BaseSystemAdapter implements SystemAdapter {
+export abstract class BaseSystemStateAdapter implements SystemStateAdapter {
   abstract id: string;
 
-  isCompatible(_version: string): boolean {
-    return true;
-  }
+  constructor(protected page?: FoundryPage) {}
 
-  abstract getHPPath(): string;
-  abstract grantCurrency(
-    page: Page,
+  async grantCurrency(
+    page: FoundryPage,
     actorName: string,
     amount: number,
-    currency?: string,
-  ): Promise<void>;
+    currency: string,
+  ): Promise<any> {
+    return page.evaluate(
+      ({ actorName, amount, currency }) => {
+        const actor = window.game.actors.getName(actorName);
+        if (!actor) throw new Error(`Actor not found: ${actorName}`);
+        const current = (actor.system.currency?.[currency] || 0) + amount;
+        return actor.update({ [`system.currency.${currency}`]: current });
+      },
+      { actorName, amount, currency },
+    );
+  }
 
-  abstract manageGroupMembers(
-    page: Page,
-    groupName: string,
-    memberNames: string[],
-    action: "add" | "remove",
-  ): Promise<void>;
+  getTestActorData(_name: string): { type: string; system: any } {
+    return {
+      type: "character",
+      system: {
+        attributes: { hp: { value: 10, max: 10 } },
+      },
+    };
+  }
+
+  async setActorHP(
+    page: FoundryPage,
+    actorName: string,
+    value: number,
+    max?: number,
+  ): Promise<any> {
+    return page.evaluate(
+      ({ actorName, value, max }) => {
+        const actor = window.game.actors.getName(actorName);
+        if (!actor) throw new Error(`Actor not found: ${actorName}`);
+        const update: any = { "system.attributes.hp.value": value };
+        if (max !== undefined) update["system.attributes.hp.max"] = max;
+        return actor.update(update);
+      },
+      { actorName, value, max },
+    );
+  }
+
+  getCurrencyVerifyParams(
+    _actorName: string,
+    _amount: number,
+    _currency: string,
+  ): { key: string; predicate: (data: any, extra?: any) => boolean } {
+    return {
+      key: "actor-update",
+      predicate: (data: any, extra: any) => {
+        // Broadly match any update that touches currency for the target actor
+        if (data.name !== extra.actorName) return false;
+
+        // Deep check for the expected currency value in the delta
+        const delta = data.delta || {};
+
+        // Check for direct property update: "system.currency.gp": 100
+        if (delta[`system.currency.${extra.currency}`] === extra.amount) return true;
+
+        // Check for nested update: { system: { currency: { gp: 100 } } }
+        const nestedVal = delta.system?.currency?.[extra.currency];
+        if (nestedVal === extra.amount) return true;
+
+        return false;
+      },
+    };
+  }
 }

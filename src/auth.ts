@@ -118,11 +118,19 @@ export async function returnToSetup(
  * Performs full end-to-end setup of a Foundry VTT instance.
  */
 export async function foundrySetup(page: Page, config: any = {}) {
+  const SYSTEM_LABELS: Record<string, string> = {
+    dnd5e: "D&D 5th Edition",
+    pf2e: "Pathfinder 2e",
+    pf1: "Pathfinder 1st Edition",
+    swade: "Savage Worlds Adventure Edition",
+    worldbuilding: "Simple Worldbuilding",
+    dungeonworld: "Dungeon World",
+  };
+
   const {
     worldId,
-    systemId,
+    systemId = process.env.FOUNDRY_SYSTEM_ID || "dnd5e",
     systemManifest,
-    systemLabel = "D&D 5th Edition",
     moduleId,
     moduleManifest,
     adminPassword = process.env.FOUNDRY_ADMIN_PASSWORD || process.env.FOUNDRY_ADMIN_KEY,
@@ -133,7 +141,9 @@ export async function foundrySetup(page: Page, config: any = {}) {
     version = process.env.FOUNDRY_VERSION,
   } = config;
 
-  console.log(`[foundrySetup] Starting setup for world: ${worldId}`);
+  const systemLabel = config.systemLabel || SYSTEM_LABELS[systemId] || systemId;
+
+  console.log(`[foundrySetup] Starting setup for world: ${worldId} (System: ${systemId})`);
 
   let done = false;
   let maxAttempts = 5;

@@ -3,6 +3,10 @@ import { FoundryState } from "./state.js";
 import { FoundryUI } from "./ui/index.js";
 import { FoundryCanvas } from "./canvas.js";
 import { disableTour } from "./helpers.js";
+import { DeprecationTracker } from "./deprecations.js";
+import { initAllSystems } from "./systems/index.js";
+
+import { FoundryPage } from "./types/index.js";
 
 /**
  * Extended Playwright test fixtures for Foundry VTT.
@@ -17,6 +21,10 @@ export interface FoundryFixtures {
     /** WebGL Canvas interaction. */
     canvas: FoundryCanvas;
   };
+  /** Tracker for deprecation warnings. */
+  deprecationTracker: DeprecationTracker;
+  /** The Playwright Page object. */
+  page: FoundryPage;
 }
 
 /**
@@ -24,19 +32,29 @@ export interface FoundryFixtures {
  * and provides Foundry-specific utilities.
  */
 export const test = base.extend<FoundryFixtures>({
-  foundry: async ({ page }, use) => {
+  deprecationTracker: async (_, use) => {
+    await use(new DeprecationTracker());
+  },
+  foundry: async ({ page, deprecationTracker }, use) => {
     const systemId = process.env.FOUNDRY_SYSTEM_ID || "dnd5e";
     const uiAdapterId = process.env.FOUNDRY_UI_ADAPTER || "default";
 
     await use({
-      state: new FoundryState(page, systemId),
+      state: new FoundryState(page as FoundryPage, systemId, deprecationTracker),
       ui: new FoundryUI(page, uiAdapterId),
       canvas: new FoundryCanvas(page),
     });
   },
-  page: async ({ page }, use) => {
+  page: async ({ page, deprecationTracker }, use) => {
     // 1. Initial page setup
     await disableTour(page);
+
+    // Attach tracker to page for non-fixture access (e.g. in adapters)
+    const foundryPage = page as FoundryPage;
+    foundryPage.deprecationTracker = deprecationTracker;
+
+    // Initialize all known systems to register their deprecation patterns
+    initAllSystems(foundryPage);
 
     const deprecations: string[] = [];
 
@@ -52,23 +70,12 @@ export const test = base.extend<FoundryFixtures>({
         return;
 
       if (type === "error") console.error(`Browser Error: ${text}`);
-
       if (type === "warning") {
+        if (deprecationTracker.shouldIgnore(text)) return;
+
         console.warn(`Browser Warning: ${text}`);
-        const lowerText = text.toLowerCase();
 
-        if (lowerText.includes("deprecated") || lowerText.includes("deprecation")) {
-          // Only fail on deprecations that are NOT from our registered V14 namespaces
-          if (text.includes("ActorSheet") || text.includes("Actors")) {
-            // If it mentions namespacing under foundry.appv1, it's the specific one we are trying to fix
-            if (text.includes("namespaced under foundry")) return;
-          }
-          deprecations.push(text);
-          return;
-        }
-
-        // DnD5e specific property move deprecations
-        if (text.includes("has moved to") && (text.includes("senses") || text.includes("dnd5e"))) {
+        if (deprecationTracker.shouldFail(text)) {
           deprecations.push(text);
           return;
         }
@@ -80,6 +87,7 @@ export const test = base.extend<FoundryFixtures>({
           throw new Error(`Critical Warning: ${text}`);
         }
       }
+      if (type === "log") console.log(`Browser Log: ${text}`);
     });
 
     // 2. Pre-Test Synchronization
@@ -116,7 +124,7 @@ export const test = base.extend<FoundryFixtures>({
     await syncModule();
 
     try {
-      await use(page);
+      await use(foundryPage);
 
       // Report deprecations at the end of a successful test run
       if (deprecations.length > 0) {

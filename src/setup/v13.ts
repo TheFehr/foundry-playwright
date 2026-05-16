@@ -1,9 +1,11 @@
-import { expect, Page } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
 import {
   installSystemFromManifest as helperInstallSystemFromManifest,
   installModuleFromManifest as helperInstallModuleFromManifest,
 } from "../helpers.js";
+
+import { FoundryPage } from "../types/index.js";
 
 /**
  * Setup adapter for Foundry VTT Version 13.
@@ -11,7 +13,13 @@ import {
 export class V13SetupAdapter implements SetupAdapter {
   version = 13;
 
-  async switchTab(page: Page, tabName: string): Promise<void> {
+  constructor(page?: FoundryPage) {
+    if (page?.deprecationTracker) {
+      // Add version-specific ignores if needed
+    }
+  }
+
+  async switchTab(page: FoundryPage, tabName: string): Promise<void> {
     const tabMap: Record<string, string> = {
       Worlds: "worlds",
       "Game Worlds": "worlds",
@@ -70,7 +78,7 @@ export class V13SetupAdapter implements SetupAdapter {
     console.log(`[V13SetupAdapter] Tab ${tabName} is now active.`);
   }
 
-  async handleEULA(page: Page): Promise<void> {
+  async handleEULA(page: FoundryPage): Promise<void> {
     console.log("[V13SetupAdapter] Handling EULA...");
 
     // 0. Handle License Key Activation
@@ -108,7 +116,7 @@ export class V13SetupAdapter implements SetupAdapter {
     }
   }
 
-  async handleLicenseActivation(page: Page, licenseKey?: string): Promise<void> {
+  async handleLicenseActivation(page: FoundryPage, licenseKey?: string): Promise<void> {
     const licenseHeading = page.getByRole("heading", { name: "License Key Activation" });
     if ((await licenseHeading.count()) > 0 && (await licenseHeading.isVisible())) {
       console.log("[V13SetupAdapter] License Key Activation screen detected.");
@@ -131,7 +139,7 @@ export class V13SetupAdapter implements SetupAdapter {
     }
   }
 
-  async installSystem(page: Page, systemId: string, _systemLabel: string): Promise<void> {
+  async installSystem(page: FoundryPage, systemId: string, _systemLabel: string): Promise<void> {
     console.log(`[V13SetupAdapter] Installing system: ${systemId}`);
     await this.switchTab(page, "Systems");
 
@@ -173,7 +181,7 @@ export class V13SetupAdapter implements SetupAdapter {
     }
   }
 
-  async installModules(page: Page, moduleIds: string[]): Promise<void> {
+  async installModules(page: FoundryPage, moduleIds: string[]): Promise<void> {
     console.log(`[V13SetupAdapter] Installing modules: ${moduleIds.join(", ")}`);
     await this.switchTab(page, "Modules");
 
@@ -213,15 +221,15 @@ export class V13SetupAdapter implements SetupAdapter {
     }
   }
 
-  async installSystemFromManifest(page: Page, manifestUrl: string): Promise<void> {
+  async installSystemFromManifest(page: FoundryPage, manifestUrl: string): Promise<void> {
     await helperInstallSystemFromManifest(page, manifestUrl);
   }
 
-  async installModuleFromManifest(page: Page, manifestUrl: string): Promise<void> {
+  async installModuleFromManifest(page: FoundryPage, manifestUrl: string): Promise<void> {
     await helperInstallModuleFromManifest(page, manifestUrl);
   }
 
-  async openSystemInstallDialog(page: Page): Promise<any> {
+  async openSystemInstallDialog(page: FoundryPage): Promise<any> {
     console.log("[V13SetupAdapter] Opening System Install Dialog...");
     await this.switchTab(page, "Systems");
 
@@ -242,7 +250,7 @@ export class V13SetupAdapter implements SetupAdapter {
     return dialog;
   }
 
-  async openModuleInstallDialog(page: Page): Promise<any> {
+  async openModuleInstallDialog(page: FoundryPage): Promise<any> {
     console.log("[V13SetupAdapter] Opening Module Install Dialog...");
     await this.switchTab(page, "Modules");
 
@@ -264,7 +272,7 @@ export class V13SetupAdapter implements SetupAdapter {
   }
 
   async createWorld(
-    page: Page,
+    page: FoundryPage,
     worldId: string,
     systemLabel: string,
     systemId: string,
@@ -325,7 +333,7 @@ export class V13SetupAdapter implements SetupAdapter {
     await expect(page.locator("form#world-config")).toBeHidden({ timeout: 20000 });
   }
 
-  async deleteWorldIfExists(page: Page, worldId: string): Promise<void> {
+  async deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void> {
     console.log(`[V13SetupAdapter] Deleting world if exists: ${worldId}`);
     await this.switchTab(page, "Worlds");
     const worldBox = page.locator(`[data-package-id="${worldId}"]`).first();
@@ -359,7 +367,7 @@ export class V13SetupAdapter implements SetupAdapter {
   }
 
   private async waitForInstallation(
-    page: Page,
+    page: FoundryPage,
     dialog: any,
     verificationSelector: string,
     tabName: string,
@@ -402,4 +410,8 @@ export class V13SetupAdapter implements SetupAdapter {
  */
 export class V13GameAdapter extends BaseGameAdapter {
   version = 13;
+
+  constructor(page?: FoundryPage) {
+    super(page);
+  }
 }

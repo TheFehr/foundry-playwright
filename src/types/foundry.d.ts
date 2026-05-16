@@ -21,6 +21,7 @@ declare global {
     type: string;
     system: any;
     items: Collection<Item>;
+    createEmbeddedDocuments(embeddedName: string, data: any[], context?: any): Promise<any[]>;
   }
 
   interface Item extends FoundryDocument {
@@ -97,9 +98,10 @@ declare global {
       logs: Record<string, any[]>;
       state: Record<string, any>;
       counter: number;
+      log(key: string, data: any): void;
     };
     FP_VERIFY_RESET(): void;
-    _hookLogs: Record<string, number>;
+    _hookLogs: Record<string, unknown[][]>;
     _socketLogs: Record<string, number>;
     [key: string]: any; // Index signature to allow dynamic access to document classes like Actor, Item, etc.
   }

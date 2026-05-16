@@ -1,4 +1,4 @@
-import { Page } from "@playwright/test";
+import { FoundryPage } from "../types/index.js";
 
 /**
  * Interface for version-specific Foundry VTT setup logic.
@@ -9,80 +9,85 @@ export interface SetupAdapter {
 
   /**
    * Switches between tabs on the setup screen.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param tabName The logical name of the tab (e.g., "Worlds", "Systems").
    */
-  switchTab(page: Page, tabName: string): Promise<void>;
+  switchTab(page: FoundryPage, tabName: string): Promise<void>;
 
   /**
    * Handles the End User License Agreement screen if it appears.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    */
-  handleEULA(page: Page): Promise<void>;
+  handleEULA(page: FoundryPage): Promise<void>;
 
   /**
    * Handles the License Key Activation screen if it appears.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param licenseKey The license key to activate (optional).
    */
-  handleLicenseActivation(page: Page, licenseKey?: string): Promise<void>;
+  handleLicenseActivation(page: FoundryPage, licenseKey?: string): Promise<void>;
 
   /**
    * Installs a game system from the manifest list.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param systemId The ID of the system to install.
    * @param systemLabel The human-readable label of the system.
    */
-  installSystem(page: Page, systemId: string, systemLabel: string): Promise<void>;
+  installSystem(page: FoundryPage, systemId: string, systemLabel: string): Promise<void>;
 
   /**
    * Installs one or more add-on modules from the manifest list.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param moduleIds The ID(s) of the module(s) to install.
    */
-  installModules(page: Page, moduleIds: string[]): Promise<void>;
+  installModules(page: FoundryPage, moduleIds: string[]): Promise<void>;
 
   /**
    * Installs a game system from a direct manifest URL.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param manifestUrl The URL to the system.json manifest.
    */
-  installSystemFromManifest(page: Page, manifestUrl: string): Promise<void>;
+  installSystemFromManifest(page: FoundryPage, manifestUrl: string): Promise<void>;
 
   /**
    * Installs a module from a direct manifest URL.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param manifestUrl The URL to the module.json manifest.
    */
-  installModuleFromManifest(page: Page, manifestUrl: string): Promise<void>;
+  installModuleFromManifest(page: FoundryPage, manifestUrl: string): Promise<void>;
 
   /**
    * Opens the system installation dialog.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    */
-  openSystemInstallDialog(page: Page): Promise<any>;
+  openSystemInstallDialog(page: FoundryPage): Promise<any>;
 
   /**
    * Opens the module installation dialog.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    */
-  openModuleInstallDialog(page: Page): Promise<any>;
+  openModuleInstallDialog(page: FoundryPage): Promise<any>;
 
   /**
    * Creates a new game world.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param worldId The ID for the new world.
    * @param systemLabel The human-readable label of the system to use.
    * @param systemId The unique ID of the game system to use.
    */
-  createWorld(page: Page, worldId: string, systemLabel: string, systemId: string): Promise<void>;
+  createWorld(
+    page: FoundryPage,
+    worldId: string,
+    systemLabel: string,
+    systemId: string,
+  ): Promise<void>;
 
   /**
    * Deletes a game world if it exists.
-   * @param page The Playwright Page object.
+   * @param page The Foundry VTT Page object.
    * @param worldId The ID of the world to delete.
    */
-  deleteWorldIfExists(page: Page, worldId: string): Promise<void>;
+  deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void>;
 }
 
 /**
@@ -92,10 +97,15 @@ export interface GameAdapter {
   /** The major Foundry VTT version this adapter is for. */
   version: number;
 
-  createDocument(page: Page, documentName: string, data: any, options: any): Promise<any>;
-  updateDocument(page: Page, uuid: string, delta: any): Promise<any>;
-  deleteDocuments(page: Page, documentName: string, ids: string[], options: any): Promise<void>;
-  getDocuments(page: Page, collection: string, query: any): Promise<any[]>;
+  createDocument(page: FoundryPage, documentName: string, data: any, options: any): Promise<any>;
+  updateDocument(page: FoundryPage, uuid: string, delta: any): Promise<any>;
+  deleteDocuments(
+    page: FoundryPage,
+    documentName: string,
+    ids: string[],
+    options: any,
+  ): Promise<void>;
+  getDocuments(page: FoundryPage, collection: string, query: any): Promise<any[]>;
 }
 
 /**
@@ -104,7 +114,14 @@ export interface GameAdapter {
 export abstract class BaseGameAdapter implements GameAdapter {
   abstract version: number;
 
-  async createDocument(page: Page, documentName: string, data: any, options: any): Promise<any> {
+  constructor(protected page?: FoundryPage) {}
+
+  async createDocument(
+    page: FoundryPage,
+    documentName: string,
+    data: any,
+    options: any,
+  ): Promise<any> {
     return page.evaluate(
       async ({ documentName, data, options }) => {
         const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
@@ -117,7 +134,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
     );
   }
 
-  async updateDocument(page: Page, uuid: string, delta: any): Promise<any> {
+  async updateDocument(page: FoundryPage, uuid: string, delta: any): Promise<any> {
     return page.evaluate(
       async ({ uuid, delta }) => {
         const doc = window.fromUuidSync ? window.fromUuidSync(uuid) : null;
@@ -134,7 +151,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
   }
 
   async deleteDocuments(
-    page: Page,
+    page: FoundryPage,
     documentName: string,
     ids: string[],
     options: any,
@@ -149,7 +166,11 @@ export abstract class BaseGameAdapter implements GameAdapter {
     );
   }
 
-  async getDocuments(page: Page, collection: string, query: Record<string, any>): Promise<any[]> {
+  async getDocuments(
+    page: FoundryPage,
+    collection: string,
+    query: Record<string, any>,
+  ): Promise<any[]> {
     return page.evaluate(
       ({ collection, query }) => {
         const coll = window.game[collection];

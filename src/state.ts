@@ -1,25 +1,28 @@
-import { Page } from "@playwright/test";
-import { UserRole } from "./types/index.js";
-
-declare global {
-  interface Window {
-    game: any;
-    Hooks: any;
-    foundry: any;
-    CONFIG: any;
-    _hookLogs: Record<string, any[]>;
-    _socketLogs: Record<string, number>;
-  }
-}
+import { FoundryPage, UserRole } from "./types/index.js";
+import { getSystemStateAdapter, SystemStateAdapter } from "./systems/index.js";
+import { DeprecationTracker } from "./deprecations.js";
 
 /**
  * Provides methods for direct manipulation of the Foundry VTT state.
  */
 export class FoundryState {
+  private adapter: SystemStateAdapter;
+
   constructor(
-    private page: Page,
+    private page: FoundryPage,
     private systemId: string = "dnd5e",
-  ) {}
+    private deprecationTracker?: DeprecationTracker,
+  ) {
+    this.adapter = getSystemStateAdapter(systemId, page);
+  }
+
+  /**
+   * Sets the system adapter to use.
+   */
+  setSystem(systemId: string) {
+    this.systemId = systemId;
+    this.adapter = getSystemStateAdapter(systemId, this.page);
+  }
 
   /**
    * Aggressively removes properties known to trigger deprecation warnings on access.
@@ -197,16 +200,14 @@ export class FoundryState {
    * @param currency The type of currency (e.g., "gp", "sp").
    */
   async grantCurrency(actorName: string, amount: number, currency: string = "gp") {
-    return this.page.evaluate(
-      ({ actorName, amount, currency }) => {
-        // @ts-ignore
-        const actor = game.actors.getName(actorName);
-        if (!actor) throw new Error(`Actor not found: ${actorName}`);
-        const current = actor.system.currency[currency] || 0;
-        return actor.update({ [`system.currency.${currency}`]: current + amount });
-      },
-      { actorName, amount, currency },
-    );
+    return this.adapter.grantCurrency(this.page, actorName, amount, currency);
+  }
+
+  /**
+   * Gets the verification parameters for a currency update.
+   */
+  getCurrencyVerifyParams(actorName: string, amount: number, currency: string = "gp") {
+    return this.adapter.getCurrencyVerifyParams(actorName, amount, currency);
   }
 
   /**
@@ -216,17 +217,7 @@ export class FoundryState {
    * @param max The new max HP value (optional).
    */
   async setActorHP(actorName: string, value: number, max?: number) {
-    return this.page.evaluate(
-      ({ actorName, value, max }) => {
-        // @ts-ignore
-        const actor = game.actors.getName(actorName);
-        if (!actor) throw new Error(`Actor not found: ${actorName}`);
-        const update: any = { "system.attributes.hp.value": value };
-        if (max !== undefined) update["system.attributes.hp.max"] = max;
-        return actor.update(update);
-      },
-      { actorName, value, max },
-    );
+    return this.adapter.setActorHP(this.page, actorName, value, max);
   }
 
   /**
@@ -386,19 +377,8 @@ export class FoundryState {
    * Creates a test actor.
    */
   async createTestActor(name: string = "Test Actor") {
-    const system: any = {};
-    if (this.systemId === "dnd5e") {
-      // Modern DnD5e 5.3+ structure to avoid deprecation warnings
-      system.details = {
-        senses: {
-          ranges: {
-            darkvision: 60,
-          },
-        },
-      };
-      system.attributes = { hp: { value: 10, max: 10 } };
-    }
-    return this.createDocument("Actor", { name, type: "character", system });
+    const { type, system } = this.adapter.getTestActorData(name);
+    return this.createDocument("Actor", { name, type, system });
   }
 
   /**
