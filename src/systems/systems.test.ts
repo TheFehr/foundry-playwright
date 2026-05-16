@@ -1,45 +1,46 @@
 import { describe, it, expect } from "vitest";
-import { getSystemAdapter } from "./index.js";
-import { DnD5eAdapter } from "./dnd5e.js";
-import { PF2eAdapter } from "./pf2e.js";
+import { getSystemStateAdapter } from "./index.js";
+import { DnD5eStateAdapter } from "./dnd5e.js";
+import { PF2eStateAdapter } from "./pf2e.js";
 
-describe("SystemAdapters", () => {
-  const mockPage = {
-    evaluate: (_fn: any) => Promise.resolve("1.0.0"),
-  } as any;
-
-  describe("getSystemAdapter", () => {
-    it("returns DnD5eAdapter for 'dnd5e'", async () => {
-      const adapter = await getSystemAdapter(mockPage, "dnd5e");
-      expect(adapter).toBeInstanceOf(DnD5eAdapter);
+describe("SystemStateAdapters", () => {
+  describe("getSystemStateAdapter", () => {
+    it("returns DnD5eStateAdapter for 'dnd5e'", () => {
+      const adapter = getSystemStateAdapter("dnd5e");
+      expect(adapter).toBeInstanceOf(DnD5eStateAdapter);
       expect(adapter.id).toBe("dnd5e");
     });
 
-    it("returns PF2eAdapter for 'pf2e'", async () => {
-      const adapter = await getSystemAdapter(mockPage, "pf2e");
-      expect(adapter).toBeInstanceOf(PF2eAdapter);
+    it("returns PF2eStateAdapter for 'pf2e'", () => {
+      const adapter = getSystemStateAdapter("pf2e");
+      expect(adapter).toBeInstanceOf(PF2eStateAdapter);
       expect(adapter.id).toBe("pf2e");
     });
 
-    it("defaults to DnD5eAdapter for unknown systems", async () => {
-      const adapter = await getSystemAdapter(mockPage, "unknown-system");
-      expect(adapter).toBeInstanceOf(DnD5eAdapter);
+    it("defaults to DnD5eStateAdapter for unknown systems", () => {
+      const adapter = getSystemStateAdapter("unknown-system");
+      expect(adapter).toBeInstanceOf(DnD5eStateAdapter);
     });
   });
 
-  describe("DnD5eAdapter", () => {
-    const adapter = new DnD5eAdapter();
+  describe("DnD5eStateAdapter", () => {
+    const adapter = new DnD5eStateAdapter();
 
-    it("returns the correct HP path", () => {
-      expect(adapter.getHPPath()).toBe("system.attributes.hp.value");
+    it("returns correct test actor data", () => {
+      const data = adapter.getTestActorData("Test");
+      expect(data.type).toBe("character");
+      expect(data.system.attributes.hp.value).toBe(10);
+      expect(data.system.details.senses.ranges.darkvision).toBe(60);
     });
   });
 
-  describe("PF2eAdapter", () => {
-    const adapter = new PF2eAdapter();
+  describe("PF2eStateAdapter", () => {
+    const adapter = new PF2eStateAdapter();
 
-    it("returns the correct HP path", () => {
-      expect(adapter.getHPPath()).toBe("system.attributes.hp.value");
+    it("returns correct test actor data", () => {
+      const data = adapter.getTestActorData("Test");
+      expect(data.type).toBe("character");
+      expect(data.system.attributes.hp.value).toBe(10);
     });
   });
 });
