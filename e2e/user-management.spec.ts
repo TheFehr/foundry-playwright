@@ -13,7 +13,6 @@ test.describe("User Management Verification", () => {
       userName: "Gamemaster",
       adminPassword,
       moduleId: "fake-module",
-      systemId: "dnd5e",
     });
     await page.close();
   });

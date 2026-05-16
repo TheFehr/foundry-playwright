@@ -12,7 +12,6 @@ test("V14 Setup Audit", async ({ page }) => {
     userName: "Gamemaster",
     adminPassword,
     moduleId: "fake-module",
-    systemId: "dnd5e",
   });
 
   // Audit Setup Screen

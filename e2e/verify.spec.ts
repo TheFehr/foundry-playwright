@@ -13,7 +13,6 @@ test.describe("Library Verification Suite", () => {
       userName: "Gamemaster",
       adminPassword,
       moduleId: "fake-module",
-      systemId: "dnd5e",
     });
     await page.close();
   });
@@ -33,7 +32,6 @@ test.describe("Library Verification Suite", () => {
       await foundrySetup(page, {
         worldId,
         adminPassword,
-        systemId: "dnd5e",
         createWorld: false,
         deleteIfExists: false,
       });
@@ -105,13 +103,8 @@ test.describe("Library Verification Suite", () => {
       { timeout: 30000 },
     );
     await foundry.state.grantCurrency(actorName, 100, "gp");
-    await verifyResult(
-      page,
-      "actor-update",
-      (data: any, extra: any) =>
-        data.name === extra.actorName && data.delta.system?.currency?.gp === 100,
-      { actorName },
-    );
+    const { key, predicate } = foundry.state.getCurrencyVerifyParams(actorName, 100, "gp");
+    await verifyResult(page, key, predicate, { actorName, amount: 100, currency: "gp" });
   });
 
   test("foundry.state: settings management", async ({ page, foundry }) => {
