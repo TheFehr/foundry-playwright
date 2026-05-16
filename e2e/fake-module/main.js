@@ -29,42 +29,44 @@
            */
           sanitize(data) {
               if (!data || typeof data !== 'object') return data;
-              try {
-                  // Known problematic keys in DnD5e
-                  const deprecatedDnD5e = ['darkvision', 'blindsight', 'tremorsense', 'truesight', 'special'];
+              
+              const clean = (obj) => {
+                  if (!obj || typeof obj !== 'object') return obj;
                   
-                  const cleanObject = (obj) => {
-                      if (!obj || typeof obj !== 'object' || obj instanceof Document) return obj;
-                      const result = Array.isArray(obj) ? [] : {};
-                      for (let key in obj) {
-                          if (deprecatedDnD5e.includes(key)) continue;
-                          
-                          // Avoid deep recursion into large structures to prevent stack overflow
-                          const val = obj[key];
-                          if (val && typeof val === 'object' && !(val instanceof Document)) {
-                              if (key === 'senses') {
-                                  const senses = {};
-                                  for (let skey in val) {
-                                      if (!deprecatedDnD5e.includes(skey)) senses[skey] = val[skey];
-                                  }
-                                  result[key] = senses;
-                              } else {
-                                  // Just a shallow copy for everything else to be safe
-                                  result[key] = val;
-                              }
-                          } else {
-                              result[key] = val;
-                          }
-                      }
-                      return result;
-                  };
+                  // If it's an array, clean each element
+                  if (Array.isArray(obj)) return obj.map(clean);
 
-                  let base = data;
-                  // Prioritize raw database data (_source) to avoid schema-level getters/deprecations
-                  if (data._source) base = data._source;
-                  else if (data.toObject) base = data.toObject();
+                  // If it's a Foundry Document or similar, use toObject or _source
+                  let base = obj;
+                  if (typeof obj.toObject === 'function') base = obj.toObject();
+                  else if (obj._source) base = obj._source;
+
+                  const deprecatedDnD5e = ['darkvision', 'blindsight', 'tremorsense', 'truesight', 'special'];
+                  const result = {};
                   
-                  return cleanObject(base);
+                  for (let key in base) {
+                      if (deprecatedDnD5e.includes(key)) continue;
+                      
+                      const val = base[key];
+                      if (val && typeof val === 'object') {
+                          if (key === 'senses') {
+                              const senses = {};
+                              for (let skey in val) {
+                                  if (!deprecatedDnD5e.includes(skey)) senses[skey] = val[skey];
+                              }
+                              result[key] = senses;
+                          } else {
+                              result[key] = clean(val);
+                          }
+                      } else {
+                          result[key] = val;
+                      }
+                  }
+                  return result;
+              };
+
+              try {
+                  return clean(data);
               } catch (e) {
                   return { error: "Sanitization failed", message: e.message };
               }
@@ -77,6 +79,40 @@
           }
 
           setupInterceptors() {
+            console.log('FP_VERIFY: Setting up interceptors...');
+            
+            const self = this;
+            
+            // Global hook proxy
+            if (typeof Hooks !== 'undefined') {
+                const originalCall = Hooks.call;
+                Hooks.call = function(hook, ...args) {
+                    try {
+                        if (hook.toLowerCase().includes('create') || hook.toLowerCase().includes('update')) {
+                            console.log(`FP_VERIFY: Intercepted ${hook}`, args);
+                        }
+
+                        // Special handling for document creation
+                        if (hook === 'createItem' || hook === 'createActor') {
+                            const doc = args[0];
+                            const lower = hook.replace('create', '').toLowerCase();
+                            self.log(`${lower}-create`, { id: doc.id, name: doc.name, data: doc });
+                        }
+
+                        if (hook === 'createEmbeddedDocuments') {
+                            const [parent, type, data] = args;
+                            if (type === 'Item') {
+                                data.forEach(d => {
+                                    self.log('item-create', { id: d.id || d._id, name: d.name, data: d, parentId: parent.id });
+                                });
+                            }
+                        }
+                    } catch (e) { console.error('FP_VERIFY: Interceptor error', e); }
+                    
+                    return originalCall.apply(this, [hook, ...args]);
+                };
+            }
+
             document.body.addEventListener('drop', (event) => {
                 try {
                     const dataTransfer = event.dataTransfer.getData('text/plain');
@@ -89,13 +125,42 @@
 
             const docs = ['Actor', 'Item', 'Scene', 'User', 'JournalEntry', 'RollTable'];
             docs.forEach(d => {
-              Hooks.on(`create${d}`, (doc) => {
-                  this.log(`${d.toLowerCase()}-create`, { id: doc.id, name: doc.name, data: doc });
-              });
-              Hooks.on(`update${d}`, (doc, delta) => {
-                  this.log(`${d.toLowerCase()}-update`, { id: doc.id, name: doc.name, delta });
-              });
-              Hooks.on(`delete${d}`, (doc) => this.log(`${d.toLowerCase()}-delete`, { id: doc.id }));
+              const lower = d.toLowerCase();
+              
+              Hooks.on(`create${d}`, (doc, ...args) => {
+                  console.log(`FP_VERIFY: create${d} hook triggered`, { id: doc.id, name: doc.name });
+                  this.log(`${lower}-create`, { id: doc.id, name: doc.name, data: doc });
+              }, { once: false, priority: 100 });
+              
+              Hooks.on(`update${d}`, (doc, delta, ...args) => {
+                  console.log(`FP_VERIFY: update${d} hook triggered`, { id: doc.id, delta });
+                  this.log(`${lower}-update`, { id: doc.id, name: doc.name, delta });
+              }, { once: false, priority: 100 });
+            });
+
+            // Embedded document hooks (very common in systems like PF2e)
+            Hooks.on('createEmbeddedDocuments', (parent, type, data, ...args) => {
+                console.log(`FP_VERIFY: createEmbeddedDocuments hook triggered`, { parent: parent.id, type, count: data.length });
+                if (type === 'Item') {
+                    data.forEach(d => {
+                        const itemData = d.toObject ? d.toObject() : (d._source || d);
+                        this.log(`item-create`, { id: d.id || d._id, name: d.name, data: itemData, parentId: parent.id });
+                    });
+                }
+            }, { once: false, priority: 100 });
+
+            // V14+ namespaced hooks (if any)
+            Hooks.on('createDocument', (doc) => {
+                const lower = doc.documentName.toLowerCase();
+                this.log(`${lower}-create`, { id: doc.id, name: doc.name, data: doc });
+            });
+            Hooks.on('updateDocument', (doc, delta) => {
+                const lower = doc.documentName.toLowerCase();
+                this.log(`${lower}-update`, { id: doc.id, name: doc.name, delta });
+            });
+            Hooks.on('deleteDocument', (doc) => {
+                const lower = doc.documentName.toLowerCase();
+                this.log(`${lower}-delete`, { id: doc.id });
             });
 
             if (typeof game !== 'undefined' && game.socket) {
