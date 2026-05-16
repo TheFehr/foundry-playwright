@@ -18,17 +18,17 @@
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
-    "systemVersion": "8.1.2",
-    "status": "pending",
-    "timestamp": "2026-05-12T21:38:23.239Z",
-    "notes": "Automated detection: newer system version available."
+    "systemVersion": "7.12.2",
+    "status": "stable",
+    "timestamp": "2026-05-15T18:01:53.687Z",
+    "notes": "Verified locally with pf2e v7.12.2."
   },
   {
     "fvtt": "14.360.0",
     "system": "pf2e",
     "systemVersion": "8.1.2",
-    "status": "pending",
-    "timestamp": "2026-05-12T21:38:23.240Z",
-    "notes": "Automated detection: newer system version available."
+    "status": "stable",
+    "timestamp": "2026-05-15T18:04:06.504Z",
+    "notes": "Verified locally with pf2e v8.1.2."
   }
 ]
