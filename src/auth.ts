@@ -1,5 +1,5 @@
 import { Page } from "@playwright/test";
-import { disableTour, waitForReady, validateStack } from "./helpers.js";
+import { disableTour, waitForReady, validateStack, shutdownWorldDirectly } from "./helpers.js";
 import { getSetupAdapter } from "./setup/index.js";
 
 /**
@@ -95,6 +95,12 @@ export async function returnToSetup(
 
     if (url.includes("/game") || url.includes("/players")) {
       console.log("[returnToSetup] Inside World. Attempting to logout/shutdown...");
+
+      // Attempt direct API shutdown first (most robust)
+      const directShutdownSuccess = await shutdownWorldDirectly(page);
+      if (directShutdownSuccess) continue;
+
+      // Fallback: simple evaluation or redirect
       await page
         .evaluate(() => {
           // @ts-ignore

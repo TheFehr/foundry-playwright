@@ -342,6 +342,36 @@ export async function waitForReady(page: Page) {
 }
 
 /**
+ * Gracefully shuts down the active world and returns the server to the Setup screen.
+ * This utilizes the direct client API and must be executed within an authenticated GM session.
+ */
+export async function shutdownWorldDirectly(page: Page): Promise<boolean> {
+  try {
+    const isShutdownTriggered = await page.evaluate(async () => {
+      // @ts-ignore - Foundry global
+      if (typeof game !== "undefined" && game.ready && game.user?.isGM) {
+        // Triggers the server to shut down the world and redirect connected clients to /setup
+        // @ts-ignore
+        await game.shutDown();
+        return true;
+      }
+      return false;
+    });
+
+    if (isShutdownTriggered) {
+      // The server will automatically redirect the client to the setup screen
+      await page.waitForURL((url) => url.pathname.includes("/setup"), { timeout: 15000 });
+      console.log("[shutdownWorldDirectly] Successfully shut down world via direct API.");
+      return true;
+    }
+  } catch (err) {
+    console.warn("[shutdownWorldDirectly] Direct API shutdown failed or timed out.", err);
+  }
+
+  return false;
+}
+
+/**
  * Executes a function after ensuring a log has been emitted via FP_VERIFY.
  * @param page The Playwright Page object.
  * @param key The log key to wait for.
