@@ -1,5 +1,11 @@
 # Changelog
 
+# [0.3.0](https://github.com/TheFehr/foundry-playwright/compare/v0.2.2...v0.3.0) (2026-05-17)
+
+### Features
+
+- implement direct API world shutdown via game.shutDown() ([904f7de](https://github.com/TheFehr/foundry-playwright/commit/904f7dea2febf3937afae83601f49ab1721e3956))
+
 ## [0.2.2](https://github.com/TheFehr/foundry-playwright/compare/v0.2.1...v0.2.2) (2026-05-16)
 
 ## [0.2.1](https://github.com/TheFehr/foundry-playwright/compare/0.2.0...v0.2.1) (2026-05-16)
