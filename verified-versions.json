@@ -30,5 +30,13 @@
     "status": "stable",
     "timestamp": "2026-05-15T18:04:06.504Z",
     "notes": "Verified locally with pf2e v8.1.2."
+  },
+  {
+    "fvtt": "13.351.0",
+    "system": "pf2e",
+    "systemVersion": "8.1.2",
+    "status": "pending",
+    "timestamp": "2026-05-17T07:16:19.265Z",
+    "notes": "Automated detection: newer system version available."
   }
 ]
