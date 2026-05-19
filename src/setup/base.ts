@@ -60,13 +60,13 @@ export interface SetupAdapter {
    * Opens the system installation dialog.
    * @param page The Foundry VTT Page object.
    */
-  openSystemInstallDialog(page: FoundryPage): Promise<any>;
+  openSystemInstallDialog(page: FoundryPage): Promise<unknown>;
 
   /**
    * Opens the module installation dialog.
    * @param page The Foundry VTT Page object.
    */
-  openModuleInstallDialog(page: FoundryPage): Promise<any>;
+  openModuleInstallDialog(page: FoundryPage): Promise<unknown>;
 
   /**
    * Creates a new game world.
@@ -97,15 +97,24 @@ export interface GameAdapter {
   /** The major Foundry VTT version this adapter is for. */
   version: number;
 
-  createDocument(page: FoundryPage, documentName: string, data: any, options: any): Promise<any>;
-  updateDocument(page: FoundryPage, uuid: string, delta: any): Promise<any>;
+  createDocument(
+    page: FoundryPage,
+    documentName: string,
+    data: Record<string, unknown>,
+    options: Record<string, unknown>,
+  ): Promise<unknown>;
+  updateDocument(page: FoundryPage, uuid: string, delta: Record<string, unknown>): Promise<unknown>;
   deleteDocuments(
     page: FoundryPage,
     documentName: string,
     ids: string[],
-    options: any,
+    options: Record<string, unknown>,
   ): Promise<void>;
-  getDocuments(page: FoundryPage, collection: string, query: any): Promise<any[]>;
+  getDocuments(
+    page: FoundryPage,
+    collection: string,
+    query: Record<string, unknown>,
+  ): Promise<Record<string, unknown>[]>;
 }
 
 /**
@@ -119,14 +128,21 @@ export abstract class BaseGameAdapter implements GameAdapter {
   async createDocument(
     page: FoundryPage,
     documentName: string,
-    data: any,
-    options: any,
-  ): Promise<any> {
+    data: Record<string, unknown>,
+    options: Record<string, unknown>,
+  ): Promise<unknown> {
     return page.evaluate(
       async ({ documentName, data, options }) => {
         const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
         const collection = window.game[collectionName];
-        const cls = (collection as any)?.documentClass || window[documentName];
+        const cls =
+          (collection as Collection<FoundryDocument> | undefined)?.documentClass ||
+          (
+            window as unknown as Record<
+              string,
+              { create: (data: unknown, options: unknown) => Promise<unknown> }
+            >
+          )[documentName];
         if (!cls) throw new Error(`Document class ${documentName} not found.`);
         return await cls.create(data, options);
       },
@@ -134,14 +150,22 @@ export abstract class BaseGameAdapter implements GameAdapter {
     );
   }
 
-  async updateDocument(page: FoundryPage, uuid: string, delta: any): Promise<any> {
+  async updateDocument(
+    page: FoundryPage,
+    uuid: string,
+    delta: Record<string, unknown>,
+  ): Promise<unknown> {
     return page.evaluate(
       async ({ uuid, delta }) => {
         const doc = window.fromUuidSync ? window.fromUuidSync(uuid) : null;
         if (doc) return await doc.update(delta);
 
         for (const collection of Object.values(window.game.collections || {})) {
-          const match = (collection as any).getName ? (collection as any).getName(uuid) : null;
+          const c = collection as unknown as {
+            getName: (name: string) => FoundryDocument | undefined;
+          };
+          if (typeof c.getName !== "function") continue;
+          const match = c.getName(uuid);
           if (match) return await match.update(delta);
         }
         throw new Error(`Document ${uuid} not found.`);
@@ -154,11 +178,16 @@ export abstract class BaseGameAdapter implements GameAdapter {
     page: FoundryPage,
     documentName: string,
     ids: string[],
-    options: any,
+    options: Record<string, unknown>,
   ): Promise<void> {
     await page.evaluate(
       async ({ documentName, ids, options }) => {
-        const cls = window[documentName];
+        const cls = (
+          window as unknown as Record<
+            string,
+            { deleteDocuments: (ids: string[], options: unknown) => Promise<void> }
+          >
+        )[documentName];
         if (!cls) throw new Error(`Document class ${documentName} not found.`);
         await cls.deleteDocuments(ids, options);
       },
@@ -169,18 +198,22 @@ export abstract class BaseGameAdapter implements GameAdapter {
   async getDocuments(
     page: FoundryPage,
     collection: string,
-    query: Record<string, any>,
-  ): Promise<any[]> {
+    query: Record<string, unknown>,
+  ): Promise<Record<string, unknown>[]> {
     return page.evaluate(
       ({ collection, query }) => {
-        const coll = window.game[collection];
+        const coll = (window.game as unknown as Record<string, Collection<FoundryDocument>>)[
+          collection
+        ];
         if (!coll) return [];
         // Simple query matching
         return coll
           .filter((d: FoundryDocument) => {
-            return Object.entries(query).every(([k, v]) => (d as any)[k] === v);
+            return Object.entries(query).every(
+              ([k, v]) => (d as unknown as Record<string, unknown>)[k] === v,
+            );
           })
-          .map((d: FoundryDocument) => (d as any).toObject?.() || d.toJSON());
+          .map((d: FoundryDocument) => d.toObject?.() || d.toJSON());
       },
       { collection, query },
     );

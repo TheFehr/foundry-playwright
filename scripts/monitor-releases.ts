@@ -115,8 +115,8 @@ async function run() {
     } else {
       console.log("[monitor] No new releases detected.");
     }
-  } catch (error: any) {
-    console.error("[monitor] Error:", error.message);
+  } catch (error: unknown) {
+    console.error("[monitor] Error:", (error as Error).message);
     process.exit(1);
   }
 }

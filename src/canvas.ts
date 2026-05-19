@@ -14,8 +14,7 @@ export class FoundryCanvas {
   async gridToPixels(x: number, y: number): Promise<{ x: number; y: number }> {
     return this.page.evaluate(
       ({ x, y }) => {
-        // @ts-ignore
-        const canvas = window.canvas;
+        const canvas = window.game.canvas;
         if (!canvas || !canvas.ready) throw new Error("Canvas is not ready.");
 
         // Calculate pixels using Foundry's coordinate system
@@ -96,16 +95,20 @@ export class FoundryCanvas {
    */
   private async getTokenCanvasPosition(tokenId: string): Promise<{ x: number; y: number }> {
     return this.page.evaluate((id) => {
-      // @ts-ignore
-      const token = window.canvas.tokens.get(id);
+      const canvas = window.game.canvas;
+      const tokens = (
+        canvas as unknown as {
+          tokens: { get: (id: string) => { center: { x: number; y: number } } };
+        }
+      ).tokens;
+      const token = tokens.get(id);
       if (!token) throw new Error(`Token ${id} not found on canvas.`);
 
       // Get center in canvas coordinates
       const center = token.center;
 
       // Convert to global pixels
-      // @ts-ignore
-      const global = window.canvas.stage.worldTransform.apply(center);
+      const global = canvas.stage.worldTransform.apply(center);
 
       const rect = document.getElementById("canvas")?.getBoundingClientRect();
       if (!rect) throw new Error("Canvas element not found.");

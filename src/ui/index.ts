@@ -75,7 +75,7 @@ export class FoundryUI {
   /**
    * Simulates a drag-and-drop event in Foundry VTT.
    */
-  async simulateDrop(targetSelector: string, data: any) {
+  async simulateDrop(targetSelector: string, data: Record<string, unknown>) {
     const { simulateFoundryDrop } = await import("../helpers.js");
     await simulateFoundryDrop(this.page, targetSelector, data);
   }

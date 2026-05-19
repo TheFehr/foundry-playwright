@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, Locator } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
 import {
   installSystemFromManifest as helperInstallSystemFromManifest,
@@ -229,7 +229,7 @@ export class V13SetupAdapter implements SetupAdapter {
     await helperInstallModuleFromManifest(page, manifestUrl);
   }
 
-  async openSystemInstallDialog(page: FoundryPage): Promise<any> {
+  async openSystemInstallDialog(page: FoundryPage): Promise<Locator> {
     console.log("[V13SetupAdapter] Opening System Install Dialog...");
     await this.switchTab(page, "Systems");
 
@@ -250,7 +250,7 @@ export class V13SetupAdapter implements SetupAdapter {
     return dialog;
   }
 
-  async openModuleInstallDialog(page: FoundryPage): Promise<any> {
+  async openModuleInstallDialog(page: FoundryPage): Promise<Locator> {
     console.log("[V13SetupAdapter] Opening Module Install Dialog...");
     await this.switchTab(page, "Modules");
 
@@ -368,7 +368,7 @@ export class V13SetupAdapter implements SetupAdapter {
 
   private async waitForInstallation(
     page: FoundryPage,
-    dialog: any,
+    dialog: Locator,
     verificationSelector: string,
     tabName: string,
   ): Promise<void> {

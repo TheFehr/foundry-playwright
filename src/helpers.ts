@@ -1,11 +1,19 @@
-import { expect, Page, Locator } from "@playwright/test";
+import { expect, Page, Locator, Browser } from "@playwright/test";
 import path from "path";
 import fs from "fs";
 
 /**
  * Loads the verification registry from verified-versions.json.
  */
-export function getVerificationRegistry(): any[] {
+export interface RegistryEntry {
+  fvtt: string;
+  system: string;
+  systemVersion: string;
+  status: "stable" | "incompatible";
+  notes?: string;
+}
+
+export function getVerificationRegistry(): RegistryEntry[] {
   try {
     const registryPath = path.join(process.cwd(), "verified-versions.json");
     if (fs.existsSync(registryPath)) {
@@ -23,8 +31,9 @@ export function getVerificationRegistry(): any[] {
  * @param test The Playwright test object.
  * @param config Foundry setup configuration.
  */
-export function useFoundry(test: any, config: any = {}) {
-  test.beforeAll(async ({ browser }: { browser: any }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useFoundry(test: any, config: Record<string, unknown> = {}) {
+  test.beforeAll(async ({ browser }: { browser: Browser }) => {
     const page = await browser.newPage();
     const { foundrySetup } = await import("./auth.js");
     await foundrySetup(page, config);
@@ -40,13 +49,13 @@ export async function validateStack(page: Page, targetVersion?: string | number)
   if (registry.length === 0) return;
 
   const current = await page.evaluate(() => {
-    const g = (window as any).game;
+    const g = window.game;
     const foundry = g.version || g.release?.generation;
     const system = g.system.id;
     const systemVersion = g.system.version;
     const modules = Array.from(g.modules.values())
-      .filter((m: any) => m.active && m.id !== "fake-module")
-      .map((m: any) => ({ id: m.id, version: m.version }));
+      .filter((m) => m.active && m.id !== "fake-module")
+      .map((m) => ({ id: m.id as string, version: m.version as string }));
 
     return { foundry, system, systemVersion, modules };
   });
@@ -260,7 +269,7 @@ export async function switchTab(page: Page, tabName: string) {
 export async function openSystemInstallDialog(page: Page): Promise<Locator> {
   const { getSetupAdapter } = await import("./setup/index.js");
   const adapter = await getSetupAdapter(page);
-  return await adapter.openSystemInstallDialog(page);
+  return (await adapter.openSystemInstallDialog(page)) as Locator;
 }
 
 /**
@@ -270,7 +279,7 @@ export async function openSystemInstallDialog(page: Page): Promise<Locator> {
 export async function openModuleInstallDialog(page: Page): Promise<Locator> {
   const { getSetupAdapter } = await import("./setup/index.js");
   const adapter = await getSetupAdapter(page);
-  return await adapter.openModuleInstallDialog(page);
+  return (await adapter.openModuleInstallDialog(page)) as Locator;
 }
 
 /**
@@ -338,7 +347,7 @@ async function installFromManifest(
  */
 export async function waitForReady(page: Page) {
   console.log("[waitForReady] Waiting for game to be ready...");
-  await page.waitForFunction(() => (window as any).game?.ready, { timeout: 60000 });
+  await page.waitForFunction(() => window.game?.ready, { timeout: 60000 });
 }
 
 /**
@@ -348,11 +357,11 @@ export async function waitForReady(page: Page) {
 export async function shutdownWorldDirectly(page: Page): Promise<boolean> {
   try {
     const isShutdownTriggered = await page.evaluate(async () => {
-      // @ts-ignore - Foundry global
-      if (typeof game !== "undefined" && game.ready && game.user?.isGM) {
+      const g = window.game;
+      if (typeof g !== "undefined" && g.ready && g.user?.isGM) {
         // Triggers the server to shut down the world and redirect connected clients to /setup
-        // @ts-ignore
-        await game.shutDown();
+        // @ts-ignore - Foundry global
+        await g.shutDown();
         return true;
       }
       return false;
@@ -381,8 +390,8 @@ export async function shutdownWorldDirectly(page: Page): Promise<boolean> {
 export async function verifyResult(
   page: Page,
   key: string,
-  predicate: (data: any, extra?: any) => boolean,
-  extraData?: any,
+  predicate: (data: Record<string, unknown>, extra?: unknown) => boolean,
+  extraData?: unknown,
   options: { timeout?: number } = {},
 ) {
   const { timeout = 15000 } = options;
@@ -396,8 +405,8 @@ export async function verifyResult(
       ({ key, predicateStr, extraData }) => {
         try {
           const predicate = new Function(`return ${predicateStr}`)();
-          const logs = (window as any).FP_VERIFY?.logs[key] || [];
-          return logs.some((l: any) => predicate(l, extraData));
+          const logs = window.FP_VERIFY?.logs[key] || [];
+          return logs.some((l) => predicate(l, extraData));
         } catch {
           return false;
         }
@@ -414,18 +423,37 @@ export async function verifyResult(
 /**
  * Waits for a specific actor flag to be set to a value.
  */
-export async function waitForActorFlag(page: Page, actorName: string, flag: string, value: any) {
+export async function waitForActorFlag(
+  page: Page,
+  actorName: string,
+  flag: string,
+  value: unknown,
+) {
   await verifyResult(page, "actor-update", (data) => {
-    return data.name === actorName && data.delta.flags?.["fake-module"]?.[flag] === value;
+    return (
+      data.name === actorName &&
+      (
+        (data.delta as Record<string, unknown>)?.flags as
+          | Record<string, Record<string, unknown>>
+          | undefined
+      )?.["fake-module"]?.[flag] === value
+    );
   });
 }
 
 /**
  * Waits for specific actor data to be updated.
  */
-export async function waitForActorData(page: Page, actorName: string, path: string, value: any) {
+export async function waitForActorData(
+  page: Page,
+  actorName: string,
+  path: string,
+  value: unknown,
+) {
   await verifyResult(page, "actor-update", (data) => {
-    const current = data.delta.system?.[path];
+    const current = (
+      (data.delta as Record<string, unknown>)?.system as Record<string, unknown> | undefined
+    )?.[path];
     return data.name === actorName && current === value;
   });
 }
@@ -433,11 +461,11 @@ export async function waitForActorData(page: Page, actorName: string, path: stri
 /**
  * Waits for a game setting to be set.
  */
-export async function waitForSetting(page: Page, module: string, key: string, value: any) {
+export async function waitForSetting(page: Page, module: string, key: string, value: unknown) {
   // Note: Settings updates are usually logged or checked directly
   await page.waitForFunction(
     ({ module, key, value }) => {
-      return (window as any).game.settings.get(module, key) === value;
+      return window.game.settings.get(module, key) === value;
     },
     { module, key, value },
   );
@@ -448,7 +476,7 @@ export async function waitForSetting(page: Page, module: string, key: string, va
  */
 export async function clearFPVerify(page: Page) {
   await page.evaluate(() => {
-    if ((window as any).FP_VERIFY_RESET) (window as any).FP_VERIFY_RESET();
+    if (window.FP_VERIFY_RESET) window.FP_VERIFY_RESET();
   });
 }
 
@@ -502,7 +530,11 @@ export async function dropCompendiumItem(
 /**
  * Simulates a Foundry VTT drag-and-drop event.
  */
-export async function simulateFoundryDrop(page: Page, targetSelector: string, data: any) {
+export async function simulateFoundryDrop(
+  page: Page,
+  targetSelector: string,
+  data: Record<string, unknown>,
+) {
   console.log(`[simulateFoundryDrop] Dropping ${data.type} onto ${targetSelector}...`);
   await page.evaluate(
     ({ selector, data }) => {

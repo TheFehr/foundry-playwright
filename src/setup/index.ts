@@ -30,9 +30,9 @@ export async function getSetupAdapter(
       () => {
         // 1. Check for Version String (Most reliable if available)
         const v =
-          (window as any).game?.version ||
-          (window as any).game?.release?.generation ||
-          (window as any).foundry?.utils?.vttVersion;
+          (window as unknown as Window).game?.version ||
+          (window as unknown as Window).game?.release?.generation ||
+          (window as unknown as Window).foundry?.utils?.vttVersion;
         if (v) {
           const vs = String(v);
           if (vs.startsWith("14")) return 14;
@@ -41,7 +41,7 @@ export async function getSetupAdapter(
 
         // 2. Check for V14 definitive markers (ApplicationV2 shell)
         const isV14 =
-          (window as any).foundry?.applications?.api?.ApplicationV2 !== undefined ||
+          (window as unknown as Window).foundry?.applications?.api?.ApplicationV2 !== undefined ||
           document.querySelector("foundry-app") !== null ||
           document.body.classList.contains("v14");
 
@@ -77,8 +77,8 @@ export async function getSetupAdapter(
         return {
           url: window.location.href,
           html: document.body.innerHTML.substring(0, 500),
-          foundry: !!(window as any).foundry,
-          vttVersion: (window as any).foundry?.utils?.vttVersion,
+          foundry: !!(window as unknown as Window).foundry,
+          vttVersion: (window as unknown as Window).foundry?.utils?.vttVersion,
           scripts: Array.from(document.querySelectorAll("script")).map((s) => s.src),
         };
       });
@@ -126,14 +126,15 @@ export async function getGameAdapter(
     .waitForFunction(
       () => {
         const v =
-          (window as any).game?.version ||
-          (window as any).game?.release?.generation ||
-          (window as any).foundry?.utils?.vttVersion;
+          (window as unknown as Window).game?.version ||
+          (window as unknown as Window).game?.release?.generation ||
+          (window as unknown as Window).foundry?.utils?.vttVersion;
         if (v) {
           if (String(v).startsWith("14")) return 14;
           if (String(v).startsWith("13")) return 13;
         }
-        if ((window as any).foundry?.applications?.api?.ApplicationV2 !== undefined) return 14;
+        if ((window as unknown as Window).foundry?.applications?.api?.ApplicationV2 !== undefined)
+          return 14;
         return null;
       },
       {},

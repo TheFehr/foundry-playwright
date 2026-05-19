@@ -59,11 +59,10 @@ export class FoundryState {
    * @param documentName The type of document (e.g., "Actor", "Item").
    * @param data The document data.
    */
-  async createDocument(documentName: string, data: any) {
+  async createDocument(documentName: string, data: Record<string, unknown>) {
     return this.page.evaluate(
       async ({ documentName, data, sanitizer }) => {
-        // @ts-ignore
-        const cls = CONFIG[documentName].documentClass;
+        const cls = window.CONFIG[documentName].documentClass;
         const doc = await cls.create(data);
         if (!doc) return null;
         // Use raw _source to avoid getters/deprecations
@@ -81,12 +80,11 @@ export class FoundryState {
    * @param id The ID of the document to update.
    * @param delta The data to update.
    */
-  async updateDocument(documentName: string, id: string, delta: any) {
+  async updateDocument(documentName: string, id: string, delta: Record<string, unknown>) {
     return this.page.evaluate(
       ({ documentName, id, delta }) => {
-        // @ts-ignore
-        const doc = game.collections.get(documentName).get(id);
-        return doc.update(delta);
+        const doc = window.game.collections.get(documentName).get(id);
+        return doc?.update(delta);
       },
       { documentName, id, delta },
     );
@@ -100,9 +98,8 @@ export class FoundryState {
   async deleteDocument(documentName: string, id: string) {
     return this.page.evaluate(
       ({ documentName, id }) => {
-        // @ts-ignore
-        const doc = game.collections.get(documentName).get(id);
-        return doc.delete();
+        const doc = window.game.collections.get(documentName).get(id);
+        return doc?.delete();
       },
       { documentName, id },
     );
@@ -116,8 +113,7 @@ export class FoundryState {
   async getDocument(documentName: string, id: string) {
     return this.page.evaluate(
       ({ documentName, id, sanitizer }) => {
-        // @ts-ignore
-        const doc = game.collections.get(documentName).get(id);
+        const doc = window.game.collections.get(documentName).get(id);
         if (!doc) return null;
         // Use raw _source to avoid getters/deprecations
         const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
@@ -136,9 +132,15 @@ export class FoundryState {
   async getDocumentByName(documentName: string, name: string) {
     return this.page.evaluate(
       ({ documentName, name, sanitizer }) => {
-        const g = (window as any).game;
-        const collection = g.collections.get(documentName) || g[documentName.toLowerCase() + "s"];
-        const doc = collection.getName(name);
+        const g = window.game;
+        const collection =
+          g.collections.get(documentName) ||
+          (g as Record<string, unknown>)[documentName.toLowerCase() + "s"];
+        const c = collection as unknown as {
+          getName: (name: string) => FoundryDocument | undefined;
+        };
+        if (!c || typeof c.getName !== "function") return null;
+        const doc = c.getName(name);
         if (!doc) return null;
         // Use raw _source to avoid getters/deprecations
         const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
@@ -155,8 +157,11 @@ export class FoundryState {
   async createUser(name: string, role: UserRole = UserRole.PLAYER, password?: string) {
     return this.page.evaluate(
       ({ name, role, password }) => {
-        // @ts-ignore
-        return User.create({ name, role, password });
+        return (
+          window.game.users.documentClass as {
+            create: (data: Record<string, unknown>) => Promise<User>;
+          }
+        ).create({ name, role, password });
       },
       { name, role, password },
     );
@@ -168,8 +173,7 @@ export class FoundryState {
   async setUserRole(userId: string, role: UserRole) {
     return this.page.evaluate(
       ({ userId, role }) => {
-        // @ts-ignore
-        const user = game.users.get(userId);
+        const user = window.game.users.get(userId);
         if (!user) throw new Error(`User not found: ${userId}`);
         return user.update({ role });
       },
@@ -183,11 +187,13 @@ export class FoundryState {
   async setRolePermission(permission: string, role: UserRole, allowed: boolean) {
     return this.page.evaluate(
       ({ permission, role, allowed }) => {
-        // @ts-ignore
-        const current = game.settings.get("core", "permissions") || {};
+        const current =
+          (window.game.settings.get("core", "permissions") as Record<
+            string,
+            Record<number, boolean>
+          >) || {};
         const update = { ...current, [permission]: { ...current[permission], [role]: allowed } };
-        // @ts-ignore
-        return game.settings.set("core", "permissions", update);
+        return window.game.settings.set("core", "permissions", update);
       },
       { permission, role, allowed },
     );
@@ -229,11 +235,10 @@ export class FoundryState {
   async roll(actorName: string, formula: string, label: string = "Test Roll") {
     return this.page.evaluate(
       ({ actorName, formula, label }) => {
-        // @ts-ignore
-        const actor = game.actors.getName(actorName);
+        const actor = window.game.actors.getName(actorName);
         if (!actor) throw new Error(`Actor not found: ${actorName}`);
-        // @ts-ignore
-        const roll = new Roll(formula, actor.getRollData());
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const roll = new (window as any).Roll(formula, (actor as any).getRollData?.());
         return roll.toMessage({ flavor: label });
       },
       { actorName, formula, label },
@@ -245,12 +250,11 @@ export class FoundryState {
    * @param name The name of the macro.
    * @param args Arguments to pass to the macro.
    */
-  async executeMacro(name: string, ...args: any[]) {
+  async executeMacro(name: string, ...args: unknown[]) {
     return this.page.evaluate(
       ({ name, args }) => {
-        // @ts-ignore
-        const macro = game.macros.getName(name);
-        return macro.execute(...args);
+        const macro = window.game.macros.getName(name);
+        return macro?.execute(...args);
       },
       { name, args },
     );
@@ -261,7 +265,7 @@ export class FoundryState {
    * @param hookName The name of the hook (e.g., "renderActorSheet").
    * @param args Arguments to pass to the hook.
    */
-  async triggerHook(hookName: string, ...args: any[]) {
+  async triggerHook(hookName: string, ...args: unknown[]) {
     return this.page.evaluate(
       ({ hookName, args }) => {
         return window.Hooks.call(hookName, ...args);
@@ -275,7 +279,7 @@ export class FoundryState {
    * @param eventName The name of the event.
    * @param data The data to emit.
    */
-  async emitSocket(eventName: string, data: any) {
+  async emitSocket(eventName: string, data: unknown) {
     return this.page.evaluate(
       ({ eventName, data }) => {
         return window.game.socket.emit(eventName, data);
@@ -294,14 +298,14 @@ export class FoundryState {
     await this.page.evaluate((hookName) => {
       window._hookLogs = window._hookLogs || {};
       window._hookLogs[hookName] = window._hookLogs[hookName] || [];
-      window.Hooks.on(hookName, (...args: any[]) => {
+      window.Hooks.on(hookName, (...args: unknown[]) => {
         window._hookLogs[hookName].push(args);
       });
     }, hookName);
 
     await this.page.waitForFunction(
       (name) => {
-        return window._hookLogs?.[name]?.length > 0;
+        return (window._hookLogs?.[name]?.length ?? 0) > 0;
       },
       hookName,
       { timeout },
@@ -349,8 +353,7 @@ export class FoundryState {
   async assignActorToUser(userId: string, actorId: string) {
     return this.page.evaluate(
       ({ userId, actorId }) => {
-        // @ts-ignore
-        const user = game.users.get(userId);
+        const user = window.game.users.get(userId);
         if (!user) throw new Error(`User not found: ${userId}`);
         return user.update({ character: actorId });
       },
@@ -361,11 +364,10 @@ export class FoundryState {
   /**
    * Updates an existing user.
    */
-  async updateUser(userId: string, delta: any) {
+  async updateUser(userId: string, delta: Record<string, unknown>) {
     return this.page.evaluate(
       ({ userId, delta }) => {
-        // @ts-ignore
-        const user = game.users.get(userId);
+        const user = window.game.users.get(userId);
         if (!user) throw new Error(`User not found: ${userId}`);
         return user.update(delta);
       },
@@ -384,7 +386,7 @@ export class FoundryState {
   /**
    * Sets or updates a Foundry VTT setting.
    */
-  async setSetting(module: string, key: string, value: any) {
+  async setSetting(module: string, key: string, value: unknown) {
     return this.page.evaluate(
       ({ module, key, value }) => {
         return window.game.settings.set(module, key, value);

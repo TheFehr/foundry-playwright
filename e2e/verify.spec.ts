@@ -50,22 +50,26 @@ test.describe("Library Verification Suite", () => {
     await page.waitForURL(/\/game/, { timeout: 60000 });
     await expect(page.locator("#loading")).toBeHidden({ timeout: 60000 });
     await page.waitForFunction(
-      () => typeof (window as any).game !== "undefined" && (window as any).game.ready,
+      () =>
+        typeof (window as unknown as Window).game !== "undefined" &&
+        (window as unknown as Window).game.ready,
       {
         timeout: 60000,
       },
     );
 
     // Reset verify logs for this test
-    await page.evaluate(() => (window as any).FP_VERIFY_RESET?.());
+    await page.evaluate(() => (window as unknown as Window).FP_VERIFY_RESET?.());
   });
 
   test("export: version metadata", async ({ page }) => {
     const meta = await page.evaluate(() => {
-      const game = (window as any).game;
-      const modules = Array.from(game.modules.values())
-        .filter((m: any) => m.active)
-        .map((m: any) => ({ id: m.id, version: m.version }));
+      const game = (window as unknown as Window).game;
+      const modules = Array.from(
+        game.modules.values() as Iterable<{ active: boolean; id: string; version: string }>,
+      )
+        .filter((m) => m.active)
+        .map((m) => ({ id: m.id, version: m.version }));
 
       return {
         foundry: game.version || game.release?.generation,
@@ -98,7 +102,8 @@ test.describe("Library Verification Suite", () => {
     await verifyResult(
       page,
       "actor-create",
-      (data: any, extra: any) => data.name === extra.actorName,
+      (data: Record<string, unknown>, extra: Record<string, unknown>) =>
+        data.name === extra.actorName,
       { actorName },
       { timeout: 30000 },
     );
@@ -113,7 +118,7 @@ test.describe("Library Verification Suite", () => {
     // Ensure the setting is registered
     await page.evaluate(() => {
       try {
-        (window as any).game.settings.register("fake-module", "test-string", {
+        (window as unknown as Window).game.settings.register("fake-module", "test-string", {
           scope: "world",
           config: true,
           type: String,
@@ -124,7 +129,7 @@ test.describe("Library Verification Suite", () => {
 
     await foundry.state.setSetting("fake-module", "test-string", testVal);
     const val = await page.evaluate(() =>
-      (window as any).game.settings.get("fake-module", "test-string"),
+      (window as unknown as Window).game.settings.get("fake-module", "test-string"),
     );
     expect(val).toBe(testVal);
   });
@@ -132,12 +137,14 @@ test.describe("Library Verification Suite", () => {
   test("foundry.ui: Application V2 tab switching", async ({ page, foundry }) => {
     await page.waitForFunction(
       () =>
-        (window as any).FakeAppV2 || (window as any).game?.modules?.get("fake-module")?.FakeAppV2,
+        (window as unknown as Window).FakeAppV2 ||
+        (window as unknown as Window).game?.modules?.get("fake-module")?.FakeAppV2,
       { timeout: 30000 },
     );
     await page.evaluate(async () => {
       const cls =
-        (window as any).FakeAppV2 || (window as any).game.modules.get("fake-module").FakeAppV2;
+        (window as unknown as Window).FakeAppV2 ||
+        (window as unknown as Window).game.modules.get("fake-module").FakeAppV2;
       console.log(
         `[test] cls type: ${typeof cls}, is constructor: ${cls?.prototype?.constructor === cls}`,
       );
@@ -151,21 +158,32 @@ test.describe("Library Verification Suite", () => {
     await expect(page.locator(appSelector)).toBeVisible();
 
     await foundry.ui.switchTab(appSelector, "Advanced");
-    await verifyResult(page, "app-v2-tab-click", (data: any) => data.tab === "advanced");
+    await verifyResult(
+      page,
+      "app-v2-tab-click",
+      (data: Record<string, unknown>) => data.tab === "advanced",
+    );
   });
 
   test("foundry.helpers: tour suppression", async ({ page, foundry: _foundry }) => {
     await page.waitForFunction(
-      () => (window as any).FakeTour || (window as any).game?.modules?.get("fake-module")?.FakeTour,
+      () =>
+        (window as unknown as Window).FakeTour ||
+        (window as unknown as Window).game?.modules?.get("fake-module")?.FakeTour,
       { timeout: 30000 },
     );
     await page.evaluate(() => {
       const cls =
-        (window as any).FakeTour || (window as any).game.modules.get("fake-module").FakeTour;
+        (window as unknown as Window).FakeTour ||
+        (window as unknown as Window).game.modules.get("fake-module").FakeTour;
       const tour = new cls();
       tour.start();
     });
-    await verifyResult(page, "tour-started", (data: any) => data.id === "test-tour");
+    await verifyResult(
+      page,
+      "tour-started",
+      (data: Record<string, unknown>) => data.id === "test-tour",
+    );
     await expect(async () => {
       const progress = await page.evaluate(() => window.localStorage.getItem("core.tourProgress"));
       expect(progress).toContain("backupsOverview");
@@ -191,12 +209,13 @@ test.describe("Library Verification Suite", () => {
     await verifyResult(
       page,
       "actor-create",
-      (data: any, extra: any) => data.name === extra.actorName,
+      (data: Record<string, unknown>, extra: Record<string, unknown>) =>
+        data.name === extra.actorName,
       { actorName },
     );
 
     await page.evaluate((name) => {
-      const actor = (window as any).game.actors.getName(name);
+      const actor = (window as unknown as Window).game.actors.getName(name);
       if (actor) actor.sheet.render(true);
     }, actorName);
 
@@ -211,8 +230,8 @@ test.describe("Library Verification Suite", () => {
     await verifyResult(
       page,
       "actor-sheet-drop",
-      (log: any, extra: any) => {
-        return log.dropData?.uuid === extra.uuid;
+      (log: Record<string, unknown>, extra: Record<string, unknown>) => {
+        return (log.dropData as Record<string, unknown>)?.uuid === extra.uuid;
       },
       { uuid: data.uuid },
     );

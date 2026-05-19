@@ -4,7 +4,9 @@
   "categories": {
     "correctness": "error"
   },
-  "rules": {},
+  "rules": {
+    "typescript/no-explicit-any": "error"
+  },
   "ignorePatterns": ["e2e/tidy5e-sheet/**", "e2e/fake-module/**", "node_modules/**", "dist/**"],
   "env": {
     "builtin": true

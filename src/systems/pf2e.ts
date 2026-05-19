@@ -19,10 +19,10 @@ export class PF2eStateAdapter extends BaseSystemStateAdapter {
     actorName: string,
     amount: number,
     currency: string,
-  ): Promise<any> {
+  ): Promise<unknown> {
     return page.evaluate(
       async ({ actorName, amount, currency }) => {
-        const actor = window.game.actors.getName(actorName);
+        const actor = (window as unknown as Window).game.actors.getName(actorName);
         if (!actor) throw new Error(`Actor not found: ${actorName}`);
 
         // Create the treasure item
@@ -69,14 +69,17 @@ export class PF2eStateAdapter extends BaseSystemStateAdapter {
     actorName: string,
     amount: number,
     currency: string,
-  ): { key: string; predicate: (data: any, extra?: any) => boolean } {
+  ): {
+    key: string;
+    predicate: (data: Record<string, unknown>, extra?: Record<string, unknown>) => boolean;
+  } {
     return {
       key: "pf2e-currency-added",
-      predicate: (data: any, extra: any) => {
+      predicate: (data: Record<string, unknown>, extra: Record<string, unknown> = {}) => {
         return (
-          data.actorName === extra.actorName &&
-          data.currency === extra.currency &&
-          data.amount === extra.amount
+          data["actorName"] === extra["actorName"] &&
+          data["currency"] === extra["currency"] &&
+          data["amount"] === extra["amount"]
         );
       },
     };

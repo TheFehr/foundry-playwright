@@ -73,7 +73,11 @@ test.describe("User Management Verification", () => {
 
     // Verify permission
     const isAllowed = await page.evaluate(() => {
-      return (window.game.settings.get("core", "permissions") as any)["FILES_BROWSE"][1]; // 1 is PLAYER
+      const permissions = window.game.settings.get("core", "permissions") as Record<
+        string,
+        number[]
+      >;
+      return permissions["FILES_BROWSE"][1]; // 1 is PLAYER
     });
     expect(isAllowed).toBe(true);
 

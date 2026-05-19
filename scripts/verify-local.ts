@@ -106,7 +106,7 @@ async function verifyVersion(
     let summaryContent =
       "# Verification Summary Report\n\n| Version | System | Modules | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n";
 
-    let existingResults: any[] = [];
+    let existingResults: Record<string, unknown>[] = [];
     if (fs.existsSync(summaryPath)) {
       const lines = fs.readFileSync(summaryPath, "utf8").split("\n");
       const rows = lines.filter(
@@ -138,7 +138,7 @@ async function verifyVersion(
     };
 
     const existingIdx = existingResults.findIndex(
-      (r) => r.version === version && r.system.startsWith(meta.system.id),
+      (r) => r.version === version && (r.system as string).startsWith(meta.system.id),
     );
     if (existingIdx !== -1) {
       existingResults[existingIdx] = currentResult;
@@ -147,7 +147,7 @@ async function verifyVersion(
     }
 
     existingResults.sort((a, b) =>
-      b.version.localeCompare(a.version, undefined, { numeric: true }),
+      (b.version as string).localeCompare(a.version as string, undefined, { numeric: true }),
     );
 
     existingResults.forEach((r) => {
@@ -184,7 +184,7 @@ async function verifyVersion(
 
       // Match entry by fvtt and system
       const existingIdx = registry.findIndex(
-        (e: any) => e.fvtt === version && e.system === meta.system.id,
+        (e: Record<string, unknown>) => e.fvtt === version && e.system === meta.system.id,
       );
       if (existingIdx !== -1) {
         registry[existingIdx] = entry;
@@ -196,9 +196,9 @@ async function verifyVersion(
       console.log("Registry updated successfully.");
     }
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`--- Verification Failed for ${version} ---`);
-    console.error(error.message);
+    console.error((error as Error).message);
     return false;
   } finally {
     if (orchestrator && !keepContainer) {
@@ -251,24 +251,30 @@ program
         const list = Array.isArray(registry) ? registry : [];
 
         if (options.allPending || options.all) {
-          const pending = list.filter((e: any) => e.status === "pending");
+          const pending = list.filter((e: Record<string, unknown>) => e.status === "pending");
           targets.push(
-            ...pending.map((e: any) => ({
-              version: e.fvtt,
-              system: e.system,
-              modules: e.modules?.map((m: any) => m.id) || [],
+            ...pending.map((e: Record<string, unknown>) => ({
+              version: e.fvtt as string,
+              system: e.system as string,
+              modules:
+                (e.modules as Record<string, unknown>[])?.map(
+                  (m: Record<string, unknown>) => m.id as string,
+                ) || [],
             })),
           );
           if (pending.length > 0) console.log(`Targeting ${pending.length} pending pairings.`);
         }
 
         if (options.reVerify || options.all) {
-          const stable = list.filter((e: any) => e.status === "stable");
+          const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
           targets.push(
-            ...stable.map((e: any) => ({
-              version: e.fvtt,
-              system: e.system,
-              modules: e.modules?.map((m: any) => m.id) || [],
+            ...stable.map((e: Record<string, unknown>) => ({
+              version: e.fvtt as string,
+              system: e.system as string,
+              modules:
+                (e.modules as Record<string, unknown>[])?.map(
+                  (m: Record<string, unknown>) => m.id as string,
+                ) || [],
             })),
           );
           if (stable.length > 0)
