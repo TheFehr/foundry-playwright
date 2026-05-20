@@ -1,4 +1,14 @@
-import { expect, Page, Locator, Browser } from "@playwright/test";
+import {
+  expect,
+  Page,
+  Locator,
+  Browser,
+  TestType,
+  PlaywrightTestArgs,
+  PlaywrightTestOptions,
+  PlaywrightWorkerArgs,
+  PlaywrightWorkerOptions,
+} from "@playwright/test";
 import path from "path";
 import fs from "fs";
 
@@ -26,13 +36,18 @@ export function getVerificationRegistry(): RegistryEntry[] {
 }
 
 /**
- * Helper to automatically set up a Foundry VTT instance before all tests in a file.
+ * Bootstraps a Foundry VTT instance before all tests in a spec.
  * Reduces boilerplate in spec files.
  * @param test The Playwright test object.
  * @param config Foundry setup configuration.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useFoundry(test: any, config: Record<string, unknown> = {}) {
+export function useFoundry(
+  test: TestType<
+    PlaywrightTestArgs & PlaywrightTestOptions,
+    PlaywrightWorkerArgs & PlaywrightWorkerOptions
+  >,
+  config: Record<string, unknown> = {},
+) {
   test.beforeAll(async ({ browser }: { browser: Browser }) => {
     const page = await browser.newPage();
     const { foundrySetup } = await import("./auth.js");

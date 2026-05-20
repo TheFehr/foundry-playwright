@@ -256,10 +256,11 @@ program
             ...pending.map((e: Record<string, unknown>) => ({
               version: e.fvtt as string,
               system: e.system as string,
-              modules:
-                (e.modules as Record<string, unknown>[])?.map(
-                  (m: Record<string, unknown>) => m.id as string,
-                ) || [],
+              modules: Array.isArray(e.modules)
+                ? (e.modules as Record<string, unknown>[]).map(
+                    (m: Record<string, unknown>) => m.id as string,
+                  )
+                : [],
             })),
           );
           if (pending.length > 0) console.log(`Targeting ${pending.length} pending pairings.`);
@@ -271,10 +272,11 @@ program
             ...stable.map((e: Record<string, unknown>) => ({
               version: e.fvtt as string,
               system: e.system as string,
-              modules:
-                (e.modules as Record<string, unknown>[])?.map(
-                  (m: Record<string, unknown>) => m.id as string,
-                ) || [],
+              modules: Array.isArray(e.modules)
+                ? (e.modules as Record<string, unknown>[]).map(
+                    (m: Record<string, unknown>) => m.id as string,
+                  )
+                : [],
             })),
           );
           if (stable.length > 0)

@@ -84,7 +84,8 @@ export class FoundryState {
     return this.page.evaluate(
       ({ documentName, id, delta }) => {
         const doc = window.game.collections.get(documentName).get(id);
-        return doc?.update(delta);
+        if (!doc) throw new Error(`Document ${documentName}/${id} not found`);
+        return doc.update(delta);
       },
       { documentName, id, delta },
     );
@@ -99,7 +100,8 @@ export class FoundryState {
     return this.page.evaluate(
       ({ documentName, id }) => {
         const doc = window.game.collections.get(documentName).get(id);
-        return doc?.delete();
+        if (!doc) throw new Error(`Document ${documentName}/${id} not found`);
+        return doc.delete();
       },
       { documentName, id },
     );
@@ -237,8 +239,22 @@ export class FoundryState {
       ({ actorName, formula, label }) => {
         const actor = window.game.actors.getName(actorName);
         if (!actor) throw new Error(`Actor not found: ${actorName}`);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const roll = new (window as any).Roll(formula, (actor as any).getRollData?.());
+
+        interface RollConstructor {
+          new (
+            formula: string,
+            data?: Record<string, unknown>,
+          ): {
+            toMessage(options: { flavor: string }): unknown;
+          };
+        }
+        interface ActorWithGetRollData {
+          getRollData?: () => Record<string, unknown>;
+        }
+
+        const Roll = (window as unknown as { Roll: RollConstructor }).Roll;
+        const actorWithData = actor as unknown as ActorWithGetRollData;
+        const roll = new Roll(formula, actorWithData.getRollData?.());
         return roll.toMessage({ flavor: label });
       },
       { actorName, formula, label },

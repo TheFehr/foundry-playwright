@@ -77,7 +77,11 @@ test.describe("User Management Verification", () => {
         string,
         number[]
       >;
-      return permissions["FILES_BROWSE"][1]; // 1 is PLAYER
+      const filesBrowse = permissions?.["FILES_BROWSE"];
+      if (Array.isArray(filesBrowse) && filesBrowse.length > 1) {
+        return filesBrowse[1] === 1; // 1 is PLAYER, check if it matches
+      }
+      return false;
     });
     expect(isAllowed).toBe(true);
 

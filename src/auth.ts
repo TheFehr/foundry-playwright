@@ -165,6 +165,12 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
 
   const systemLabel = config.systemLabel || SYSTEM_LABELS[systemId] || systemId;
 
+  if (!adminPassword) {
+    throw new Error(
+      "[foundrySetup] Admin password is required. Please provide 'adminPassword' in config or set FOUNDRY_ADMIN_PASSWORD/FOUNDRY_ADMIN_KEY environment variables.",
+    );
+  }
+
   console.log(`[foundrySetup] Starting setup for world: ${worldId} (System: ${systemId})`);
 
   let done = false;

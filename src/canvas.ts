@@ -95,7 +95,9 @@ export class FoundryCanvas {
    */
   private async getTokenCanvasPosition(tokenId: string): Promise<{ x: number; y: number }> {
     return this.page.evaluate((id) => {
-      const canvas = window.game.canvas;
+      const canvas = window.game?.canvas;
+      if (!canvas || !canvas.ready) throw new Error("Canvas is not ready.");
+
       const tokens = (
         canvas as unknown as {
           tokens: { get: (id: string) => { center: { x: number; y: number } } };
