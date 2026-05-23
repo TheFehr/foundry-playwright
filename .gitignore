@@ -25,3 +25,6 @@ e2e/.auth
 
 # Gemini Agent Mandates
 GEMINI.md
+
+# Antigravity CLI
+.antigravitycli/

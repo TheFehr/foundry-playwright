@@ -190,11 +190,25 @@ export class FoundryState {
     return this.page.evaluate(
       ({ permission, role, allowed }) => {
         const current =
-          (window.game.settings.get("core", "permissions") as Record<
-            string,
-            Record<number, boolean>
-          >) || {};
-        const update = { ...current, [permission]: { ...current[permission], [role]: allowed } };
+          (window.game.settings.get("core", "permissions") as Record<string, unknown>) || {};
+        const p = current[permission];
+        let updateValue: unknown;
+
+        if (Array.isArray(p)) {
+          const newP = [...p];
+          // Ensure array is long enough
+          while (newP.length <= role) newP.push(0);
+          newP[role] = allowed ? 1 : 0;
+          updateValue = newP;
+        } else if (typeof p === "object" && p !== null) {
+          updateValue = { ...p, [role]: allowed };
+        } else {
+          // If it's a number (minimum role level), we might want to convert it to an object
+          // but for now let's just use the object format if we're setting specific roles
+          updateValue = { [role]: allowed };
+        }
+
+        const update = { ...current, [permission]: updateValue };
         return window.game.settings.set("core", "permissions", update);
       },
       { permission, role, allowed },

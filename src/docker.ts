@@ -1,10 +1,12 @@
 import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
+import net from "net";
 
 export interface DockerOrchestratorConfig {
   version: string;
   port?: number;
+  maxPortRetries?: number;
   adminKey?: string;
   username?: string;
   password?: string;
@@ -25,6 +27,7 @@ export class DockerFoundryOrchestrator {
     this.config = {
       version: config.version,
       port: config.port || 30000,
+      maxPortRetries: config.maxPortRetries ?? 10,
       adminKey: config.adminKey || "password",
       username: config.username || process.env.FOUNDRY_USERNAME || "",
       password: config.password || process.env.FOUNDRY_PASSWORD || "",
@@ -41,6 +44,16 @@ export class DockerFoundryOrchestrator {
    */
   async start(): Promise<string> {
     console.log(`[DockerOrchestrator] Starting Foundry VTT v${this.config.version}...`);
+
+    // 0. Find available port if needed
+    const originalPort = this.config.port;
+    const availablePort = await this.findAvailablePort(originalPort);
+    if (availablePort !== originalPort) {
+      console.log(
+        `[DockerOrchestrator] Port ${originalPort} was unavailable. Using ${availablePort} instead.`,
+      );
+      this.config.port = availablePort;
+    }
 
     // 1. Verify environment file
     const envPath = path.resolve(this.config.envFile);
@@ -171,5 +184,35 @@ export class DockerFoundryOrchestrator {
       throw new Error("Foundry VTT failed to start within the timeout period.");
     }
     console.log("[DockerOrchestrator] Foundry is ready!");
+  }
+
+  private async findAvailablePort(startPort: number): Promise<number> {
+    let currentPort = startPort;
+    const maxPort = startPort + this.config.maxPortRetries;
+
+    while (currentPort <= maxPort) {
+      if (await this.isPortAvailable(currentPort)) {
+        return currentPort;
+      }
+      currentPort++;
+    }
+
+    throw new Error(
+      `[DockerOrchestrator] No available ports found in range ${startPort} - ${maxPort}.`,
+    );
+  }
+
+  private isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once("error", () => {
+        resolve(false);
+      });
+      server.once("listening", () => {
+        server.close();
+        resolve(true);
+      });
+      server.listen(port);
+    });
   }
 }

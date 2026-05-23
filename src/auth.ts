@@ -47,7 +47,7 @@ export async function returnToSetup(
     }
 
     if (url.includes("/auth")) {
-      console.log("[returnToSetup] On /auth screen. Logging in...");
+      console.log("[returnToSetup] On /auth screen. Checking for admin login...");
       const pwInput = page.locator('input[name="adminPassword"]');
       if (await pwInput.isVisible()) {
         await pwInput.fill(adminPassword || process.env.FOUNDRY_ADMIN_PASSWORD || "password");
@@ -60,6 +60,10 @@ export async function returnToSetup(
           page.waitForURL((u) => u.pathname.includes("/setup"), { timeout: 20000 }),
           page.waitForSelector("foundry-app#setup, body.setup", { timeout: 20000 }),
         ]).catch(() => null);
+        await page.waitForLoadState("networkidle");
+      } else {
+        console.log("[returnToSetup] On /auth but no admin login found. Navigating to /setup...");
+        await page.goto("/setup").catch(() => null);
         await page.waitForLoadState("networkidle");
       }
       continue;

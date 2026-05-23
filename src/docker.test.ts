@@ -35,4 +35,22 @@ describe("DockerFoundryOrchestrator", () => {
     expect(command).toContain("--name foundry-playwright-11-315");
     expect(command).toContain("ghcr.io/felddy/foundryvtt:11.315");
   });
+
+  it("respects maxPortRetries in config", () => {
+    const orchestrator = new DockerFoundryOrchestrator({
+      version: "12.327",
+      maxPortRetries: 20,
+    });
+    // Accessing private config for test verification
+    const config = (orchestrator as unknown as { config: { maxPortRetries: number } }).config;
+    expect(config.maxPortRetries).toBe(20);
+  });
+
+  it("defaults maxPortRetries to 10", () => {
+    const orchestrator = new DockerFoundryOrchestrator({
+      version: "12.327",
+    });
+    const config = (orchestrator as unknown as { config: { maxPortRetries: number } }).config;
+    expect(config.maxPortRetries).toBe(10);
+  });
 });

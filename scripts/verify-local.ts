@@ -18,13 +18,14 @@ async function verifyVersion(
   isDocker: boolean,
   updateRegistry: boolean,
   keepContainer: boolean,
-) {
+): Promise<{ success: boolean; failures: string[] }> {
   console.log(
     `\n--- Verifying Version: ${version} (System: ${system}, Modules: ${modules.join(", ") || "none"}) ---`,
   );
 
-  const foundryUrl = process.env.FOUNDRY_URL || "http://localhost:30000";
+  let foundryUrl = process.env.FOUNDRY_URL || "http://localhost:30000";
   let orchestrator: DockerFoundryOrchestrator | null = null;
+  let failures: string[] = [];
 
   try {
     if (isDocker) {
@@ -58,6 +59,7 @@ async function verifyVersion(
 
       const url = await orchestrator.start();
       console.log(`Foundry is up at ${url}`);
+      foundryUrl = url;
     }
 
     console.log(`Verifying against: ${foundryUrl}`);
@@ -80,10 +82,28 @@ async function verifyVersion(
     // We target only our specific verification suites
     const testFiles = ["e2e/verify.spec.ts", "e2e/user-management.spec.ts"].join(" ");
 
-    execSync(`npx playwright test ${testFiles} --workers=1 ${playwrightArgs.join(" ")}`, {
-      stdio: "inherit",
-      env,
-    });
+    const reportPath = path.join(process.cwd(), `.playwright-report-${version}.json`);
+    try {
+      execSync(
+        `npx playwright test ${testFiles} --workers=1 --reporter=line,json ${playwrightArgs.join(" ")}`,
+        {
+          stdio: "inherit",
+          env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath },
+        },
+      );
+    } catch {
+      // execSync throws on test failure, we'll parse the report below
+    }
+
+    if (fs.existsSync(reportPath)) {
+      const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+      failures = extractFailures(report);
+      fs.unlinkSync(reportPath); // Cleanup
+    }
+
+    if (failures.length > 0) {
+      throw new Error(`Verification failed with ${failures.length} test failures.`);
+    }
 
     // 4. Capture versions for the report
     console.log("[verifyVersion] Capturing system and module versions...");
@@ -195,16 +215,60 @@ async function verifyVersion(
       fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
       console.log("Registry updated successfully.");
     }
-    return true;
+    return { success: true, failures: [] };
   } catch (error: unknown) {
     console.error(`--- Verification Failed for ${version} ---`);
     console.error((error as Error).message);
-    return false;
+    return { success: false, failures };
   } finally {
     if (orchestrator && !keepContainer) {
       await orchestrator.stopAndRemove();
     }
   }
+}
+
+interface PlaywrightTestResult {
+  status: string;
+}
+
+interface PlaywrightSpec {
+  title: string;
+  tests: Array<{
+    results: PlaywrightTestResult[];
+  }>;
+}
+
+interface PlaywrightSuite {
+  suites?: PlaywrightSuite[];
+  specs?: PlaywrightSpec[];
+}
+
+interface PlaywrightReport {
+  suites?: PlaywrightSuite[];
+}
+
+/**
+ * Extracts failed test titles from a Playwright JSON report.
+ */
+function extractFailures(report: PlaywrightReport): string[] {
+  const failures: string[] = [];
+
+  function traverse(suite: PlaywrightSuite) {
+    if (suite.suites) suite.suites.forEach(traverse);
+    if (suite.specs) {
+      suite.specs.forEach((spec) => {
+        const isFailed = spec.tests.some((t) =>
+          t.results.some((r) => r.status === "failed" || r.status === "timedOut"),
+        );
+        if (isFailed) {
+          failures.push(spec.title);
+        }
+      });
+    }
+  }
+
+  if (report.suites) report.suites.forEach(traverse);
+  return failures;
 }
 
 const program = new Command();
@@ -296,10 +360,10 @@ program
       return;
     }
 
-    const results: { key: string; success: boolean }[] = [];
+    const results: { key: string; success: boolean; failures: string[] }[] = [];
 
     for (const target of targets) {
-      const success = await verifyVersion(
+      const result = await verifyVersion(
         target.version,
         target.system,
         target.modules,
@@ -307,12 +371,20 @@ program
         options.updateRegistry,
         options.keepContainer,
       );
-      results.push({ key: `${target.version} (${target.system})`, success });
+      results.push({
+        key: `${target.version} (${target.system})`,
+        success: result.success,
+        failures: result.failures,
+      });
     }
 
     console.log("\n--- Verification Summary ---");
     results.forEach((r) => {
-      console.log(`${r.key}: ${r.success ? "PASS" : "FAIL"}`);
+      const status = r.success ? "PASS" : "FAIL";
+      console.log(`${r.key}: ${status}`);
+      if (r.failures.length > 0) {
+        r.failures.forEach((f) => console.log(`  - [FAILED] ${f}`));
+      }
     });
 
     if (results.some((r) => !r.success)) {

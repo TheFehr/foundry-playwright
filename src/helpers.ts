@@ -384,9 +384,20 @@ export async function shutdownWorldDirectly(page: Page): Promise<boolean> {
 
     if (isShutdownTriggered) {
       // The server will automatically redirect the client to the setup screen
-      await page.waitForURL((url) => url.pathname.includes("/setup"), { timeout: 15000 });
-      console.log("[shutdownWorldDirectly] Successfully shut down world via direct API.");
-      return true;
+      // We wait for either /setup or /auth (in case of session loss/redirect to world login)
+      await page.waitForURL(
+        (url) => url.pathname.includes("/setup") || url.pathname.includes("/auth"),
+        { timeout: 15000 },
+      );
+
+      const isSetup = page.url().includes("/setup");
+      if (isSetup) {
+        console.log("[shutdownWorldDirectly] Successfully shut down world via direct API.");
+        return true;
+      } else {
+        console.log(`[shutdownWorldDirectly] Redirected to ${page.url()} instead of setup.`);
+        return false;
+      }
     }
   } catch (err) {
     console.warn("[shutdownWorldDirectly] Direct API shutdown failed or timed out.", err);
