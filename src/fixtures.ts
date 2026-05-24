@@ -32,7 +32,8 @@ export interface FoundryFixtures {
  * and provides Foundry-specific utilities.
  */
 export const test = base.extend<FoundryFixtures>({
-  deprecationTracker: async (_settings, use) => {
+  // eslint-disable-next-line no-empty-pattern
+  deprecationTracker: async ({}, use) => {
     await use(new DeprecationTracker());
   },
   foundry: async ({ page, deprecationTracker }, use) => {
