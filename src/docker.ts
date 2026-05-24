@@ -45,21 +45,7 @@ export class DockerFoundryOrchestrator {
   async start(): Promise<string> {
     console.log(`[DockerOrchestrator] Starting Foundry VTT v${this.config.version}...`);
 
-    // 0. Stop/Remove existing container if it exists
-    // We do this BEFORE finding an available port to avoid port drift if the existing container is using the target port.
-    this.stopAndRemove();
-
-    // 1. Find available port if needed
-    const originalPort = this.config.port;
-    const availablePort = await this.findAvailablePort(originalPort);
-    if (availablePort !== originalPort) {
-      console.log(
-        `[DockerOrchestrator] Port ${originalPort} was unavailable. Using ${availablePort} instead.`,
-      );
-      this.config.port = availablePort;
-    }
-
-    // 2. Verify environment file
+    // 0. Verify environment file first - don't tear down if invalid
     const envPath = path.resolve(this.config.envFile);
     if (!fs.existsSync(envPath)) {
       throw new Error(
@@ -76,6 +62,20 @@ export class DockerFoundryOrchestrator {
           `[DockerOrchestrator] Environment file at ${envPath} is missing required variable: ${v}`,
         );
       }
+    }
+
+    // 1. Stop/Remove existing container if it exists
+    // We do this BEFORE finding an available port to avoid port drift if the existing container is using the target port.
+    this.stopAndRemove();
+
+    // 2. Find available port if needed
+    const originalPort = this.config.port;
+    const availablePort = await this.findAvailablePort(originalPort);
+    if (availablePort !== originalPort) {
+      console.log(
+        `[DockerOrchestrator] Port ${originalPort} was unavailable. Using ${availablePort} instead.`,
+      );
+      this.config.port = availablePort;
     }
 
     // 3. Ensure directories exist
