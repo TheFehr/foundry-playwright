@@ -45,7 +45,11 @@ export class DockerFoundryOrchestrator {
   async start(): Promise<string> {
     console.log(`[DockerOrchestrator] Starting Foundry VTT v${this.config.version}...`);
 
-    // 0. Find available port if needed
+    // 0. Stop/Remove existing container if it exists
+    // We do this BEFORE finding an available port to avoid port drift if the existing container is using the target port.
+    this.stopAndRemove();
+
+    // 1. Find available port if needed
     const originalPort = this.config.port;
     const availablePort = await this.findAvailablePort(originalPort);
     if (availablePort !== originalPort) {
@@ -55,7 +59,7 @@ export class DockerFoundryOrchestrator {
       this.config.port = availablePort;
     }
 
-    // 1. Verify environment file
+    // 2. Verify environment file
     const envPath = path.resolve(this.config.envFile);
     if (!fs.existsSync(envPath)) {
       throw new Error(
@@ -74,13 +78,10 @@ export class DockerFoundryOrchestrator {
       }
     }
 
-    // 2. Ensure directories exist
+    // 3. Ensure directories exist
     if (!fs.existsSync(this.config.dataDir)) fs.mkdirSync(this.config.dataDir, { recursive: true });
     if (!fs.existsSync(this.config.cacheDir))
       fs.mkdirSync(this.config.cacheDir, { recursive: true });
-
-    // 3. Stop/Remove existing container if it exists
-    this.stopAndRemove();
 
     // 4. Pull image if missing
     const image = `ghcr.io/felddy/foundryvtt:${this.config.version}`;

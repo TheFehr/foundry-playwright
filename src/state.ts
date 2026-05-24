@@ -267,6 +267,9 @@ export class FoundryState {
         }
 
         const Roll = (window as unknown as { Roll: RollConstructor }).Roll;
+        if (typeof Roll !== "function") {
+          throw new Error("Roll is not available in window — cannot construct Roll");
+        }
         const actorWithData = actor as unknown as ActorWithGetRollData;
         const roll = new Roll(formula, actorWithData.getRollData?.());
         return roll.toMessage({ flavor: label });

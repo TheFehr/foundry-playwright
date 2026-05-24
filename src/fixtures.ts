@@ -32,7 +32,7 @@ export interface FoundryFixtures {
  * and provides Foundry-specific utilities.
  */
 export const test = base.extend<FoundryFixtures>({
-  deprecationTracker: async ({ ..._ }, use) => {
+  deprecationTracker: async (_settings, use) => {
     await use(new DeprecationTracker());
   },
   foundry: async ({ page, deprecationTracker }, use) => {

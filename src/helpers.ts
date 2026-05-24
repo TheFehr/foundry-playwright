@@ -390,7 +390,8 @@ export async function shutdownWorldDirectly(page: Page): Promise<boolean> {
         { timeout: 15000 },
       );
 
-      const isSetup = page.url().includes("/setup");
+      const pathname = new URL(page.url()).pathname;
+      const isSetup = pathname === "/setup" || pathname.endsWith("/setup");
       if (isSetup) {
         console.log("[shutdownWorldDirectly] Successfully shut down world via direct API.");
         return true;
