@@ -4,23 +4,23 @@
     "system": "dnd5e",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-05-11T17:47:20.053Z",
-    "notes": "Verified locally."
+    "timestamp": "2026-05-24T20:16:01.596Z",
+    "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "14.360.0",
     "system": "dnd5e",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-05-11T17:45:31.871Z",
-    "notes": "Verified locally."
+    "timestamp": "2026-05-24T20:17:59.525Z",
+    "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
     "systemVersion": "7.12.2",
     "status": "stable",
-    "timestamp": "2026-05-15T18:01:53.687Z",
+    "timestamp": "2026-05-24T20:20:30.251Z",
     "notes": "Verified locally with pf2e v7.12.2."
   },
   {
@@ -28,7 +28,7 @@
     "system": "pf2e",
     "systemVersion": "8.1.2",
     "status": "stable",
-    "timestamp": "2026-05-15T18:04:06.504Z",
+    "timestamp": "2026-05-24T20:23:03.989Z",
     "notes": "Verified locally with pf2e v8.1.2."
   },
   {
