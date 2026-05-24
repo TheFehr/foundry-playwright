@@ -33,7 +33,7 @@ async function fetchFoundryVersion(): Promise<string> {
     return stableMatch[1];
   }
 
-  const fallbackMatch = html.match(/Version (\d+)/);
+  const fallbackMatch = html.match(/Version ([\d.]+)/);
   if (!fallbackMatch) throw new Error("Failed to parse Foundry version from releases page.");
   return fallbackMatch[1];
 }

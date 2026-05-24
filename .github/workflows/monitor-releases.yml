@@ -50,7 +50,7 @@ jobs:
             const pending = registry.filter(e => e.status === 'pending');
 
             // Get all open issues with the label to avoid duplicates
-            const issues = await github.rest.issues.listForRepo({
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
@@ -60,7 +60,7 @@ jobs:
             for (const entry of pending) {
                 const title = `Verification Required: FVTT ${entry.fvtt} + ${entry.system} v${entry.systemVersion}`;
                 
-                if (!issues.data.some(i => i.title === title)) {
+                if (!issues.some(i => i.title === title)) {
                   console.log(`Creating issue: ${title}`);
                   await github.rest.issues.create({
                     owner: context.repo.owner,

@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import "dotenv/config";
 import path from "path";
 import fs from "fs";
@@ -393,7 +393,7 @@ program
     // Git integration
     const changedFiles = ["verified-versions.json", "verification-report.md"].filter((f) => {
       try {
-        execSync(`git diff --quiet ${f}`);
+        execFileSync("git", ["diff", "--quiet", f]);
         return false;
       } catch {
         return true;
@@ -407,11 +407,12 @@ program
       if (options.gitCommit) {
         console.log(`\n--- Auto-committing changes ---`);
         try {
-          execSync(`git add ${changedFiles.join(" ")}`);
-          execSync(`git commit -m "${commitMsg}"`, { stdio: "inherit" });
+          execFileSync("git", ["add", ...changedFiles]);
+          execFileSync("git", ["commit", "-m", commitMsg], { stdio: "inherit" });
           console.log("Commit successful.");
         } catch (e) {
           console.error("Failed to commit changes:", (e as Error).message);
+          process.exit(1);
         }
       } else {
         console.log(`\n--- Suggested Commit ---`);
