@@ -49,24 +49,27 @@ jobs:
             const registry = JSON.parse(fs.readFileSync('verified-versions.json', 'utf8'));
             const pending = registry.filter(e => e.status === 'pending');
 
+            // Get all open issues with the label to avoid duplicates
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'verification-required'
+            });
+
             for (const entry of pending) {
                 const title = `Verification Required: FVTT ${entry.fvtt} + ${entry.system} v${entry.systemVersion}`;
                 
-                // Check if issue already exists
-                const issues = await github.rest.issues.listForRepo({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  state: 'open',
-                  labels: 'verification-required'
-                });
-                
                 if (!issues.data.some(i => i.title === title)) {
+                  console.log(`Creating issue: ${title}`);
                   await github.rest.issues.create({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     title: title,
-                    body: `A new compatibility stack has been added to the pending list.\n\n**FVTT:** ${entry.fvtt}\n**System:** ${entry.system} v${entry.systemVersion}\n\nPlease run:\n\`npm run verify:local -- --docker --all-pending\``,
+                    body: `A new compatibility stack has been added to the pending list.\n\n**FVTT:** ${entry.fvtt}\n**System:** ${entry.system} v${entry.systemVersion}\n\n${entry.notes}`,
                     labels: ['verification-required']
                   });
+                } else {
+                  console.log(`Issue already exists: ${title}`);
                 }
             }

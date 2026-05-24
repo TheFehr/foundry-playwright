@@ -293,6 +293,7 @@ program
   )
   .option("--all", "Verify all pairings (pending and stable) in the registry", false)
   .option("--update-registry", "Update verified-versions.json on successful verification", false)
+  .option("--git-commit", "Automatically commit changes on success", false)
   .option(
     "--keep-container",
     "Do not stop and remove the Docker container after verification",
@@ -387,7 +388,39 @@ program
       }
     });
 
-    if (results.some((r) => !r.success)) {
+    const allPassed = results.every((r) => r.success);
+
+    // Git integration
+    const changedFiles = ["verified-versions.json", "verification-report.md"].filter((f) => {
+      try {
+        execSync(`git diff --quiet ${f}`);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+
+    if (allPassed && changedFiles.length > 0) {
+      const verifiedKeys = results.map((r) => r.key).join(", ");
+      const commitMsg = `chore(verify): verify ${verifiedKeys}`;
+
+      if (options.gitCommit) {
+        console.log(`\n--- Auto-committing changes ---`);
+        try {
+          execSync(`git add ${changedFiles.join(" ")}`);
+          execSync(`git commit -m "${commitMsg}"`, { stdio: "inherit" });
+          console.log("Commit successful.");
+        } catch (e) {
+          console.error("Failed to commit changes:", (e as Error).message);
+        }
+      } else {
+        console.log(`\n--- Suggested Commit ---`);
+        console.log(`git add ${changedFiles.join(" ")}`);
+        console.log(`git commit -m "${commitMsg}"`);
+      }
+    }
+
+    if (!allPassed) {
       process.exit(1);
     }
   });

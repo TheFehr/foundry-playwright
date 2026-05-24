@@ -23,11 +23,19 @@ interface RegistryEntry {
 async function fetchFoundryVersion(): Promise<string> {
   console.log("[monitor] Fetching latest Foundry VTT version...");
   const html = execSync("curl -s https://foundryvtt.com/releases/", { encoding: "utf8" });
-  const match = html.match(/Version (\d+)/);
-  if (!match) throw new Error("Failed to parse Foundry version from releases page.");
 
-  // We'll return the generation (e.g. "14")
-  return match[1];
+  // Find the first occurrence of a stable release link
+  // Structure: <a href="/releases/13.351" ...>Release 13.351</a> ... <span class="release-tag stable">Stable</span>
+  const stableMatch = html.match(
+    /<a href="\/releases\/([\d.]+)"[^>]*>Release [\d.]+<\/a>[\s\S]{0,500}?<span class="release-tag stable">Stable<\/span>/,
+  );
+  if (stableMatch) {
+    return stableMatch[1];
+  }
+
+  const fallbackMatch = html.match(/Version (\d+)/);
+  if (!fallbackMatch) throw new Error("Failed to parse Foundry version from releases page.");
+  return fallbackMatch[1];
 }
 
 async function fetchSystemLatest(systemId: string): Promise<string> {
@@ -77,13 +85,14 @@ async function run() {
           console.log(
             `[monitor] New system update detected: ${system.id} v${system.latest} for FVTT ${fvtt}`,
           );
+          const verifyCmd = `npm run verify:local -- --docker --version ${fvtt} --system ${system.id} --update-registry --git-commit`;
           registry.push({
             fvtt,
             system: system.id,
             systemVersion: system.latest,
             status: "pending",
             timestamp: new Date().toISOString(),
-            notes: `Automated detection: newer system version available.`,
+            notes: `Automated detection: newer system version available. Run verification: \`${verifyCmd}\``,
           });
           updated = true;
         }
@@ -97,13 +106,14 @@ async function run() {
     if (!hasGeneration) {
       console.log(`[monitor] New Foundry generation detected: ${foundryLatest}`);
       for (const system of systems) {
+        const verifyCmd = `npm run verify:local -- --docker --version ${foundryLatest} --system ${system.id} --update-registry --git-commit`;
         registry.push({
           fvtt: foundryLatest,
           system: system.id,
           systemVersion: system.latest,
           status: "pending",
           timestamp: new Date().toISOString(),
-          notes: `Automated detection: new Foundry generation.`,
+          notes: `Automated detection: new Foundry generation. Run verification: \`${verifyCmd}\``,
         });
       }
       updated = true;
