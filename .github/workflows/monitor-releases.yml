@@ -69,6 +69,7 @@ jobs:
                     body: `A new compatibility stack has been added to the pending list.\n\n**FVTT:** ${entry.fvtt}\n**System:** ${entry.system} v${entry.systemVersion}\n\n${entry.notes}`,
                     labels: ['verification-required']
                   });
+                  issues.push({ title });
                 } else {
                   console.log(`Issue already exists: ${title}`);
                 }
