@@ -57,6 +57,26 @@ program
           }
         }
 
+        // Auto-inject the current working directory if it is a module itself (contains module.json)
+        const rootModuleJson = path.join(process.cwd(), "module.json");
+        if (fs.existsSync(rootModuleJson)) {
+          const moduleData = JSON.parse(fs.readFileSync(rootModuleJson, "utf8"));
+          const moduleId = moduleData.id || moduleData.name;
+          if (moduleId) {
+            const modulesDir = path.join(tmpDataDir, "Data", "modules", moduleId);
+            fs.mkdirSync(modulesDir, { recursive: true });
+
+            const rootItems = fs.readdirSync(process.cwd());
+            const exclude = ["node_modules", "e2e", ".git", ".foundry_cache", ".foundry_test_data"];
+            for (const item of rootItems) {
+              if (exclude.includes(item)) continue;
+              const srcPath = path.join(process.cwd(), item);
+              const destPath = path.join(modulesDir, item);
+              fs.cpSync(srcPath, destPath, { recursive: true });
+            }
+          }
+        }
+
         const url = await orchestrator.start();
         process.env.FOUNDRY_URL = url;
       }
