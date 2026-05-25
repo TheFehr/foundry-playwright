@@ -15,17 +15,17 @@ export interface SystemStateAdapter {
     actorName: string,
     amount: number,
     currency: string,
-  ): Promise<any>;
+  ): Promise<unknown>;
 
   /**
    * Provides the system-specific data structure for a test actor.
    */
-  getTestActorData(name: string): { type: string; system: any };
+  getTestActorData(name: string): { type: string; system: Record<string, unknown> };
 
   /**
    * Sets an actor's HP.
    */
-  setActorHP(page: FoundryPage, actorName: string, value: number, max?: number): Promise<any>;
+  setActorHP(page: FoundryPage, actorName: string, value: number, max?: number): Promise<unknown>;
 
   /**
    * Returns the log key and a predicate to verify a currency update in verifyResult.
@@ -34,7 +34,10 @@ export interface SystemStateAdapter {
     actorName: string,
     amount: number,
     currency: string,
-  ): { key: string; predicate: (data: any, extra?: any) => boolean };
+  ): {
+    key: string;
+    predicate: (data: Record<string, unknown>, extra?: Record<string, unknown>) => boolean;
+  };
 }
 
 /**
@@ -50,19 +53,20 @@ export abstract class BaseSystemStateAdapter implements SystemStateAdapter {
     actorName: string,
     amount: number,
     currency: string,
-  ): Promise<any> {
+  ): Promise<unknown> {
     return page.evaluate(
       ({ actorName, amount, currency }) => {
         const actor = window.game.actors.getName(actorName);
         if (!actor) throw new Error(`Actor not found: ${actorName}`);
-        const current = (actor.system.currency?.[currency] || 0) + amount;
+        const current =
+          ((actor.system.currency as Record<string, number>)?.[currency] || 0) + amount;
         return actor.update({ [`system.currency.${currency}`]: current });
       },
       { actorName, amount, currency },
     );
   }
 
-  getTestActorData(_name: string): { type: string; system: any } {
+  getTestActorData(_name: string): { type: string; system: Record<string, unknown> } {
     return {
       type: "character",
       system: {
@@ -76,12 +80,12 @@ export abstract class BaseSystemStateAdapter implements SystemStateAdapter {
     actorName: string,
     value: number,
     max?: number,
-  ): Promise<any> {
+  ): Promise<unknown> {
     return page.evaluate(
       ({ actorName, value, max }) => {
         const actor = window.game.actors.getName(actorName);
         if (!actor) throw new Error(`Actor not found: ${actorName}`);
-        const update: any = { "system.attributes.hp.value": value };
+        const update: Record<string, unknown> = { "system.attributes.hp.value": value };
         if (max !== undefined) update["system.attributes.hp.max"] = max;
         return actor.update(update);
       },
@@ -93,22 +97,27 @@ export abstract class BaseSystemStateAdapter implements SystemStateAdapter {
     _actorName: string,
     _amount: number,
     _currency: string,
-  ): { key: string; predicate: (data: any, extra?: any) => boolean } {
+  ): {
+    key: string;
+    predicate: (data: Record<string, unknown>, extra?: Record<string, unknown>) => boolean;
+  } {
     return {
       key: "actor-update",
-      predicate: (data: any, extra: any) => {
+      predicate: (data: Record<string, unknown>, extra: Record<string, unknown> = {}) => {
         // Broadly match any update that touches currency for the target actor
-        if (data.name !== extra.actorName) return false;
+        if (data["name"] !== extra["actorName"]) return false;
 
         // Deep check for the expected currency value in the delta
-        const delta = data.delta || {};
+        const delta = (data["delta"] as Record<string, unknown>) || {};
 
         // Check for direct property update: "system.currency.gp": 100
-        if (delta[`system.currency.${extra.currency}`] === extra.amount) return true;
+        if (delta[`system.currency.${extra["currency"]}`] === extra["amount"]) return true;
 
         // Check for nested update: { system: { currency: { gp: 100 } } }
-        const nestedVal = delta.system?.currency?.[extra.currency];
-        if (nestedVal === extra.amount) return true;
+        const system = delta["system"] as Record<string, unknown> | undefined;
+        const currency = system?.["currency"] as Record<string, unknown> | undefined;
+        const nestedVal = currency?.[extra["currency"] as string];
+        if (nestedVal === extra["amount"]) return true;
 
         return false;
       },

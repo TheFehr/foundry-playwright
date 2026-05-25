@@ -35,7 +35,7 @@ test.describe("Foundry VTT Library Example", () => {
     // Using UI interaction (if an actor sheet was open)
     // await foundry.ui.switchActorTab('Example Actor', 'Inventory');
 
-    const isReady = await page.evaluate(() => (window as any).game?.ready);
+    const isReady = await page.evaluate(() => (window as unknown as Window).game?.ready);
     expect(isReady).toBe(true);
   });
 });

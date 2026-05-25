@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, Locator } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
 import {
   installSystemFromManifest as helperInstallSystemFromManifest,
@@ -50,7 +50,9 @@ export class V13SetupAdapter implements SetupAdapter {
     console.log(`[V13SetupAdapter] Found tab: "${tabText}". Clicking...`);
 
     // Click and wait for active class
-    await tabLocator.evaluate((el: Element) => (el as HTMLElement).click());
+    await tabLocator
+      .click()
+      .catch(() => tabLocator.evaluate((el: Element) => (el as HTMLElement).click()));
 
     await page.waitForFunction(
       ({ name, dt }) => {
@@ -229,7 +231,7 @@ export class V13SetupAdapter implements SetupAdapter {
     await helperInstallModuleFromManifest(page, manifestUrl);
   }
 
-  async openSystemInstallDialog(page: FoundryPage): Promise<any> {
+  async openSystemInstallDialog(page: FoundryPage): Promise<Locator> {
     console.log("[V13SetupAdapter] Opening System Install Dialog...");
     await this.switchTab(page, "Systems");
 
@@ -250,7 +252,7 @@ export class V13SetupAdapter implements SetupAdapter {
     return dialog;
   }
 
-  async openModuleInstallDialog(page: FoundryPage): Promise<any> {
+  async openModuleInstallDialog(page: FoundryPage): Promise<Locator> {
     console.log("[V13SetupAdapter] Opening Module Install Dialog...");
     await this.switchTab(page, "Modules");
 
@@ -285,21 +287,24 @@ export class V13SetupAdapter implements SetupAdapter {
       .filter({ hasText: /Create World/i })
       .first();
     console.log("[V13SetupAdapter] Clicking Create World button...");
-    await createBtn.evaluate((el: Element) => (el as HTMLElement).click());
+    await createBtn
+      .click()
+      .catch(() => createBtn.evaluate((el: Element) => (el as HTMLElement).click()));
 
-    // Target the specific world-config form
+    // Target the specific world-config form or its containing dialog
     const createDialog = page
-      .locator("form#world-config, .application, .window-app")
-      .filter({ hasText: /World Configuration|Create World/i })
+      .locator("form#world-config, .window-app:has(form#world-config)")
       .last();
 
     await createDialog.waitFor({ state: "visible", timeout: 20000 });
     console.log("[V13SetupAdapter] World creation dialog is visible.");
 
-    const titleInput = createDialog.locator(
-      'input[name="title"], input[name*="title" i], input[placeholder*="Title" i]',
-    );
-    await titleInput.first().fill(worldId);
+    const titleInput = createDialog
+      .locator('input[name="title"], input[name*="title" i], input[placeholder*="Title" i]')
+      .first();
+
+    await titleInput.waitFor({ state: "visible", timeout: 10000 });
+    await titleInput.fill(worldId);
 
     const pathInput = createDialog.locator(
       'input[name="id"], input[name="name"], input[name*="path" i], input[placeholder*="Path" i]',
@@ -312,22 +317,24 @@ export class V13SetupAdapter implements SetupAdapter {
       'select[name="system"], select[name*="system" i], select.system-select',
     );
 
-    // Attempt to select by label, then fallback to value (id)
+    // Attempt to select by value (id), then fallback to label
     try {
-      await systemSelect.first().selectOption({ label: systemLabel }, { timeout: 5000 });
+      await systemSelect.first().selectOption({ value: systemId }, { timeout: 5000 });
     } catch {
       console.warn(
-        `[V13SetupAdapter] Failed to select system by label "${systemLabel}". Trying ID "${systemId}"...`,
+        `[V13SetupAdapter] Failed to select system by ID "${systemId}". Trying label "${systemLabel}"...`,
       );
-      // We use systemId passed from createWorld call
-      await systemSelect.first().selectOption({ value: systemId });
+      // Fallback to label
+      await systemSelect.first().selectOption({ label: systemLabel });
     }
 
     const submitBtn = createDialog
       .locator('button[type="submit"], button')
       .filter({ hasText: /Create World|Create/i })
       .first();
-    await submitBtn.evaluate((el: Element) => (el as HTMLElement).click());
+    await submitBtn
+      .click()
+      .catch(() => submitBtn.evaluate((el: Element) => (el as HTMLElement).click()));
 
     // Wait for the specific form to be removed
     await expect(page.locator("form#world-config")).toBeHidden({ timeout: 20000 });
@@ -368,7 +375,7 @@ export class V13SetupAdapter implements SetupAdapter {
 
   private async waitForInstallation(
     page: FoundryPage,
-    dialog: any,
+    dialog: Locator,
     verificationSelector: string,
     tabName: string,
   ): Promise<void> {

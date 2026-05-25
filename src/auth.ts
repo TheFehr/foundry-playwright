@@ -47,7 +47,7 @@ export async function returnToSetup(
     }
 
     if (url.includes("/auth")) {
-      console.log("[returnToSetup] On /auth screen. Logging in...");
+      console.log("[returnToSetup] On /auth screen. Checking for admin login...");
       const pwInput = page.locator('input[name="adminPassword"]');
       if (await pwInput.isVisible()) {
         await pwInput.fill(adminPassword || process.env.FOUNDRY_ADMIN_PASSWORD || "password");
@@ -60,6 +60,10 @@ export async function returnToSetup(
           page.waitForURL((u) => u.pathname.includes("/setup"), { timeout: 20000 }),
           page.waitForSelector("foundry-app#setup, body.setup", { timeout: 20000 }),
         ]).catch(() => null);
+        await page.waitForLoadState("networkidle");
+      } else {
+        console.log("[returnToSetup] On /auth but no admin login found. Navigating to /setup...");
+        await page.goto("/setup").catch(() => null);
         await page.waitForLoadState("networkidle");
       }
       continue;
@@ -120,10 +124,26 @@ export async function returnToSetup(
   }
 }
 
+export interface FoundrySetupConfig {
+  worldId?: string;
+  systemId?: string;
+  systemLabel?: string;
+  systemManifest?: string;
+  moduleId?: string | string[];
+  moduleManifest?: string;
+  adminPassword?: string;
+  userName?: string;
+  password?: string;
+  createWorld?: boolean;
+  deleteIfExists?: boolean;
+  version?: string | number;
+  [key: string]: unknown;
+}
+
 /**
  * Performs full end-to-end setup of a Foundry VTT instance.
  */
-export async function foundrySetup(page: Page, config: any = {}) {
+export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
   const SYSTEM_LABELS: Record<string, string> = {
     dnd5e: "D&D 5th Edition",
     pf2e: "Pathfinder 2e",
@@ -139,7 +159,7 @@ export async function foundrySetup(page: Page, config: any = {}) {
     systemManifest,
     moduleId,
     moduleManifest,
-    adminPassword = process.env.FOUNDRY_ADMIN_PASSWORD || process.env.FOUNDRY_ADMIN_KEY,
+    adminPassword = (process.env.FOUNDRY_ADMIN_PASSWORD || process.env.FOUNDRY_ADMIN_KEY) as string,
     userName = "Gamemaster",
     password = "",
     createWorld = true,
@@ -148,6 +168,12 @@ export async function foundrySetup(page: Page, config: any = {}) {
   } = config;
 
   const systemLabel = config.systemLabel || SYSTEM_LABELS[systemId] || systemId;
+
+  if (!adminPassword) {
+    throw new Error(
+      "[foundrySetup] Admin password is required. Please provide 'adminPassword' in config or set FOUNDRY_ADMIN_PASSWORD/FOUNDRY_ADMIN_KEY environment variables.",
+    );
+  }
 
   console.log(`[foundrySetup] Starting setup for world: ${worldId} (System: ${systemId})`);
 
@@ -230,9 +256,9 @@ export async function foundrySetup(page: Page, config: any = {}) {
       }
 
       // 5. World Management (NOW SAFE in V14 as system exists)
-      if (deleteIfExists) await adapter.deleteWorldIfExists(page, worldId);
+      if (deleteIfExists && worldId) await adapter.deleteWorldIfExists(page, worldId);
 
-      if (createWorld) {
+      if (createWorld && worldId) {
         await adapter.createWorld(page, worldId, systemLabel, systemId);
 
         // Final redirection check
@@ -297,8 +323,8 @@ export async function foundrySetup(page: Page, config: any = {}) {
       const current = game.settings.get("core", "moduleConfiguration") || {};
       let changed = false;
       ids.forEach((id) => {
-        if (!current[id]) {
-          current[id] = true;
+        if (!(current as Record<string, boolean>)[id]) {
+          (current as Record<string, boolean>)[id] = true;
           changed = true;
         }
       });
@@ -319,7 +345,7 @@ export async function foundrySetup(page: Page, config: any = {}) {
 /**
  * Performs teardown of a Foundry VTT world.
  */
-export async function foundryTeardown(page: Page, config: any) {
+export async function foundryTeardown(page: Page, config: FoundrySetupConfig) {
   const {
     worldId,
     adminPassword = process.env.FOUNDRY_ADMIN_PASSWORD || process.env.FOUNDRY_ADMIN_KEY,
@@ -332,7 +358,7 @@ export async function foundryTeardown(page: Page, config: any) {
 
   const adapter = await getSetupAdapter(page, version);
   await disableTour(page);
-  await adapter.deleteWorldIfExists(page, worldId);
+  if (worldId) await adapter.deleteWorldIfExists(page, worldId);
   console.log("[foundryTeardown] Teardown complete.");
 }
 

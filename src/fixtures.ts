@@ -32,7 +32,8 @@ export interface FoundryFixtures {
  * and provides Foundry-specific utilities.
  */
 export const test = base.extend<FoundryFixtures>({
-  deprecationTracker: async (_, use) => {
+  // eslint-disable-next-line no-empty-pattern
+  deprecationTracker: async ({}, use) => {
     await use(new DeprecationTracker());
   },
   foundry: async ({ page, deprecationTracker }, use) => {
@@ -96,22 +97,21 @@ export const test = base.extend<FoundryFixtures>({
       if (url.includes("/game") || url.includes("/players")) {
         console.log("[fixture] Synchronizing with game state...");
         await page
-          .waitForFunction(() => (window as any).FP_VERIFY !== undefined, { timeout: 30000 })
+          .waitForFunction(() => window.FP_VERIFY !== undefined, { timeout: 30000 })
           .catch(() => null);
 
         // Wait for constructor readiness on V14
         const isV14 = await page.evaluate(
           () =>
-            (window as any).foundry?.applications?.api?.ApplicationV2 !== undefined ||
+            window.foundry?.applications?.api?.ApplicationV2 !== undefined ||
             document.querySelector('script[src*="foundry.mjs"]') !== null,
         );
         if (isV14) {
           await page
             .waitForFunction(
               () => {
-                return (
-                  (window as any).FakeAppV2 !== undefined && (window as any).FakeTour !== undefined
-                );
+                const w = window as unknown as Record<string, unknown>;
+                return w.FakeAppV2 !== undefined && w.FakeTour !== undefined;
               },
               {},
               { timeout: 15000 },
@@ -136,17 +136,17 @@ export const test = base.extend<FoundryFixtures>({
     } catch (error) {
       const verifyData = await page
         .evaluate(() => {
-          if (!(window as any).FP_VERIFY) return null;
+          if (!window.FP_VERIFY) return null;
           // Return a shallow copy of log keys to avoid massive serialization
-          const logs = (window as any).FP_VERIFY.logs;
-          const summary: any = {};
-          for (let key in logs) {
+          const logs = window.FP_VERIFY.logs;
+          const summary: Record<string, string> = {};
+          for (const key in logs) {
             summary[key] = logs[key].length + " entries";
           }
           return {
             summary,
             lastLogs: Object.fromEntries(
-              Object.entries(logs).map(([k, v]: [string, any]) => [k, v.slice(-1)]),
+              Object.entries(logs).map(([k, v]) => [k, (v as unknown[]).slice(-1)]),
             ),
           };
         })

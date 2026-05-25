@@ -73,8 +73,10 @@ program
         const registryPath = path.join(process.cwd(), "verified-versions.json");
         if (fs.existsSync(registryPath)) {
           const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
-          registry.pending = registry.pending.filter((v: any) => v.version !== version);
-          if (!registry.verified.find((v: any) => v.version === version)) {
+          registry.pending = registry.pending.filter(
+            (v: { version: string }) => v.version !== version,
+          );
+          if (!registry.verified.find((v: { version: string }) => v.version === version)) {
             registry.verified.push({
               version,
               timestamp: new Date().toISOString(),
@@ -85,8 +87,8 @@ program
           fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
         }
       }
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
     } finally {
       if (orchestrator) {

@@ -72,7 +72,8 @@ This script is a robust wrapper around Playwright and Docker that ensures the en
 - **Test Orchestration:** Runs the full suite against the instance.
 - **Cleanup:** If Docker was used, the script automatically stops and removes the container after the tests complete (unless `--keep-container` is used).
 - **Report Generation:** Generates `verification-report.md`.
-- **Automatic Registry Update (Interactive):** Prompts to update `verified-versions.json` on success.
+- **Automatic Registry Update:** Updates `verified-versions.json` on success (if `--update-registry` is used).
+- **Git Integration:** Automatically commits changes on success with a descriptive message (if `--git-commit` is used) or suggests a commit command.
 
 3.  **Sign-off:**
     - Review the changes and commit `verified-versions.json`.

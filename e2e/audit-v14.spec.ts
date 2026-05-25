@@ -42,10 +42,10 @@ test("V14 Setup Audit", async ({ page }) => {
         formId: document.querySelector("form")?.id,
         inputs: Array.from(document.querySelectorAll("input, select, button")).map((el) => ({
           tag: el.tagName,
-          name: (el as any).name,
-          type: (el as any).type,
+          name: (el as HTMLInputElement).name,
+          type: (el as HTMLInputElement).type,
           id: el.id,
-          placeholder: (el as any).placeholder,
+          placeholder: (el as HTMLInputElement).placeholder,
         })),
         packages: Array.from(document.querySelectorAll(".package")).map((el) => ({
           id: (el as HTMLElement).dataset.packageId,

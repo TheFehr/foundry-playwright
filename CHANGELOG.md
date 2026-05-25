@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0](https://github.com/TheFehr/foundry-playwright/compare/v0.3.1...v0.4.0) (2026-05-23)
+
+### Features
+
+- improve V13 reliability, docker port orchestration, and detailed failure reporting ([8f57958](https://github.com/TheFehr/foundry-playwright/commit/8f579588590ad00dfb83e78ead6acc36c5147d94))
+
 ## [0.3.1](https://github.com/TheFehr/foundry-playwright/compare/v0.3.0...v0.3.1) (2026-05-17)
 
 # [0.3.0](https://github.com/TheFehr/foundry-playwright/compare/v0.2.2...v0.3.0) (2026-05-17)

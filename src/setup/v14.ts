@@ -396,7 +396,8 @@ export class V14SetupAdapter implements SetupAdapter {
           );
           const target = tabs.find(
             (t) =>
-              (t as any).dataset.tab?.includes(type) || t.textContent?.toLowerCase().includes(type),
+              (t as HTMLElement).dataset.tab?.includes(type) ||
+              t.textContent?.toLowerCase().includes(type),
           );
           if (target && !target.classList.contains("active")) (target as HTMLElement).click();
         },
