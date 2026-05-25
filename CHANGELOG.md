@@ -1,5 +1,11 @@
 # Changelog
 
+# [0.5.0](https://github.com/TheFehr/foundry-playwright/compare/v0.4.1...v0.5.0) (2026-05-25)
+
+### Features
+
+- **cli:** auto-inject root directory as module in docker tests ([4f443c2](https://github.com/TheFehr/foundry-playwright/commit/4f443c270a61546d4373bb5eb82a30b2ecf00749))
+
 ## [0.4.1](https://github.com/TheFehr/foundry-playwright/compare/v0.3.1...v0.4.1) (2026-05-25)
 
 ## [0.4.0](https://github.com/TheFehr/foundry-playwright/compare/v0.3.1...v0.4.0) (2026-05-23)
