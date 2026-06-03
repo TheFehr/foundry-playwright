@@ -105,6 +105,58 @@ function topMinors(latestByMinor: Map<string, string>, count = TRACKED_MINOR_COU
     .slice(0, count);
 }
 
+function buildManifestUrl(systemId: string, version: string): string | null {
+  switch (systemId) {
+    case "dnd5e":
+      return `https://github.com/foundryvtt/dnd5e/releases/download/release-${version}/system.json`;
+    case "pf2e":
+      return `https://github.com/foundryvtt/pf2e/releases/download/${version}/system.json`;
+    default:
+      return null;
+  }
+}
+
+interface CompatRange {
+  minimum?: number;
+  maximum?: number;
+}
+
+const compatCache = new Map<string, CompatRange>();
+
+function fetchCompatRange(systemId: string, version: string): CompatRange {
+  const key = `${systemId}@${version}`;
+  if (compatCache.has(key)) return compatCache.get(key)!;
+
+  const url = buildManifestUrl(systemId, version);
+  if (!url) return {};
+
+  try {
+    const json = execSync(`curl -sfL "${url}"`, { encoding: "utf8" });
+    const manifest = JSON.parse(json) as { compatibility?: Record<string, string> };
+    const compat = manifest.compatibility ?? {};
+    const result: CompatRange = {};
+    if (compat["minimum"]) result.minimum = parseInt(String(compat["minimum"]).split(".")[0], 10);
+    if (compat["maximum"]) result.maximum = parseInt(String(compat["maximum"]).split(".")[0], 10);
+    compatCache.set(key, result);
+    return result;
+  } catch {
+    compatCache.set(key, {});
+    return {};
+  }
+}
+
+function isCompatibleWithFvtt(
+  systemId: string,
+  systemVersion: string,
+  fvttVersion: string,
+): boolean {
+  const fvttMajor = parseInt(fvttVersion.split(".")[0], 10);
+  const { minimum, maximum } = fetchCompatRange(systemId, systemVersion);
+  if (minimum !== undefined && fvttMajor < minimum) return false;
+  if (maximum !== undefined && fvttMajor > maximum) return false;
+  return true;
+}
+
 async function fetchFoundryVersion(): Promise<string> {
   console.log("[monitor] Fetching latest Foundry VTT version...");
   const html = execSync("curl -sf https://foundryvtt.com/releases/", { encoding: "utf8" });
@@ -171,6 +223,40 @@ async function run() {
               e.systemVersion === latestPatch,
           );
           if (hasCurrentPending) continue;
+
+          if (!isCompatibleWithFvtt(systemId, latestPatch, fvtt)) {
+            const alreadyIncompatible = registry.some(
+              (e) =>
+                e.fvtt === fvtt &&
+                e.system === systemId &&
+                e.systemMinor === minor &&
+                e.status === "incompatible" &&
+                e.systemVersion === latestPatch,
+            );
+            if (alreadyIncompatible) continue;
+
+            const { minimum, maximum } = fetchCompatRange(systemId, latestPatch);
+            const rangeNote = [
+              minimum !== undefined ? `minimum: ${minimum}` : null,
+              maximum !== undefined ? `maximum: ${maximum}` : null,
+            ]
+              .filter(Boolean)
+              .join(", ");
+            console.log(
+              `[monitor] Incompatible: ${systemId} v${latestPatch} (${rangeNote}) with FVTT ${fvtt}`,
+            );
+            registry.push({
+              fvtt,
+              system: systemId,
+              systemMinor: minor,
+              systemVersion: latestPatch,
+              status: "incompatible",
+              timestamp: new Date().toISOString(),
+              notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${fvtt.split(".")[0]}.`,
+            });
+            updated = true;
+            continue;
+          }
 
           console.log(
             `[monitor] Queuing: ${systemId} v${latestPatch} (minor ${minor}) for FVTT ${fvtt}`,
