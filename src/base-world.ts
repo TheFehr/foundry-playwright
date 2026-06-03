@@ -193,6 +193,7 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
   let isV14 = false;
 
   test.beforeAll(async ({ browser }: { browser: Browser }) => {
+    test.setTimeout(600000);
     const page = (await browser.newPage()) as FoundryPage;
     try {
       const adapter = await getSetupAdapter(page, version);
@@ -200,8 +201,19 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
 
       if (isV14) {
         // Check if the base backup already exists so we can skip world re-creation on warm runs.
-        await page.goto("/setup").catch(() => null);
-        await page.waitForLoadState("networkidle");
+        // Retry the initial navigation in case the Docker container isn't fully ready yet.
+        for (let i = 0; i < 10; i++) {
+          try {
+            await page.goto("/setup");
+            await page.waitForLoadState("networkidle");
+            if (page.url().startsWith("http")) break;
+          } catch {
+            console.log(
+              `[useBaseWorld] Server not ready (attempt ${i + 1}/10), retrying in 10s...`,
+            );
+            await page.waitForTimeout(10000);
+          }
+        }
         const existingBackups = await adapter
           .listWorldBackups(page, worldId)
           .catch(() => [] as string[]);
@@ -233,6 +245,7 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
   });
 
   test.beforeEach(async ({ browser, page }: { browser: Browser; page: FoundryPage }) => {
+    test.setTimeout(600000);
     const tempPage = (await browser.newPage()) as FoundryPage;
     try {
       if (isV14) {

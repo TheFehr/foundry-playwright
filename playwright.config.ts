@@ -1,4 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -35,6 +38,10 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
+        launchOptions: {
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+          args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        },
       },
     },
   ],

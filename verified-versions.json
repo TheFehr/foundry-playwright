@@ -4,7 +4,7 @@
     "system": "dnd5e",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-05-24T20:16:01.596Z",
+    "timestamp": "2026-06-03T12:23:02.024Z",
     "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
@@ -20,7 +20,7 @@
     "system": "pf2e",
     "systemVersion": "7.12.2",
     "status": "stable",
-    "timestamp": "2026-05-24T20:20:30.251Z",
+    "timestamp": "2026-06-03T12:34:05.577Z",
     "notes": "Verified locally with pf2e v7.12.2."
   },
   {
