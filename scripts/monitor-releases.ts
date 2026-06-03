@@ -6,13 +6,15 @@ import { execSync } from "child_process";
 /**
  * Release Monitoring Script
  *
- * Fetches latest versions of Foundry VTT and supported systems,
- * and updates verified-versions.json with pending entries.
+ * Tracks the latest 3 minor versions of each supported system across all stable
+ * Foundry versions. Adds a pending entry whenever a new patch is released within
+ * a tracked minor, or when a new minor version appears (sliding the window).
  */
 
 interface RegistryEntry {
   fvtt: string;
   system: string;
+  systemMinor: string;
   systemVersion: string;
   modules?: { id: string; version: string }[];
   status: "stable" | "pending" | "incompatible";
@@ -20,34 +22,83 @@ interface RegistryEntry {
   notes: string;
 }
 
+interface GithubRelease {
+  tag_name: string;
+  prerelease: boolean;
+  draft: boolean;
+}
+
+const SYSTEM_REPOS: Record<string, string> = {
+  dnd5e: "foundryvtt/dnd5e",
+  pf2e: "foundryvtt/pf2e",
+};
+
+const TRACKED_MINOR_COUNT = 3;
+
+function extractVersion(tag: string, systemId: string): string | null {
+  if (systemId === "dnd5e") {
+    const m = tag.match(/^release-(\d+\.\d+\.\d+)$/);
+    return m ? m[1] : null;
+  }
+  // pf2e: tag is bare version number
+  if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
+  return null;
+}
+
+function minorOf(version: string): string {
+  const [major, minor] = version.split(".");
+  return `${major}.${minor}`;
+}
+
+function compareVersions(a: string, b: string): number {
+  const ap = a.split(".").map(Number);
+  const bp = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(ap.length, bp.length); i++) {
+    const diff = (ap[i] ?? 0) - (bp[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+async function fetchLatestByMinor(systemId: string): Promise<Map<string, string>> {
+  const repo = SYSTEM_REPOS[systemId];
+  if (!repo) throw new Error(`Unknown system: ${systemId}`);
+  console.log(`[monitor] Fetching releases for ${systemId} from GitHub...`);
+  const json = execSync(
+    `curl -sf -H "Accept: application/vnd.github.v3+json" -H "User-Agent: foundry-playwright/monitor" "https://api.github.com/repos/${repo}/releases?per_page=100"`,
+    { encoding: "utf8" },
+  );
+  const releases: GithubRelease[] = JSON.parse(json);
+  const latestByMinor = new Map<string, string>();
+  for (const release of releases) {
+    if (release.prerelease || release.draft) continue;
+    const version = extractVersion(release.tag_name, systemId);
+    if (!version) continue;
+    const minor = minorOf(version);
+    const existing = latestByMinor.get(minor);
+    if (!existing || compareVersions(version, existing) > 0) {
+      latestByMinor.set(minor, version);
+    }
+  }
+  return latestByMinor;
+}
+
+function topMinors(latestByMinor: Map<string, string>, count = TRACKED_MINOR_COUNT): string[] {
+  return [...latestByMinor.keys()]
+    .sort((a, b) => compareVersions(b + ".0", a + ".0"))
+    .slice(0, count);
+}
+
 async function fetchFoundryVersion(): Promise<string> {
   console.log("[monitor] Fetching latest Foundry VTT version...");
-  const html = execSync("curl -s https://foundryvtt.com/releases/", { encoding: "utf8" });
-
-  // Find the first occurrence of a stable release link
-  // Structure: <a href="/releases/13.351" ...>Release 13.351</a> ... <span class="release-tag stable">Stable</span>
+  const html = execSync("curl -sf https://foundryvtt.com/releases/", { encoding: "utf8" });
   const stableMatch = html.match(
     /<a href="\/releases\/([\d.]+)"[^>]*>Release [\d.]+<\/a>[\s\S]{0,500}?<span class="release-tag stable">Stable<\/span>/,
   );
-  if (stableMatch) {
-    return stableMatch[1];
-  }
-
+  if (stableMatch) return stableMatch[1];
   const fallbackMatch = html.match(/Version ([\d.]+)/);
   if (!fallbackMatch) throw new Error("Failed to parse Foundry version from releases page.");
   return fallbackMatch[1];
-}
-
-async function fetchSystemLatest(systemId: string): Promise<string> {
-  console.log(`[monitor] Fetching latest release for ${systemId} via Forge Bazaar...`);
-  const json = execSync(`curl -s https://forge-vtt.com/api/bazaar/package/${systemId}`, {
-    encoding: "utf8",
-  });
-  const data = JSON.parse(json);
-  if (!data.success || !data.package?.latest) {
-    throw new Error(`Failed to fetch latest release for ${systemId} from Forge Bazaar`);
-  }
-  return data.package.latest;
 }
 
 async function run() {
@@ -56,67 +107,71 @@ async function run() {
     let registry: RegistryEntry[] = JSON.parse(fs.readFileSync(registryPath, "utf8"));
 
     const foundryLatest = await fetchFoundryVersion();
-    const dnd5eLatest = await fetchSystemLatest("dnd5e");
-    const pf2eLatest = await fetchSystemLatest("pf2e");
-
-    console.log(
-      `[monitor] Latest Versions -> FVTT: ${foundryLatest}, dnd5e: ${dnd5eLatest}, pf2e: ${pf2eLatest}`,
-    );
-
-    const systems = [
-      { id: "dnd5e", latest: dnd5eLatest },
-      { id: "pf2e", latest: pf2eLatest },
-    ];
-
+    const systems = ["dnd5e", "pf2e"];
     let updated = false;
 
-    // 1. Check for new System versions for existing stable FVTT versions
     const stableFvttVersions = [
       ...new Set(registry.filter((e) => e.status === "stable").map((e) => e.fvtt)),
     ];
 
-    for (const fvtt of stableFvttVersions) {
-      for (const system of systems) {
-        const exists = registry.some(
-          (e) => e.fvtt === fvtt && e.system === system.id && e.systemVersion === system.latest,
-        );
+    // Include new Foundry generation if not yet tracked
+    const majorFoundry = foundryLatest.split(".")[0];
+    const hasGeneration = registry.some((e) => e.fvtt.startsWith(`${majorFoundry}.`));
+    const fvttToCheck = hasGeneration ? stableFvttVersions : [...stableFvttVersions, foundryLatest];
 
-        if (!exists) {
-          console.log(
-            `[monitor] New system update detected: ${system.id} v${system.latest} for FVTT ${fvtt}`,
+    if (!hasGeneration) {
+      console.log(`[monitor] New Foundry generation detected: ${foundryLatest}`);
+    }
+
+    console.log(
+      `[monitor] FVTT latest: ${foundryLatest} | Checking ${fvttToCheck.length} version(s)`,
+    );
+
+    for (const systemId of systems) {
+      const latestByMinor = await fetchLatestByMinor(systemId);
+      const minors = topMinors(latestByMinor);
+      console.log(`[monitor] ${systemId} top ${TRACKED_MINOR_COUNT} minors: ${minors.join(", ")}`);
+
+      for (const fvtt of fvttToCheck) {
+        for (const minor of minors) {
+          const latestPatch = latestByMinor.get(minor)!;
+
+          const hasCurrentStable = registry.some(
+            (e) =>
+              e.fvtt === fvtt &&
+              e.system === systemId &&
+              e.systemMinor === minor &&
+              e.status === "stable" &&
+              e.systemVersion === latestPatch,
           );
-          const verifyCmd = `npm run verify:local -- --docker --version ${fvtt} --system ${system.id} --update-registry --git-commit`;
+          if (hasCurrentStable) continue;
+
+          const hasCurrentPending = registry.some(
+            (e) =>
+              e.fvtt === fvtt &&
+              e.system === systemId &&
+              e.systemMinor === minor &&
+              e.status === "pending" &&
+              e.systemVersion === latestPatch,
+          );
+          if (hasCurrentPending) continue;
+
+          console.log(
+            `[monitor] Queuing: ${systemId} v${latestPatch} (minor ${minor}) for FVTT ${fvtt}`,
+          );
+          const verifyCmd = `npm run verify:local -- --docker --version ${fvtt} --system ${systemId} --system-minor ${minor} --update-registry --git-commit`;
           registry.push({
             fvtt,
-            system: system.id,
-            systemVersion: system.latest,
+            system: systemId,
+            systemMinor: minor,
+            systemVersion: latestPatch,
             status: "pending",
             timestamp: new Date().toISOString(),
-            notes: `Automated detection: newer system version available. Run verification: \`${verifyCmd}\``,
+            notes: `Automated detection. Run verification: \`${verifyCmd}\``,
           });
           updated = true;
         }
       }
-    }
-
-    // 2. Check if latest Foundry generation is represented
-    const majorFoundry = foundryLatest.split(".")[0];
-    const hasGeneration = registry.some((e) => e.fvtt.startsWith(majorFoundry));
-
-    if (!hasGeneration) {
-      console.log(`[monitor] New Foundry generation detected: ${foundryLatest}`);
-      for (const system of systems) {
-        const verifyCmd = `npm run verify:local -- --docker --version ${foundryLatest} --system ${system.id} --update-registry --git-commit`;
-        registry.push({
-          fvtt: foundryLatest,
-          system: system.id,
-          systemVersion: system.latest,
-          status: "pending",
-          timestamp: new Date().toISOString(),
-          notes: `Automated detection: new Foundry generation. Run verification: \`${verifyCmd}\``,
-        });
-      }
-      updated = true;
     }
 
     if (updated) {

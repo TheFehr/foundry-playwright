@@ -174,7 +174,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
   const {
     worldId,
     systemId = process.env.FOUNDRY_SYSTEM_ID || "dnd5e",
-    systemManifest,
+    systemManifest = process.env.FOUNDRY_SYSTEM_MANIFEST,
     moduleId,
     moduleManifest,
     adminPassword = (process.env.FOUNDRY_ADMIN_PASSWORD || process.env.FOUNDRY_ADMIN_KEY) as string,

@@ -2,6 +2,7 @@
   {
     "fvtt": "13.351.0",
     "system": "dnd5e",
+    "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
     "timestamp": "2026-06-03T12:23:02.024Z",
@@ -10,6 +11,7 @@
   {
     "fvtt": "14.360.0",
     "system": "dnd5e",
+    "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
     "timestamp": "2026-05-24T20:17:59.525Z",
@@ -18,6 +20,7 @@
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
+    "systemMinor": "7.12",
     "systemVersion": "7.12.2",
     "status": "stable",
     "timestamp": "2026-06-03T12:34:05.577Z",
@@ -26,6 +29,7 @@
   {
     "fvtt": "14.360.0",
     "system": "pf2e",
+    "systemMinor": "8.1",
     "systemVersion": "8.1.2",
     "status": "stable",
     "timestamp": "2026-05-24T20:23:03.989Z",
@@ -34,25 +38,28 @@
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
+    "systemMinor": "8.1",
     "systemVersion": "8.1.2",
-    "status": "pending",
+    "status": "stable",
     "timestamp": "2026-05-17T07:16:19.265Z",
-    "notes": "Automated detection: newer system version available."
+    "notes": "Verified locally with pf2e v8.1.2."
   },
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
+    "systemMinor": "8.2",
     "systemVersion": "8.2.0",
     "status": "pending",
     "timestamp": "2026-06-02T08:47:51.720Z",
-    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 13.351.0 --system pf2e --update-registry --git-commit`"
+    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 13.351.0 --system pf2e --system-minor 8.2 --update-registry --git-commit`"
   },
   {
     "fvtt": "14.360.0",
     "system": "pf2e",
+    "systemMinor": "8.2",
     "systemVersion": "8.2.0",
     "status": "pending",
     "timestamp": "2026-06-02T08:47:51.720Z",
-    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 14.360.0 --system pf2e --update-registry --git-commit`"
+    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 14.360.0 --system pf2e --system-minor 8.2 --update-registry --git-commit`"
   }
 ]

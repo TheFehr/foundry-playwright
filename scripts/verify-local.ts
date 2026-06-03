@@ -9,18 +9,77 @@ import { Command } from "commander";
  * Local Verification Script
  *
  * Orchestrates a Docker-based Foundry instance and runs the verification suite.
+ * Supports pinning a specific system version via --system-minor (resolves latest
+ * patch for that minor from GitHub) or --system-version (exact version).
  */
+
+const SYSTEM_REPOS: Record<string, string> = {
+  dnd5e: "foundryvtt/dnd5e",
+  pf2e: "foundryvtt/pf2e",
+};
+
+function extractVersionTag(tag: string, systemId: string): string | null {
+  if (systemId === "dnd5e") {
+    const m = tag.match(/^release-(\d+\.\d+\.\d+)$/);
+    return m ? m[1] : null;
+  }
+  if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
+  return null;
+}
+
+function compareVersions(a: string, b: string): number {
+  const ap = a.split(".").map(Number);
+  const bp = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(ap.length, bp.length); i++) {
+    const diff = (ap[i] ?? 0) - (bp[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function buildManifestUrl(systemId: string, version: string): string | null {
+  switch (systemId) {
+    case "dnd5e":
+      return `https://github.com/foundryvtt/dnd5e/releases/download/release-${version}/system.json`;
+    case "pf2e":
+      return `https://github.com/foundryvtt/pf2e/releases/download/${version}/system.json`;
+    default:
+      return null;
+  }
+}
+
+async function resolveLatestPatch(systemId: string, minor: string): Promise<string> {
+  const repo = SYSTEM_REPOS[systemId];
+  if (!repo) throw new Error(`Cannot resolve patch for unknown system: ${systemId}`);
+  console.log(`[verify] Resolving latest patch for ${systemId} minor ${minor}...`);
+  const json = execSync(
+    `curl -sf -H "Accept: application/vnd.github.v3+json" -H "User-Agent: foundry-playwright/verify" "https://api.github.com/repos/${repo}/releases?per_page=100"`,
+    { encoding: "utf8" },
+  );
+  const releases: { tag_name: string; prerelease: boolean; draft: boolean }[] = JSON.parse(json);
+  let latest: string | null = null;
+  for (const release of releases) {
+    if (release.prerelease || release.draft) continue;
+    const version = extractVersionTag(release.tag_name, systemId);
+    if (!version || !version.startsWith(`${minor}.`)) continue;
+    if (!latest || compareVersions(version, latest) > 0) latest = version;
+  }
+  if (!latest) throw new Error(`No release found for ${systemId} minor ${minor}`);
+  console.log(`[verify] Resolved ${systemId} minor ${minor} → v${latest}`);
+  return latest;
+}
 
 async function verifyVersion(
   version: string,
   system: string,
   modules: string[],
+  systemVersion: string | undefined,
   isDocker: boolean,
   updateRegistry: boolean,
   keepContainer: boolean,
 ): Promise<{ success: boolean; failures: string[] }> {
   console.log(
-    `\n--- Verifying Version: ${version} (System: ${system}, Modules: ${modules.join(", ") || "none"}) ---`,
+    `\n--- Verifying Version: ${version} (System: ${system}${systemVersion ? ` v${systemVersion}` : ""}, Modules: ${modules.join(", ") || "none"}) ---`,
   );
 
   let foundryUrl = process.env.FOUNDRY_URL || "http://localhost:30000";
@@ -64,8 +123,14 @@ async function verifyVersion(
 
     console.log(`Verifying against: ${foundryUrl}`);
 
+    // Build system manifest URL if a specific version is pinned
+    const manifestUrl = systemVersion ? buildManifestUrl(system, systemVersion) : null;
+    if (systemVersion && !manifestUrl) {
+      console.warn(`[verify] No manifest URL builder for system "${system}"; installing latest.`);
+    }
+
     // Run E2E tests
-    const env = {
+    const env: Record<string, string> = {
       ...process.env,
       FOUNDRY_URL: foundryUrl,
       FOUNDRY_VERSION: version,
@@ -73,15 +138,17 @@ async function verifyVersion(
       FOUNDRY_UI_ADAPTER: process.env.FOUNDRY_UI_ADAPTER || system,
       FOUNDRY_MODULE_IDS: modules.join(","),
     };
+    if (manifestUrl) {
+      env["FOUNDRY_SYSTEM_MANIFEST"] = manifestUrl;
+      console.log(`[verify] Pinning system manifest: ${manifestUrl}`);
+    }
 
     // Pass through common Playwright flags
     const playwrightArgs = process.argv.filter(
       (a) => a.startsWith("--ui") || a.startsWith("--headed") || a.startsWith("--debug"),
     );
 
-    // We target only our specific verification suites
     const testFiles = ["e2e/verify.spec.ts", "e2e/user-management.spec.ts"].join(" ");
-
     const reportPath = path.join(process.cwd(), `.playwright-report-${version}.json`);
     try {
       execSync(
@@ -92,20 +159,20 @@ async function verifyVersion(
         },
       );
     } catch {
-      // execSync throws on test failure, we'll parse the report below
+      // execSync throws on test failure; we parse the report below
     }
 
     if (fs.existsSync(reportPath)) {
       const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
       failures = extractFailures(report);
-      fs.unlinkSync(reportPath); // Cleanup
+      fs.unlinkSync(reportPath);
     }
 
     if (failures.length > 0) {
       throw new Error(`Verification failed with ${failures.length} test failures.`);
     }
 
-    // 4. Capture versions for the report
+    // Capture versions for the report
     console.log("[verifyVersion] Capturing system and module versions...");
     let meta = {
       foundry: version,
@@ -116,7 +183,7 @@ async function verifyVersion(
     const metaPath = path.join(process.cwd(), ".foundry_metadata.json");
     if (fs.existsSync(metaPath)) {
       meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      fs.unlinkSync(metaPath); // Clean up
+      fs.unlinkSync(metaPath);
     }
 
     console.log(`--- Verification Successful for ${version} ---`);
@@ -148,9 +215,10 @@ async function verifyVersion(
       });
     }
 
+    const installedSystemVersion = meta.system.version;
     const currentResult = {
       version: version,
-      system: `${meta.system.id} (v${meta.system.version})`,
+      system: `${meta.system.id} (v${installedSystemVersion})`,
       modules: meta.modules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
       status: "PASS",
       date: new Date().toISOString().split("T")[0],
@@ -177,37 +245,40 @@ async function verifyVersion(
     fs.writeFileSync(summaryPath, summaryContent);
     console.log(`Summary updated: ${summaryPath}`);
 
-    // Registry Update (Root-level array migration)
+    // Registry update — key is (fvtt, system, systemMinor)
     if (updateRegistry) {
       console.log(`Updating verified-versions.json for ${version}...`);
       const registryPath = path.join(process.cwd(), "verified-versions.json");
       let registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
 
-      // In case of migration from old object schema
       if (!Array.isArray(registry)) {
         console.warn("Registry is not an array. Performing migration...");
         registry = [];
       }
 
-      // Record non-fake modules for the matrix
       const realModules = meta.modules.filter((m) => m.id !== "fake-module");
+      const [sysMajor, sysMinor] = installedSystemVersion.split(".");
+      const systemMinor = `${sysMajor}.${sysMinor}`;
 
       const entry = {
         fvtt: version,
         system: meta.system.id,
-        systemVersion: meta.system.version,
+        systemMinor,
+        systemVersion: installedSystemVersion,
         modules: realModules.length > 0 ? realModules : undefined,
         status: "stable" as const,
         timestamp: new Date().toISOString(),
-        notes: `Verified locally with ${meta.system.id} v${meta.system.version}.`,
+        notes: `Verified locally with ${meta.system.id} v${installedSystemVersion}.`,
       };
 
-      // Match entry by fvtt and system
-      const existingIdx = registry.findIndex(
-        (e: Record<string, unknown>) => e.fvtt === version && e.system === meta.system.id,
+      const entryIdx = (registry as Record<string, unknown>[]).findIndex(
+        (e) =>
+          e["fvtt"] === version &&
+          e["system"] === meta.system.id &&
+          e["systemMinor"] === systemMinor,
       );
-      if (existingIdx !== -1) {
-        registry[existingIdx] = entry;
+      if (entryIdx !== -1) {
+        registry[entryIdx] = entry;
       } else {
         registry.push(entry);
       }
@@ -247,9 +318,6 @@ interface PlaywrightReport {
   suites?: PlaywrightSuite[];
 }
 
-/**
- * Extracts failed test titles from a Playwright JSON report.
- */
 function extractFailures(report: PlaywrightReport): string[] {
   const failures: string[] = [];
 
@@ -271,6 +339,13 @@ function extractFailures(report: PlaywrightReport): string[] {
   return failures;
 }
 
+interface VerifyTarget {
+  version: string;
+  system: string;
+  systemVersion?: string;
+  modules: string[];
+}
+
 const program = new Command();
 
 program
@@ -283,6 +358,10 @@ program
     "--system <id>",
     "The system ID to use for verification",
     process.env.FOUNDRY_SYSTEM_ID || "dnd5e",
+  )
+  .option(
+    "--system-minor <minor>",
+    "Pin to the latest patch of this system minor version (e.g. 8.2). Resolved via GitHub API.",
   )
   .option("--modules <ids>", "Comma-separated module IDs to install and verify", "")
   .option("--all-pending", "Verify all pairings currently marked as pending in the registry", false)
@@ -302,12 +381,12 @@ program
   .action(async (options) => {
     console.log("--- Starting Local Verification ---");
 
-    // 1. Build the library once
+    // Build the library once
     console.log("Building library...");
     execSync("npm run build", { stdio: "inherit" });
 
     const modules = options.modules ? options.modules.split(",").map((m: string) => m.trim()) : [];
-    let targets: { version: string; system: string; modules: string[] }[] = [];
+    let targets: VerifyTarget[] = [];
 
     if (options.allPending || options.reVerify || options.all) {
       const registryPath = path.join(process.cwd(), "verified-versions.json");
@@ -319,11 +398,12 @@ program
           const pending = list.filter((e: Record<string, unknown>) => e.status === "pending");
           targets.push(
             ...pending.map((e: Record<string, unknown>) => ({
-              version: e.fvtt as string,
-              system: e.system as string,
-              modules: Array.isArray(e.modules)
-                ? (e.modules as Record<string, unknown>[]).map(
-                    (m: Record<string, unknown>) => m.id as string,
+              version: e["fvtt"] as string,
+              system: e["system"] as string,
+              systemVersion: e["systemVersion"] as string | undefined,
+              modules: Array.isArray(e["modules"])
+                ? (e["modules"] as Record<string, unknown>[]).map(
+                    (m: Record<string, unknown>) => m["id"] as string,
                   )
                 : [],
             })),
@@ -335,11 +415,12 @@ program
           const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
           targets.push(
             ...stable.map((e: Record<string, unknown>) => ({
-              version: e.fvtt as string,
-              system: e.system as string,
-              modules: Array.isArray(e.modules)
-                ? (e.modules as Record<string, unknown>[]).map(
-                    (m: Record<string, unknown>) => m.id as string,
+              version: e["fvtt"] as string,
+              system: e["system"] as string,
+              systemVersion: e["systemVersion"] as string | undefined,
+              modules: Array.isArray(e["modules"])
+                ? (e["modules"] as Record<string, unknown>[]).map(
+                    (m: Record<string, unknown>) => m["id"] as string,
                   )
                 : [],
             })),
@@ -353,7 +434,13 @@ program
       }
     } else {
       const versionArg = options.version || process.env.FOUNDRY_VERSION || "13";
-      targets = [{ version: versionArg, system: options.system, modules }];
+      let systemVersion: string | undefined;
+
+      if (options.systemMinor) {
+        systemVersion = await resolveLatestPatch(options.system, options.systemMinor);
+      }
+
+      targets = [{ version: versionArg, system: options.system, systemVersion, modules }];
     }
 
     if (targets.length === 0) {
@@ -368,12 +455,16 @@ program
         target.version,
         target.system,
         target.modules,
+        target.systemVersion,
         options.docker,
         options.updateRegistry,
         options.keepContainer,
       );
+      const sysLabel = target.systemVersion
+        ? `${target.system} v${target.systemVersion}`
+        : target.system;
       results.push({
-        key: `${target.version} (${target.system})`,
+        key: `${target.version} (${sysLabel})`,
         success: result.success,
         failures: result.failures,
       });
@@ -402,7 +493,7 @@ program
 
     if (allPassed && changedFiles.length > 0) {
       const verifiedKeys = results.map((r) => r.key).join(", ");
-      const commitMsg = `chore(verify): verify ${verifiedKeys}`;
+      const commitMsg = `chore(registry): verify ${verifiedKeys}`;
 
       if (options.gitCommit) {
         console.log(`\n--- Auto-committing changes ---`);
