@@ -1,4 +1,5 @@
 export * from "./fixtures.js";
+export * from "./base-world.js";
 export {
   disableTour,
   switchTab,

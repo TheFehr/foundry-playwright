@@ -340,6 +340,63 @@ export class V13SetupAdapter implements SetupAdapter {
     await expect(page.locator("form#world-config")).toBeHidden({ timeout: 20000 });
   }
 
+  async launchWorld(page: FoundryPage, worldId: string): Promise<void> {
+    console.log(`[V13SetupAdapter] Launching world: ${worldId}`);
+    await this.switchTab(page, "Worlds");
+    const worldBox = page.locator(`[data-package-id="${worldId}"]`).first();
+    await worldBox.waitFor({ state: "visible", timeout: 15000 });
+
+    const launchBtn = worldBox
+      .locator('[data-action="worldLaunch"], button:has-text("Launch")')
+      .first();
+    await launchBtn
+      .click()
+      .catch(() => launchBtn.evaluate((el: Element) => (el as HTMLElement).click()));
+    await page.waitForURL(
+      (u) =>
+        u.pathname.includes("/join") ||
+        u.pathname.includes("/game") ||
+        u.pathname.includes("/players"),
+      { timeout: 60000 },
+    );
+  }
+
+  async createWorldBackup(
+    _page: FoundryPage,
+    _worldId: string,
+    _backupName: string,
+  ): Promise<void> {
+    throw new Error(
+      "[V13SetupAdapter] World backups are not supported on Foundry V13. Use V14 or later.",
+    );
+  }
+
+  async restoreWorldBackup(
+    _page: FoundryPage,
+    _worldId: string,
+    _backupName: string,
+  ): Promise<void> {
+    throw new Error(
+      "[V13SetupAdapter] World backup restore is not supported on Foundry V13. Use V14 or later.",
+    );
+  }
+
+  async listWorldBackups(_page: FoundryPage, _worldId: string): Promise<string[]> {
+    throw new Error(
+      "[V13SetupAdapter] World backup listing is not supported on Foundry V13. Use V14 or later.",
+    );
+  }
+
+  async deleteWorldBackup(
+    _page: FoundryPage,
+    _worldId: string,
+    _backupName: string,
+  ): Promise<void> {
+    throw new Error(
+      "[V13SetupAdapter] World backup deletion is not supported on Foundry V13. Use V14 or later.",
+    );
+  }
+
   async deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void> {
     console.log(`[V13SetupAdapter] Deleting world if exists: ${worldId}`);
     await this.switchTab(page, "Worlds");

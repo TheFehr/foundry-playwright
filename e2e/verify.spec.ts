@@ -1,64 +1,19 @@
-import { test, expect, verifyResult } from "../src/index.js";
-import { foundrySetup, foundryTeardown } from "../src/index.js";
+import { test, expect, verifyResult, useBaseWorld } from "../src/index.js";
 
 test.describe("Library Verification Suite", () => {
   const worldId = "verify-world";
   const adminPassword = process.env.FOUNDRY_ADMIN_KEY || "password";
 
-  test.beforeAll(async ({ browser }) => {
-    test.setTimeout(600000);
-    const page = await browser.newPage();
-    await foundrySetup(page, {
-      worldId,
-      userName: "Gamemaster",
-      adminPassword,
-      moduleId: "fake-module",
-    });
-    await page.close();
+  useBaseWorld(test, {
+    worldId,
+    adminPassword,
+    moduleId: "fake-module",
   });
 
+  // Extend timeout for the first run (world creation + backup).
+  test.beforeAll(() => test.setTimeout(600000));
+
   test.beforeEach(async ({ page }) => {
-    const { disableTour } = await import("../src/helpers.js");
-    const { foundrySetup } = await import("../src/auth.js");
-
-    // Attempt to reach the join screen
-    await page.goto("/join", { timeout: 30000 }).catch(() => null);
-    await disableTour(page);
-    await page.waitForLoadState("networkidle");
-
-    // If redirected to /auth or /setup, we need to re-launch or re-auth
-    if (page.url().includes("/auth") || page.url().includes("/setup")) {
-      console.log("[beforeEach] Not on join screen. Ensuring world is active...");
-      await foundrySetup(page, {
-        worldId,
-        adminPassword,
-        createWorld: false,
-        deleteIfExists: false,
-      });
-      if (!page.url().includes("/game")) {
-        await page.goto("/join").catch(() => null);
-      }
-    }
-
-    if (page.url().includes("/join")) {
-      await page.locator('select[name="userid"]').selectOption({ label: "Gamemaster" });
-      await page
-        .locator('button[name="join"]')
-        .evaluate((el: Element) => (el as HTMLElement).click());
-    }
-
-    await page.waitForURL(/\/game/, { timeout: 60000 });
-    await expect(page.locator("#loading")).toBeHidden({ timeout: 60000 });
-    await page.waitForFunction(
-      () =>
-        typeof (window as unknown as Window).game !== "undefined" &&
-        (window as unknown as Window).game.ready,
-      {
-        timeout: 60000,
-      },
-    );
-
-    // Reset verify logs for this test
     await page.evaluate(() => (window as unknown as Window).FP_VERIFY_RESET?.());
   });
 
@@ -82,13 +37,6 @@ test.describe("Library Verification Suite", () => {
     });
     const fs = await import("node:fs");
     fs.writeFileSync(".foundry_metadata.json", JSON.stringify(meta, null, 2));
-  });
-
-  test.afterAll(async ({ browser }) => {
-    test.setTimeout(120000);
-    const page = await browser.newPage();
-    await foundryTeardown(page, { worldId, adminPassword });
-    await page.close();
   });
 
   test("foundry.state: document management", async ({ page, foundry }) => {
@@ -115,7 +63,6 @@ test.describe("Library Verification Suite", () => {
   test("foundry.state: settings management", async ({ page, foundry }) => {
     const testVal = "val-" + Date.now();
 
-    // Ensure the setting is registered
     await page.evaluate(() => {
       try {
         (window as unknown as Window).game.settings.register("fake-module", "test-string", {

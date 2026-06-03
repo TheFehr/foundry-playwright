@@ -490,6 +490,221 @@ export class V14SetupAdapter implements SetupAdapter {
     }
   }
 
+  async launchWorld(page: FoundryPage, worldId: string): Promise<void> {
+    console.log(`[V14SetupAdapter] Launching world: ${worldId}`);
+    await this.switchTab(page, "Worlds");
+    const worldBox = page
+      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
+      .first();
+    await worldBox.waitFor({ state: "visible", timeout: 15000 });
+
+    const launchBtn = worldBox
+      .locator('[data-action="worldLaunch"], button:has-text("Launch")')
+      .first();
+    await launchBtn.evaluate((el: Element) => (el as HTMLElement).click());
+    await page.waitForURL(
+      (u) =>
+        u.pathname.includes("/join") ||
+        u.pathname.includes("/game") ||
+        u.pathname.includes("/players"),
+      { timeout: 60000 },
+    );
+  }
+
+  async createWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
+    console.log(`[V14SetupAdapter] Creating backup "${backupName}" for world: ${worldId}`);
+    await this.switchTab(page, "Worlds");
+    const worldBox = page
+      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
+      .first();
+    await worldBox.waitFor({ state: "visible", timeout: 15000 });
+
+    await worldBox.click({ button: "right" });
+    const backupOption = page
+      .locator("li.context-item, .context-item")
+      .filter({ hasText: /Create Backup|Backup World/i })
+      .first();
+    await backupOption.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const dialog = page
+      .locator("dialog, .application, foundry-app")
+      .filter({ hasText: /Backup|Create Backup/i })
+      .last();
+    await dialog.waitFor({ state: "visible", timeout: 15000 });
+
+    const labelInput = dialog
+      .locator(
+        'input[name="label"], input[name="description"], input[name="name"], input[type="text"]',
+      )
+      .first();
+    await labelInput.fill(backupName);
+
+    await dialog
+      .locator(
+        'button[type="submit"], button[data-action="yes"], button.bright, button:has-text("Create"), button:has-text("Save")',
+      )
+      .first()
+      .evaluate((el: Element) => (el as HTMLElement).click());
+
+    await page
+      .waitForFunction(() => !document.querySelector(".notification.info, .progress-bar.active"), {
+        timeout: 120000,
+      })
+      .catch(() => null);
+
+    await dialog.waitFor({ state: "hidden", timeout: 30000 }).catch(() => null);
+    console.log(`[V14SetupAdapter] Backup "${backupName}" created.`);
+  }
+
+  async restoreWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
+    console.log(`[V14SetupAdapter] Restoring backup "${backupName}" for world: ${worldId}`);
+    await this.switchTab(page, "Worlds");
+    const worldBox = page
+      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
+      .first();
+    await worldBox.waitFor({ state: "visible", timeout: 15000 });
+
+    await worldBox.click({ button: "right" });
+    const manageOption = page
+      .locator("li.context-item, .context-item")
+      .filter({ hasText: /Manage Backups|Restore Backup|Backups/i })
+      .first();
+    await manageOption.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const backupsDialog = page
+      .locator("dialog, .application, foundry-app")
+      .filter({ hasText: /Backup/i })
+      .last();
+    await backupsDialog.waitFor({ state: "visible", timeout: 15000 });
+
+    const backupRow = backupsDialog
+      .locator(
+        `[data-backup-label="${backupName}"], li:has-text("${backupName}"), .backup-entry:has-text("${backupName}"), tr:has-text("${backupName}")`,
+      )
+      .first();
+    await backupRow.waitFor({ state: "visible", timeout: 10000 });
+
+    const restoreBtn = backupRow
+      .locator('button[data-action="restore"], button:has-text("Restore")')
+      .first();
+    await restoreBtn.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const confirmDialog = page
+      .locator("dialog, .application")
+      .filter({ hasText: /Restore|Confirm/i })
+      .last();
+    if (await confirmDialog.isVisible()) {
+      await confirmDialog
+        .locator('button[data-action="yes"], button:has-text("Yes"), button.bright')
+        .first()
+        .evaluate((el: Element) => (el as HTMLElement).click());
+    }
+
+    await page
+      .waitForFunction(() => !document.querySelector(".notification.info, .progress-bar.active"), {
+        timeout: 120000,
+      })
+      .catch(() => null);
+
+    console.log(`[V14SetupAdapter] Backup "${backupName}" restored.`);
+    await page.waitForLoadState("networkidle").catch(() => null);
+  }
+
+  async listWorldBackups(page: FoundryPage, worldId: string): Promise<string[]> {
+    console.log(`[V14SetupAdapter] Listing backups for world: ${worldId}`);
+    await this.switchTab(page, "Worlds");
+    const worldBox = page
+      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
+      .first();
+    await worldBox.waitFor({ state: "visible", timeout: 15000 });
+
+    await worldBox.click({ button: "right" });
+    const manageOption = page
+      .locator("li.context-item, .context-item")
+      .filter({ hasText: /Manage Backups|Restore Backup|Backups/i })
+      .first();
+    await manageOption.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const backupsDialog = page
+      .locator("dialog, .application, foundry-app")
+      .filter({ hasText: /Backup/i })
+      .last();
+    await backupsDialog.waitFor({ state: "visible", timeout: 15000 });
+
+    const labels = await backupsDialog
+      .locator("[data-backup-label], .backup-entry, li.backup, tr.backup")
+      .evaluateAll((els) =>
+        els.map(
+          (el) =>
+            (el as HTMLElement).dataset.backupLabel ||
+            el.querySelector(".backup-label, .label, td:first-child")?.textContent?.trim() ||
+            el.textContent?.trim() ||
+            "",
+        ),
+      );
+
+    const closeBtn = backupsDialog
+      .locator('button[data-action="close"], .header-control.close, .header-button.close')
+      .first();
+    if (await closeBtn.isVisible()) {
+      await closeBtn.evaluate((el: Element) => (el as HTMLElement).click());
+    }
+
+    return labels.filter(Boolean);
+  }
+
+  async deleteWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
+    console.log(`[V14SetupAdapter] Deleting backup "${backupName}" for world: ${worldId}`);
+    await this.switchTab(page, "Worlds");
+    const worldBox = page
+      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
+      .first();
+    await worldBox.waitFor({ state: "visible", timeout: 15000 });
+
+    await worldBox.click({ button: "right" });
+    const manageOption = page
+      .locator("li.context-item, .context-item")
+      .filter({ hasText: /Manage Backups|Backups/i })
+      .first();
+    await manageOption.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const backupsDialog = page
+      .locator("dialog, .application, foundry-app")
+      .filter({ hasText: /Backup/i })
+      .last();
+    await backupsDialog.waitFor({ state: "visible", timeout: 15000 });
+
+    const backupRow = backupsDialog
+      .locator(
+        `[data-backup-label="${backupName}"], li:has-text("${backupName}"), .backup-entry:has-text("${backupName}"), tr:has-text("${backupName}")`,
+      )
+      .first();
+    const deleteBtn = backupRow
+      .locator('button[data-action="delete"], button:has-text("Delete")')
+      .first();
+    await deleteBtn.evaluate((el: Element) => (el as HTMLElement).click());
+
+    const confirmDialog = page
+      .locator("dialog, .application")
+      .filter({ hasText: /Delete|Confirm/i })
+      .last();
+    if (await confirmDialog.isVisible()) {
+      await confirmDialog
+        .locator('button[data-action="yes"], button:has-text("Yes"), button.bright')
+        .first()
+        .evaluate((el: Element) => (el as HTMLElement).click());
+    }
+
+    await backupRow.waitFor({ state: "hidden", timeout: 15000 }).catch(() => null);
+
+    const closeBtn = backupsDialog
+      .locator('button[data-action="close"], .header-control.close')
+      .first();
+    if (await closeBtn.isVisible()) {
+      await closeBtn.evaluate((el: Element) => (el as HTMLElement).click());
+    }
+  }
+
   async deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void> {
     console.log(`[V14SetupAdapter] Deleting world if exists: ${worldId}`);
     await this.switchTab(page, "Worlds");
