@@ -254,14 +254,28 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
         await adapter.restoreWorldBackup(tempPage, worldId, backupName);
         await adapter.launchWorld(tempPage, worldId);
       } else {
-        // V13: full teardown + recreate + setupWorld before each spec.
-        await foundryTeardown(tempPage, config).catch(() => null);
-        await foundrySetup(tempPage, config);
+        // V13: delete + recreate world only — system/modules already installed in beforeAll.
+        await returnToSetup(tempPage, adminPw, version);
+        const v13Adapter = await getSetupAdapter(tempPage, version);
+        const sysId = config.systemId ?? process.env.FOUNDRY_SYSTEM_ID ?? "dnd5e";
+        const SYSTEM_LABELS: Record<string, string> = {
+          dnd5e: "D&D 5th Edition",
+          pf2e: "Pathfinder 2e",
+          pf1: "Pathfinder 1st Edition",
+          swade: "Savage Worlds Adventure Edition",
+          worldbuilding: "Simple Worldbuilding",
+          dungeonworld: "Dungeon World",
+        };
+        const sysLabel = config.systemLabel ?? SYSTEM_LABELS[sysId] ?? sysId;
+        await v13Adapter.deleteWorldIfExists(tempPage, worldId);
+        await v13Adapter.createWorld(tempPage, worldId, sysLabel, sysId);
         if (config.setupWorld) {
+          if (!tempPage.url().includes("/game")) {
+            await loginAs(tempPage, userName, password);
+            await waitForReady(tempPage);
+          }
           await config.setupWorld(buildHelpers(tempPage, config));
         }
-        // Return to setup so the world is in a clean launched state for loginAs.
-        // foundrySetup already ends at /game on the temp page, which is fine.
       }
     } finally {
       await tempPage.close();
