@@ -60,12 +60,28 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+function getGithubAuthHeader(): string {
+  try {
+    const token = execSync("gh auth token", {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (token) return `-H "Authorization: Bearer ${token}"`;
+  } catch {
+    console.warn(
+      "[monitor] gh not available or not logged in — using unauthenticated GitHub API (60 req/hr limit).",
+    );
+  }
+  return "";
+}
+
 async function fetchLatestByMinor(systemId: string): Promise<Map<string, string>> {
   const repo = SYSTEM_REPOS[systemId];
   if (!repo) throw new Error(`Unknown system: ${systemId}`);
   console.log(`[monitor] Fetching releases for ${systemId} from GitHub...`);
+  const authHeader = getGithubAuthHeader();
   const json = execSync(
-    `curl -sf -H "Accept: application/vnd.github.v3+json" -H "User-Agent: foundry-playwright/monitor" "https://api.github.com/repos/${repo}/releases?per_page=100"`,
+    `curl -sf ${authHeader} -H "Accept: application/vnd.github.v3+json" -H "User-Agent: foundry-playwright/monitor" "https://api.github.com/repos/${repo}/releases?per_page=100"`,
     { encoding: "utf8" },
   );
   const releases: GithubRelease[] = JSON.parse(json);

@@ -48,12 +48,28 @@ function buildManifestUrl(systemId: string, version: string): string | null {
   }
 }
 
+function getGithubAuthHeader(): string {
+  try {
+    const token = execSync("gh auth token", {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (token) return `-H "Authorization: Bearer ${token}"`;
+  } catch {
+    console.warn(
+      "[verify] gh not available or not logged in — using unauthenticated GitHub API (60 req/hr limit).",
+    );
+  }
+  return "";
+}
+
 async function resolveLatestPatch(systemId: string, minor: string): Promise<string> {
   const repo = SYSTEM_REPOS[systemId];
   if (!repo) throw new Error(`Cannot resolve patch for unknown system: ${systemId}`);
   console.log(`[verify] Resolving latest patch for ${systemId} minor ${minor}...`);
+  const authHeader = getGithubAuthHeader();
   const json = execSync(
-    `curl -sf -H "Accept: application/vnd.github.v3+json" -H "User-Agent: foundry-playwright/verify" "https://api.github.com/repos/${repo}/releases?per_page=100"`,
+    `curl -sf ${authHeader} -H "Accept: application/vnd.github.v3+json" -H "User-Agent: foundry-playwright/verify" "https://api.github.com/repos/${repo}/releases?per_page=100"`,
     { encoding: "utf8" },
   );
   const releases: { tag_name: string; prerelease: boolean; draft: boolean }[] = JSON.parse(json);
