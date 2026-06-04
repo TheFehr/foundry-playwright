@@ -5,7 +5,7 @@
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-06-03T12:23:02.024Z",
+    "timestamp": "2026-06-04T16:26:06.102Z",
     "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
@@ -14,7 +14,7 @@
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-05-24T20:17:59.525Z",
+    "timestamp": "2026-06-04T16:30:37.012Z",
     "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
@@ -23,7 +23,7 @@
     "systemMinor": "7.12",
     "systemVersion": "7.12.2",
     "status": "stable",
-    "timestamp": "2026-06-03T12:34:05.577Z",
+    "timestamp": "2026-06-04T16:35:52.699Z",
     "notes": "Verified locally with pf2e v7.12.2."
   },
   {
@@ -59,7 +59,7 @@
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
     "status": "stable",
-    "timestamp": "2026-06-03T12:00:00.000Z",
+    "timestamp": "2026-06-04T16:46:54.787Z",
     "notes": "Verified locally with pf2e v8.2.0."
   }
 ]
