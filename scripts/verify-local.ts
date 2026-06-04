@@ -166,6 +166,7 @@ async function verifyVersion(
 
     const testFiles = ["e2e/verify.spec.ts", "e2e/user-management.spec.ts"].join(" ");
     const reportPath = path.join(process.cwd(), `.playwright-report-${version}.json`);
+    let execError: Error | null = null;
     try {
       execSync(
         `npx playwright test ${testFiles} --workers=1 --reporter=line,json ${playwrightArgs.join(" ")}`,
@@ -174,14 +175,17 @@ async function verifyVersion(
           env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath },
         },
       );
-    } catch {
-      // execSync throws on test failure; we parse the report below
+    } catch (e) {
+      execError = e as Error;
     }
 
     if (fs.existsSync(reportPath)) {
       const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
       failures = extractFailures(report);
       fs.unlinkSync(reportPath);
+    } else if (execError) {
+      // Playwright failed to start or crashed without producing a report.
+      throw execError;
     }
 
     if (failures.length > 0) {
@@ -242,7 +246,7 @@ async function verifyVersion(
     };
 
     const existingIdx = existingResults.findIndex(
-      (r) => r.version === version && (r.system as string).startsWith(meta.system.id),
+      (r) => r.version === version && r.system === currentResult.system,
     );
     if (existingIdx !== -1) {
       existingResults[existingIdx] = currentResult;

@@ -528,6 +528,27 @@ export class V14SetupAdapter implements SetupAdapter {
       .catch(() => null);
   }
 
+  private async openBackupsDialog(page: FoundryPage, worldId: string): Promise<Locator> {
+    await this.dismissStrayDialogs(page);
+    await this.switchTab(page, "Worlds");
+    const worldBox = page
+      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
+      .first();
+    await worldBox.waitFor({ state: "visible", timeout: 15000 });
+    await worldBox.click({ button: "right" });
+    const manageOption = page
+      .locator("li.context-item, .context-item, nav li")
+      .filter({ hasText: /^\s*Manage Backups\s*$/ })
+      .first();
+    await manageOption.evaluate((el: Element) => (el as HTMLElement).click());
+    const backupsDialog = page
+      .locator("dialog, .application, foundry-app")
+      .filter({ hasText: /Backup/i })
+      .last();
+    await backupsDialog.waitFor({ state: "visible", timeout: 15000 });
+    return backupsDialog;
+  }
+
   async createWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
     console.log(`[V14SetupAdapter] Creating backup "${backupName}" for world: ${worldId}`);
     await this.dismissStrayDialogs(page);
@@ -566,6 +587,13 @@ export class V14SetupAdapter implements SetupAdapter {
       .first()
       .evaluate((el: Element) => (el as HTMLElement).click());
 
+    // Wait for the progress indicator to appear first (short timeout — it may be brief),
+    // then wait for it to disappear so we don't resolve before the backup actually starts.
+    await page
+      .waitForFunction(() => !!document.querySelector(".notification.info, .progress-bar.active"), {
+        timeout: 5000,
+      })
+      .catch(() => null);
     await page
       .waitForFunction(() => !document.querySelector(".notification.info, .progress-bar.active"), {
         timeout: 120000,
@@ -577,25 +605,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
   async restoreWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
     console.log(`[V14SetupAdapter] Restoring backup "${backupName}" for world: ${worldId}`);
-    await this.dismissStrayDialogs(page);
-    await this.switchTab(page, "Worlds");
-    const worldBox = page
-      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
-      .first();
-    await worldBox.waitFor({ state: "visible", timeout: 15000 });
-
-    await worldBox.click({ button: "right" });
-    const manageOption = page
-      .locator("li.context-item, .context-item, nav li")
-      .filter({ hasText: /^\s*Manage Backups\s*$/ })
-      .first();
-    await manageOption.evaluate((el: Element) => (el as HTMLElement).click());
-
-    const backupsDialog = page
-      .locator("dialog, .application, foundry-app")
-      .filter({ hasText: /Backup/i })
-      .last();
-    await backupsDialog.waitFor({ state: "visible", timeout: 15000 });
+    const backupsDialog = await this.openBackupsDialog(page, worldId);
 
     // V14 backup entries are div.form-group.slim.package; label/note is in <p class="hint">
     const backupRow = backupsDialog.locator(".package").filter({ hasText: backupName }).first();
@@ -657,25 +667,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
   async listWorldBackups(page: FoundryPage, worldId: string): Promise<string[]> {
     console.log(`[V14SetupAdapter] Listing backups for world: ${worldId}`);
-    await this.dismissStrayDialogs(page);
-    await this.switchTab(page, "Worlds");
-    const worldBox = page
-      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
-      .first();
-    await worldBox.waitFor({ state: "visible", timeout: 15000 });
-
-    await worldBox.click({ button: "right" });
-    const manageOption = page
-      .locator("li.context-item, .context-item, nav li")
-      .filter({ hasText: /^\s*Manage Backups\s*$/ })
-      .first();
-    await manageOption.evaluate((el: Element) => (el as HTMLElement).click());
-
-    const backupsDialog = page
-      .locator("dialog, .application, foundry-app")
-      .filter({ hasText: /Backup/i })
-      .last();
-    await backupsDialog.waitFor({ state: "visible", timeout: 15000 });
+    const backupsDialog = await this.openBackupsDialog(page, worldId);
 
     // V14 backup entries are div.package with [data-entry] or [data-id]; label is in <p class="hint">
     const labels = await backupsDialog
@@ -694,25 +686,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
   async deleteWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
     console.log(`[V14SetupAdapter] Deleting backup "${backupName}" for world: ${worldId}`);
-    await this.dismissStrayDialogs(page);
-    await this.switchTab(page, "Worlds");
-    const worldBox = page
-      .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
-      .first();
-    await worldBox.waitFor({ state: "visible", timeout: 15000 });
-
-    await worldBox.click({ button: "right" });
-    const manageOption = page
-      .locator("li.context-item, .context-item, nav li")
-      .filter({ hasText: /^\s*Manage Backups\s*$/ })
-      .first();
-    await manageOption.evaluate((el: Element) => (el as HTMLElement).click());
-
-    const backupsDialog = page
-      .locator("dialog, .application, foundry-app")
-      .filter({ hasText: /Backup/i })
-      .last();
-    await backupsDialog.waitFor({ state: "visible", timeout: 15000 });
+    const backupsDialog = await this.openBackupsDialog(page, worldId);
 
     // V14 has no per-entry delete button; select via checkbox then use bulk "Delete Selected"
     const backupRow = backupsDialog.locator(".package").filter({ hasText: backupName }).first();

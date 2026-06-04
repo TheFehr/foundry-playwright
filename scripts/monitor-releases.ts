@@ -182,12 +182,17 @@ async function run() {
       ...new Set(registry.filter((e) => e.status === "stable").map((e) => e.fvtt)),
     ];
 
-    // Include new Foundry generation if not yet tracked
+    // Include new Foundry generation if no stable row exists for it yet.
+    // A pending/incompatible row is not enough — keep checking until something is verified.
     const majorFoundry = foundryLatest.split(".")[0];
-    const hasGeneration = registry.some((e) => e.fvtt.startsWith(`${majorFoundry}.`));
-    const fvttToCheck = hasGeneration ? stableFvttVersions : [...stableFvttVersions, foundryLatest];
+    const hasGenerationStable = registry.some(
+      (e) => e.status === "stable" && e.fvtt.startsWith(`${majorFoundry}.`),
+    );
+    const fvttToCheck = hasGenerationStable
+      ? stableFvttVersions
+      : [...stableFvttVersions, foundryLatest];
 
-    if (!hasGeneration) {
+    if (!hasGenerationStable) {
       console.log(`[monitor] New Foundry generation detected: ${foundryLatest}`);
     }
 
@@ -204,13 +209,14 @@ async function run() {
         for (const minor of minors) {
           const latestPatch = latestByMinor.get(minor)!;
 
+          // Registry key is (fvtt, system, systemMinor) — one entry per minor.
+          // Any existing stable or pending row for this minor suppresses a new entry.
           const hasCurrentStable = registry.some(
             (e) =>
               e.fvtt === fvtt &&
               e.system === systemId &&
               e.systemMinor === minor &&
-              e.status === "stable" &&
-              e.systemVersion === latestPatch,
+              e.status === "stable",
           );
           if (hasCurrentStable) continue;
 
@@ -219,8 +225,7 @@ async function run() {
               e.fvtt === fvtt &&
               e.system === systemId &&
               e.systemMinor === minor &&
-              e.status === "pending" &&
-              e.systemVersion === latestPatch,
+              e.status === "pending",
           );
           if (hasCurrentPending) continue;
 
@@ -230,8 +235,7 @@ async function run() {
                 e.fvtt === fvtt &&
                 e.system === systemId &&
                 e.systemMinor === minor &&
-                e.status === "incompatible" &&
-                e.systemVersion === latestPatch,
+                e.status === "incompatible",
             );
             if (alreadyIncompatible) continue;
 

@@ -9,6 +9,7 @@ import {
 } from "@playwright/test";
 import {
   FoundrySetupConfig,
+  SYSTEM_LABELS,
   foundrySetup,
   foundryTeardown,
   loginAs,
@@ -196,24 +197,22 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
     test.setTimeout(600000);
     const page = (await browser.newPage()) as FoundryPage;
     try {
+      // Navigate first so getSetupAdapter can probe the DOM when version is not explicit.
+      for (let i = 0; i < 10; i++) {
+        try {
+          await page.goto("/setup");
+          await page.waitForLoadState("networkidle");
+          if (page.url().startsWith("http")) break;
+        } catch {
+          console.log(`[useBaseWorld] Server not ready (attempt ${i + 1}/10), retrying in 10s...`);
+          await page.waitForTimeout(10000);
+        }
+      }
+
       const adapter = await getSetupAdapter(page, version);
       isV14 = adapter.version >= 14;
 
       if (isV14) {
-        // Check if the base backup already exists so we can skip world re-creation on warm runs.
-        // Retry the initial navigation in case the Docker container isn't fully ready yet.
-        for (let i = 0; i < 10; i++) {
-          try {
-            await page.goto("/setup");
-            await page.waitForLoadState("networkidle");
-            if (page.url().startsWith("http")) break;
-          } catch {
-            console.log(
-              `[useBaseWorld] Server not ready (attempt ${i + 1}/10), retrying in 10s...`,
-            );
-            await page.waitForTimeout(10000);
-          }
-        }
         const existingBackups = await adapter
           .listWorldBackups(page, worldId)
           .catch(() => [] as string[]);
@@ -258,14 +257,6 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
         await returnToSetup(tempPage, adminPw, version);
         const v13Adapter = await getSetupAdapter(tempPage, version);
         const sysId = config.systemId ?? process.env.FOUNDRY_SYSTEM_ID ?? "dnd5e";
-        const SYSTEM_LABELS: Record<string, string> = {
-          dnd5e: "D&D 5th Edition",
-          pf2e: "Pathfinder 2e",
-          pf1: "Pathfinder 1st Edition",
-          swade: "Savage Worlds Adventure Edition",
-          worldbuilding: "Simple Worldbuilding",
-          dungeonworld: "Dungeon World",
-        };
         const sysLabel = config.systemLabel ?? SYSTEM_LABELS[sysId] ?? sysId;
         await v13Adapter.deleteWorldIfExists(tempPage, worldId);
         await v13Adapter.createWorld(tempPage, worldId, sysLabel, sysId);

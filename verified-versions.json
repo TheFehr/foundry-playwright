@@ -58,8 +58,8 @@
     "system": "pf2e",
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-06-02T08:47:51.720Z",
-    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 14.360.0 --system pf2e --system-minor 8.2 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-06-03T12:00:00.000Z",
+    "notes": "Verified locally with pf2e v8.2.0."
   }
 ]

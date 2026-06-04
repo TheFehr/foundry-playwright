@@ -142,6 +142,15 @@ export async function returnToSetup(
   }
 }
 
+export const SYSTEM_LABELS: Record<string, string> = {
+  dnd5e: "D&D 5th Edition",
+  pf2e: "Pathfinder 2e",
+  pf1: "Pathfinder 1st Edition",
+  swade: "Savage Worlds Adventure Edition",
+  worldbuilding: "Simple Worldbuilding",
+  dungeonworld: "Dungeon World",
+};
+
 export interface FoundrySetupConfig {
   worldId?: string;
   systemId?: string;
@@ -162,15 +171,6 @@ export interface FoundrySetupConfig {
  * Performs full end-to-end setup of a Foundry VTT instance.
  */
 export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
-  const SYSTEM_LABELS: Record<string, string> = {
-    dnd5e: "D&D 5th Edition",
-    pf2e: "Pathfinder 2e",
-    pf1: "Pathfinder 1st Edition",
-    swade: "Savage Worlds Adventure Edition",
-    worldbuilding: "Simple Worldbuilding",
-    dungeonworld: "Dungeon World",
-  };
-
   const {
     worldId,
     systemId = process.env.FOUNDRY_SYSTEM_ID || "dnd5e",
