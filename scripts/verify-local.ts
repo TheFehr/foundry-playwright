@@ -23,6 +23,11 @@ function extractVersionTag(tag: string, systemId: string): string | null {
     const m = tag.match(/^release-(\d+\.\d+\.\d+)$/);
     return m ? m[1] : null;
   }
+  if (systemId === "pf2e") {
+    // Tags are "pf2e-X.Y.Z" (current) or bare "X.Y.Z" (legacy)
+    const m = tag.match(/^(?:pf2e-)?(\d+\.\d+\.\d+)$/);
+    return m ? m[1] : null;
+  }
   if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
   return null;
 }
@@ -42,7 +47,7 @@ function buildManifestUrl(systemId: string, version: string): string | null {
     case "dnd5e":
       return `https://github.com/foundryvtt/dnd5e/releases/download/release-${version}/system.json`;
     case "pf2e":
-      return `https://github.com/foundryvtt/pf2e/releases/download/${version}/system.json`;
+      return `https://github.com/foundryvtt/pf2e/releases/download/pf2e-${version}/system.json`;
     default:
       return null;
   }

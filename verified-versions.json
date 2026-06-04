@@ -40,18 +40,18 @@
     "system": "pf2e",
     "systemMinor": "8.1",
     "systemVersion": "8.1.2",
-    "status": "stable",
-    "timestamp": "2026-05-17T07:16:19.265Z",
-    "notes": "Verified locally with pf2e v8.1.2."
+    "status": "incompatible",
+    "timestamp": "2026-06-04T00:00:00.000Z",
+    "notes": "System declares compatibility minimum: 14; incompatible with FVTT 13."
   },
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-06-02T08:47:51.720Z",
-    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 13.351.0 --system pf2e --system-minor 8.2 --update-registry --git-commit`"
+    "status": "incompatible",
+    "timestamp": "2026-06-04T00:00:00.000Z",
+    "notes": "System declares compatibility minimum: 14; incompatible with FVTT 13."
   },
   {
     "fvtt": "14.360.0",
