@@ -1,74 +1,79 @@
-# Technical Plan: Multi-Version Support (V13 & V14)
+# Multi-Version Support (V13 & V14)
 
-## The "What"
+## The Problem
 
-A strategy to ensure the testing library remains compatible across multiple major versions of FoundryVTT (specifically targeting V13 and V14). This involves abstracting UI and API differences behind version-aware adapters.
+FoundryVTT V13 and V14 have incompatible setup UIs, different DOM structures, and different backup/restore APIs. Every layer of the library needs to handle both.
 
-## The "Why"
+## Version Detection
 
-FoundryVTT major versions often introduce breaking changes to both the internal API and the DOM structure:
+The library auto-detects the running version by probing the DOM once the page is loaded:
 
-1. **API Shifts:** V14 introduces the Scene Regions API, which fundamentally changes how area effects and triggers are handled compared to V13's Measured Templates.
-2. **UI Changes:** Selectors for the setup screen, context menus, and sidebar tabs frequently shift between versions.
-3. **Internal Data Structures:** Document schemas and flag structures can evolve, requiring different injection scripts.
+- **V14**: `window.foundry.applications.api.ApplicationV2` is defined, or a `<foundry-app>` custom element is present.
+- **V13**: Neither marker is present; body classes indicate the classic setup screen.
 
-## The "How"
+You can bypass detection by setting `FOUNDRY_VERSION=13` or `FOUNDRY_VERSION=14` in your environment. This skips the DOM probe and is faster when you know the target version.
 
-### 1. Environment-Driven Configuration
+## The Adapter Pattern
 
-The library will prioritize explicit configuration to avoid "magic" detection failures.
+### `SetupAdapter` (setup screen operations)
 
-- **`FOUNDRY_VERSION` Variable:** Consumers must specify the target version in their environment (e.g., `FOUNDRY_VERSION=14`).
-- **Fail-Fast Validation:** The `foundrySetup` orchestrator will verify the provided version against the supported list (13, 14) and throw a descriptive error immediately if it's missing or unsupported.
+`getSetupAdapter(page, version?)` returns the correct implementation:
 
-### 2. The Version Adapter Pattern
+| Method                      | Purpose                                                   |
+| :-------------------------- | :-------------------------------------------------------- |
+| `handleEULA`                | Accepts the EULA modal                                    |
+| `installSystem`             | Installs a game system from the package browser           |
+| `installSystemFromManifest` | Installs a system from a direct manifest URL              |
+| `installModules`            | Installs one or more modules                              |
+| `createWorld`               | Creates a new world                                       |
+| `launchWorld`               | Clicks the Launch button and waits for `/join` or `/game` |
+| `deleteWorldIfExists`       | Deletes a world if it exists                              |
+| `switchTab`                 | Navigates the setup screen tabs                           |
 
-Interactions will be abstracted into version-specific implementation classes.
+**V14-only backup methods:**
 
-#### A. Interface Definition
+| Method               | Purpose                                                        |
+| :------------------- | :------------------------------------------------------------- |
+| `createWorldBackup`  | Takes a named backup of a world                                |
+| `restoreWorldBackup` | Restores a world from a named backup (triggers server restart) |
+| `listWorldBackups`   | Returns the list of backup labels for a world                  |
+| `deleteWorldBackup`  | Deletes a named backup                                         |
 
-```typescript
-interface VersionAdapter {
-  // UI Selectors
-  readonly selectors: Record<string, string>;
+### System & UI Adapters (in-game operations)
 
-  // High-level Actions
-  createAreaEffect(data: any): Promise<void>;
-  handleWorldConfirmation(page: Page): Promise<void>;
-}
+Two further adapter layers handle per-system and per-UI-module differences:
+
+- **`SystemStateAdapter`** — Resolved via `FOUNDRY_SYSTEM_ID`. `DnD5eAdapter` and `PF2eAdapter` implement system-specific data shapes (HP structure, currency paths, test actor types, deprecation patterns).
+- **`UIAdapter`** — Resolved via `FOUNDRY_UI_ADAPTER`. `DefaultUIAdapter`, `DnD5eUIAdapter`, and `Tidy5eUIAdapter` handle differences in actor sheet selectors and tab structures across sheet modules.
+
+## `useBaseWorld` — V14 Backup Strategy
+
+The signature difference in V14 is the native backup/restore API. `useBaseWorld` exploits this for fast, isolated test resets:
+
+```
+beforeAll
+  └── foundrySetup (create world, activate modules)
+  └── setupWorld callback (seed base state)
+  └── createWorldBackup("fp-base-<worldId>")
+
+beforeEach
+  └── returnToSetup
+  └── restoreWorldBackup  ← triggers server restart
+  └── launchWorld
+  └── loginAs (test page)
+
+[each test runs against a clean, restored world]
 ```
 
-#### B. Implementation Classes
+Backup restore in V14 involves a full server restart. The adapter polls `/setup` until the server is reachable again before proceeding.
 
-- **`V13Adapter`**: Implements logic using Measured Templates and V13-specific DOM selectors.
-- **`V14Adapter`**: Implements logic using the Scene Regions API and V14-specific selectors.
+On V13, `useBaseWorld` falls back to a full `foundrySetup` per spec (delete → create → launch → activate modules). This is slower but correct.
 
-#### C. Dynamic Fixture Yielding
+## Environment Variables
 
-The `foundry` fixture will act as a factory, yielding the correct adapter based on the environment:
-
-```typescript
-const adapter = process.env.FOUNDRY_VERSION === "14" ? new V14Adapter(page) : new V13Adapter(page);
-yield adapter;
-```
-
-### 3. Runtime Version Detection (Safety Fallback)
-
-While the environment variable is primary, the library will perform a "sanity check" once the browser is connected.
-
-- **`game.version` Sniffing:** Inside `page.evaluate`, the library will query `game.version` (or `game.release.generation` in newer versions).
-- **Warning System:** If the detected runtime version disagrees with the `FOUNDRY_VERSION` environment variable, the library will issue a loud warning or optionally switch adapters dynamically if configured to do so.
-
-### 4. Version-Aware Data Injection
-
-When using `page.evaluate` to inject data (e.g., creating tokens with elevation), the scripts will be wrapped in conditional logic:
-
-```javascript
-await page.evaluate((version) => {
-  if (version >= 14) {
-    // Use multi-level scene API
-  } else {
-    // Use V13-compatible elevation logic
-  }
-}, detectedVersion);
-```
+| Variable                  | Effect                                                               |
+| :------------------------ | :------------------------------------------------------------------- |
+| `FOUNDRY_VERSION`         | Force `"13"` or `"14"` adapter; skips DOM detection                  |
+| `FOUNDRY_SYSTEM_ID`       | Select `SystemStateAdapter` (default: `dnd5e`)                       |
+| `FOUNDRY_UI_ADAPTER`      | Select `UIAdapter` (default: `default`)                              |
+| `FOUNDRY_SYSTEM_MANIFEST` | Install system from this manifest URL instead of the package browser |
