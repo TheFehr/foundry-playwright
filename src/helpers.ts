@@ -336,7 +336,9 @@ async function installFromManifest(
   await manifestInput.fill(manifestUrl);
 
   const installBtn = dialog
-    .locator('button[data-action="installPackage"], button:has-text("Install"), button.bright')
+    .locator(
+      'button[data-action="installUrl"], button[data-action="installPackage"], button:has-text("Install"), button.bright',
+    )
     .filter({ visible: true })
     .last();
   await installBtn.evaluate((el) => (el as HTMLElement).click());

@@ -442,7 +442,8 @@ program
             ...stable.map((e: Record<string, unknown>) => ({
               version: e["fvtt"] as string,
               system: e["system"] as string,
-              systemVersion: e["systemVersion"] as string | undefined,
+              // Don't pin systemVersion for re-verify: let installSystem handle already-installed
+              // systems; the registry update records whatever version is actually installed.
               modules: Array.isArray(e["modules"])
                 ? (e["modules"] as Record<string, unknown>[]).map(
                     (m: Record<string, unknown>) => m["id"] as string,

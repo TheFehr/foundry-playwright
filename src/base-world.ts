@@ -9,7 +9,6 @@ import {
 } from "@playwright/test";
 import {
   FoundrySetupConfig,
-  SYSTEM_LABELS,
   foundrySetup,
   foundryTeardown,
   loginAs,
@@ -253,18 +252,10 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
         await adapter.restoreWorldBackup(tempPage, worldId, backupName);
         await adapter.launchWorld(tempPage, worldId);
       } else {
-        // V13: delete + recreate world only — system/modules already installed in beforeAll.
-        await returnToSetup(tempPage, adminPw, version);
-        const v13Adapter = await getSetupAdapter(tempPage, version);
-        const sysId = config.systemId ?? process.env.FOUNDRY_SYSTEM_ID ?? "dnd5e";
-        const sysLabel = config.systemLabel ?? SYSTEM_LABELS[sysId] ?? sysId;
-        await v13Adapter.deleteWorldIfExists(tempPage, worldId);
-        await v13Adapter.createWorld(tempPage, worldId, sysLabel, sysId);
+        // V13: full re-setup each spec. foundrySetup is idempotent (skips already-installed
+        // system/modules), deletes+recreates the world, launches it, logs in, and activates modules.
+        await foundrySetup(tempPage, { ...config, deleteIfExists: true });
         if (config.setupWorld) {
-          if (!tempPage.url().includes("/game")) {
-            await loginAs(tempPage, userName, password);
-            await waitForReady(tempPage);
-          }
           await config.setupWorld(buildHelpers(tempPage, config));
         }
       }
