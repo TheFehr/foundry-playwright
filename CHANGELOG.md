@@ -1,5 +1,11 @@
 # Changelog
 
+# [0.6.0](https://github.com/TheFehr/foundry-playwright/compare/v0.5.0...v0.6.0) (2026-06-05)
+
+### Features
+
+- useBaseWorld fixture and minor-version verification matrix ([#15](https://github.com/TheFehr/foundry-playwright/issues/15)) ([e8c08f2](https://github.com/TheFehr/foundry-playwright/commit/e8c08f24dc7a62e15f64e2bd902a46912b5a22e2))
+
 # [0.5.0](https://github.com/TheFehr/foundry-playwright/compare/v0.4.1...v0.5.0) (2026-05-25)
 
 ### Features
