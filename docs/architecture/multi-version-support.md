@@ -50,7 +50,7 @@ Two further adapter layers handle per-system and per-UI-module differences:
 
 The signature difference in V14 is the native backup/restore API. `useBaseWorld` exploits this for fast, isolated test resets:
 
-```
+```text
 beforeAll
   └── foundrySetup (create world, activate modules)
   └── setupWorld callback (seed base state)

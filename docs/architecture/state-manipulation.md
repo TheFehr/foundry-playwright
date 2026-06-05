@@ -29,7 +29,7 @@ All methods run inside the browser via `page.evaluate`. They communicate with Fo
 await foundry.state.createDocument("Actor", { name: "Hero", type: "character" });
 await foundry.state.createDocument("Item", { name: "Sword", type: "weapon" });
 
-// Update by document name
+// Update by document ID
 await foundry.state.updateDocument("Actor", actorId, { "system.attributes.hp.value": 50 });
 
 // Delete by ID
