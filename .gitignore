@@ -23,8 +23,9 @@ e2e/.auth
 .idea/modules.xml
 .idea/vcs.xml
 
-# Gemini Agent Mandates
+# AI Agent Context Files
 GEMINI.md
+CLAUDE.md
 
 # Antigravity CLI
 .antigravitycli/

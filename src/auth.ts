@@ -83,12 +83,20 @@ export async function returnToSetup(
           .evaluate((el: Element) => (el as HTMLElement).click());
         await page.waitForTimeout(5000); // Allow time for shutdown
       } else {
-        // Standard return or direct navigation
-        const returnBtn = page.locator(
-          'button:has-text("Return to Setup"), button[name="shutdown"]',
-        );
+        // Admin already authenticated — the form still renders a submit button labelled
+        // "Return to Setup" (with an info message instead of the password input).
+        // Also handles V13 "Return to Setup" / shutdown buttons.
+        const returnBtn = page
+          .locator(
+            '#join-game-setup button[type="submit"], #join-game-setup button, ' +
+              'button:has-text("Return to Setup"), button[name="shutdown"], button[data-action="shutdown"]',
+          )
+          .filter({ visible: true })
+          .first();
         if (await returnBtn.isVisible()) {
+          console.log("[returnToSetup] Return-to-setup button found. Clicking...");
           await returnBtn.evaluate((el: Element) => (el as HTMLElement).click());
+          await page.waitForTimeout(5000);
         } else {
           await page.goto("/setup").catch(() => null);
         }
@@ -97,7 +105,17 @@ export async function returnToSetup(
       continue;
     }
 
-    if (url.includes("/game") || url.includes("/players")) {
+    // V14 world creation lands at /players (player config screen) while the world is running.
+    // Navigating to /setup from here auto-redirects to /game, so go via /join where the
+    // V14 admin shutdown form is available.
+    if (url.includes("/players")) {
+      console.log("[returnToSetup] On /players screen. Navigating to /join for admin shutdown...");
+      await page.goto("/join").catch(() => null);
+      await page.waitForLoadState("networkidle");
+      continue;
+    }
+
+    if (url.includes("/game")) {
       console.log("[returnToSetup] Inside World. Attempting to logout/shutdown...");
 
       // Attempt direct API shutdown first (most robust)
@@ -124,6 +142,15 @@ export async function returnToSetup(
   }
 }
 
+export const SYSTEM_LABELS: Record<string, string> = {
+  dnd5e: "D&D 5th Edition",
+  pf2e: "Pathfinder 2e",
+  pf1: "Pathfinder 1st Edition",
+  swade: "Savage Worlds Adventure Edition",
+  worldbuilding: "Simple Worldbuilding",
+  dungeonworld: "Dungeon World",
+};
+
 export interface FoundrySetupConfig {
   worldId?: string;
   systemId?: string;
@@ -144,19 +171,10 @@ export interface FoundrySetupConfig {
  * Performs full end-to-end setup of a Foundry VTT instance.
  */
 export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
-  const SYSTEM_LABELS: Record<string, string> = {
-    dnd5e: "D&D 5th Edition",
-    pf2e: "Pathfinder 2e",
-    pf1: "Pathfinder 1st Edition",
-    swade: "Savage Worlds Adventure Edition",
-    worldbuilding: "Simple Worldbuilding",
-    dungeonworld: "Dungeon World",
-  };
-
   const {
     worldId,
     systemId = process.env.FOUNDRY_SYSTEM_ID || "dnd5e",
-    systemManifest,
+    systemManifest = process.env.FOUNDRY_SYSTEM_MANIFEST,
     moduleId,
     moduleManifest,
     adminPassword = (process.env.FOUNDRY_ADMIN_PASSWORD || process.env.FOUNDRY_ADMIN_KEY) as string,
@@ -178,13 +196,24 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
   console.log(`[foundrySetup] Starting setup for world: ${worldId} (System: ${systemId})`);
 
   let done = false;
-  let maxAttempts = 5;
+  let maxAttempts = 10;
   for (let attempt = 1; attempt <= maxAttempts && !done; attempt++) {
-    if (page.url() === "about:blank") await page.goto("/");
+    if (page.url() === "about:blank") await page.goto("/").catch(() => null);
     await disableTour(page);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("networkidle").catch(() => null);
 
     const url = page.url();
+
+    // Handle chrome-error or other non-HTTP URLs — server is temporarily unavailable.
+    if (!url.startsWith("http")) {
+      console.log(
+        `[foundrySetup] Attempt ${attempt}/${maxAttempts}: server not accessible (${url}), retrying in 10s...`,
+      );
+      await page.waitForTimeout(10000);
+      await page.goto("/").catch(() => null);
+      await page.waitForLoadState("networkidle").catch(() => null);
+      continue;
+    }
 
     // 0. World Lock check
     if (url.includes("/join") || url.includes("/game") || url.includes("/players")) {

@@ -88,6 +88,45 @@ export interface SetupAdapter {
    * @param worldId The ID of the world to delete.
    */
   deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void>;
+
+  /**
+   * Launches an existing world from the Setup screen.
+   * @param page The Foundry VTT Page object.
+   * @param worldId The ID of the world to launch.
+   */
+  launchWorld(page: FoundryPage, worldId: string): Promise<void>;
+
+  /**
+   * Creates a named backup of a world. V14+ only.
+   * @param page The Foundry VTT Page object.
+   * @param worldId The ID of the world to back up.
+   * @param backupName A label to identify this backup.
+   */
+  createWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void>;
+
+  /**
+   * Restores a world from a named backup. V14+ only.
+   * The world data is overwritten; call launchWorld afterwards.
+   * @param page The Foundry VTT Page object.
+   * @param worldId The ID of the world to restore.
+   * @param backupName The label of the backup to restore.
+   */
+  restoreWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void>;
+
+  /**
+   * Returns the labels of all backups for a given world. V14+ only.
+   * @param page The Foundry VTT Page object.
+   * @param worldId The ID of the world.
+   */
+  listWorldBackups(page: FoundryPage, worldId: string): Promise<string[]>;
+
+  /**
+   * Deletes a named backup for a world. V14+ only.
+   * @param page The Foundry VTT Page object.
+   * @param worldId The ID of the world.
+   * @param backupName The label of the backup to delete.
+   */
+  deleteWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void>;
 }
 
 /**

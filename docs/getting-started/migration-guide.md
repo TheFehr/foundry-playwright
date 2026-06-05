@@ -1,87 +1,116 @@
-# Migration Guide: Adopting foundry-playwright
+# Getting Started with foundry-playwright
 
-This guide explains how to migrate your existing Foundry VTT module or system testing setup to use `@thefehr/foundry-playwright`.
-
-## Step 1: Initialization
-
-Run the initialization command in your project root:
+## Step 1: Install & Initialise
 
 ```bash
+npm install --save-dev @thefehr/foundry-playwright
 npx foundry-playwright init
 ```
 
-This will:
+`init` scaffolds:
 
-- Add a `test:e2e` script to your `package.json`.
-- Create a `playwright.config.ts` with optimized settings for Foundry.
-- Create an `e2e` directory with a `basic.spec.ts` sample test.
-- Create a `.env.template` file.
+- `playwright.config.ts` with optimised settings for Foundry
+- `e2e/` directory with a sample test
+- `.env.template` with required environment variables
+- A `test:e2e` script in `package.json`
 
 ## Step 2: Environment Setup
-
-Copy `.env.template` to `.env` and fill in your Foundry credentials.
 
 ```bash
 cp .env.template .env
 ```
 
-The Docker orchestrator uses these variables to boot the correct version of Foundry.
+Fill in your Foundry credentials. At minimum you need:
+
+```env
+FOUNDRY_USERNAME=your-foundry-account@email.com
+FOUNDRY_PASSWORD=your-foundry-password
+FOUNDRY_ADMIN_KEY=your-admin-password
+```
 
 ## Step 3: Local Module Injection
 
-The library's Docker orchestrator automatically injects any directories in your `e2e/` folder that contain a `module.json` or `system.json` into the Foundry instance.
+The Docker orchestrator automatically injects any directory inside `e2e/` that contains a `module.json` or `system.json` into the Foundry container. If your module source is at the project root it is also injected automatically.
 
-If your module source is in the project root, you can create a symlink in `e2e/` or copy the files there during your build process.
+## Step 4: Writing Tests
 
-## Step 4: Writing Tests with `useFoundry`
+### Option A — `useFoundry` (simple)
 
-Instead of manual login boilerplate, use the `useFoundry` helper at the top of your test files:
+Creates the world in `beforeAll`, tears it down in `afterAll`. Tests within the file share a single world instance and must manage their own state.
 
 ```typescript
 import { test, expect, useFoundry } from "@thefehr/foundry-playwright";
 
-// This sets up the world, system, and activates your module
 useFoundry(test, {
-  worldId: "test-world",
+  worldId: "my-test-world",
   systemId: "dnd5e",
   moduleId: "my-module-id",
 });
 
-test("My first test", async ({ page, foundry }) => {
-  await page.goto("/");
-
-  // Use the 'foundry' fixture for state manipulation
-  await foundry.state.createActor({ name: "Test Hero", type: "character" });
-
-  const actors = await foundry.state.getDocuments("Actor");
-  expect(actors.some((a) => a.name === "Test Hero")).toBe(true);
+test("creates an actor", async ({ foundry }) => {
+  await foundry.state.createDocument("Actor", { name: "Hero", type: "character" });
+  const actor = await foundry.state.getDocumentByName("Actor", "Hero");
+  expect(actor).not.toBeNull();
 });
 ```
 
-## Step 5: Transitioning from UI-Based Setup
+### Option B — `useBaseWorld` (isolated, recommended for V14)
 
-If you have existing tests that click through the UI to create actors or items, consider refactoring them to use `foundry.state`. Direct state manipulation via `page.evaluate` is significantly faster and more reliable than UI interactions.
-
-**Before (UI-based):**
+Snapshots the world state after setup and restores it before every test. Each spec starts from a guaranteed clean slate.
 
 ```typescript
-await page.click(".actor-create");
-await page.fill('input[name="name"]', "Hero");
-await page.click("button.submit");
+import { test, useBaseWorld } from "@thefehr/foundry-playwright";
+
+useBaseWorld(test, {
+  worldId: "isolated-world",
+  systemId: "dnd5e",
+  moduleId: "my-module-id",
+  setupWorld: async ({ state }) => {
+    // Runs once before the snapshot is taken.
+    // Seed any data every test should start with.
+    await state.createTestActor("Starting Actor");
+  },
+});
+
+test("modifying an actor does not affect other tests", async ({ foundry }) => {
+  await foundry.state.setActorHP("Starting Actor", 1);
+  // Next test will find Starting Actor at full HP because the world is restored.
+});
 ```
 
-**After (State-based):**
+See [Authentication & World Setup](../architecture/auth-and-world.md) for the full config reference.
+
+## Step 5: State Manipulation
+
+Prefer `foundry.state` over clicking through the UI to set up test preconditions. It is faster, more reliable, and not affected by sheet UI changes.
 
 ```typescript
-await foundry.state.createActor({ name: "Hero", type: "character" });
+// Create documents directly
+await foundry.state.createDocument("Actor", { name: "Hero", type: "character" });
+await foundry.state.createDocument("Item", { name: "Sword", type: "weapon" });
+
+// Update a document
+await foundry.state.updateDocument("Actor", actorId, { "system.attributes.hp.value": 10 });
+
+// Grant currency (system-aware)
+await foundry.state.grantCurrency("Hero", 50, "gp");
+
+// User management
+const userId = await foundry.state.createUser("Player", UserRole.PLAYER, "secret");
+await foundry.state.assignActorToUser(userId, actorId);
 ```
+
+See [State Manipulation Fixtures](../architecture/state-manipulation.md) for the full API reference.
 
 ## Step 6: Running Tests
 
-Execute your tests using the NPM script:
-
 ```bash
+# Against a running Foundry instance
 npm run test:e2e
-```
 
-This command uses the CLI to spin up a Docker container, run your Playwright tests against it, and then tear it down.
+# With a Docker-managed Foundry instance
+npx foundry-playwright test --docker
+
+# Target a specific version
+npm run verify:local -- --docker --version 14.360.0 --system dnd5e
+```

@@ -1,81 +1,153 @@
-    # Technical Plan: State Manipulation Fixtures
+# State Manipulation Fixtures
 
-## The "What"
+## The `foundry` Fixture
 
-A set of Playwright fixtures and utilities that interact directly with the FoundryVTT internal API (`game`, `canvas`, `socket`) via `page.evaluate`. These utilities allow tests to inject data, modify world settings, and trigger game events without interacting with the DOM.
-
-## The "Why"
-
-Traditional E2E testing relies on "clicking through the UI" to set up state (e.g., opening an Actor sheet, clicking "Add Item", filling a form). This is:
-
-1. **Slow:** Every UI interaction requires DOM rendering, event propagation, and network roundtrips.
-2. **Brittle:** Minor UI changes (renaming a button, changing a tab layout) break setup code that is unrelated to the actual test logic.
-3. **Limited:** Some state is difficult to set up via UI alone (e.g., setting precise cooldown timers, simulating complex socket events).
-
-By manipulating state directly, we can ensure the game is in the exact required state in milliseconds, focusing the test execution on the actual feature being verified.
-
-## The "How"
-
-### 1. The `foundry` Fixture
-
-We will extend the Playwright `test` object with a `foundry` fixture that provides a high-level API for state manipulation.
+Every test receives a `foundry` fixture with three namespaces:
 
 ```typescript
-export const test = base.extend<{ foundry: FoundryUtils }>({
-  foundry: async ({ page }, use) => {
-    await use(new FoundryUtils(page));
-  },
+test("example", async ({ page, foundry }) => {
+  await foundry.state.createTestActor("Hero");
+  await foundry.ui.switchTab(".actor-sheet", "Items");
+  await foundry.canvas.clickToken("Hero");
 });
 ```
 
-### 2. Core Capabilities
+- **`foundry.state`** — `FoundryState`: direct Foundry API calls via `page.evaluate`, no UI interaction.
+- **`foundry.ui`** — `FoundryUI`: Playwright-level UI helpers for sheets and dialogs.
+- **`foundry.canvas`** — `FoundryCanvas`: WebGL canvas interaction.
 
-#### A. Document Management
+---
 
-Methods to create, update, and delete Foundry documents (`Actor`, `Item`, `Scene`, `JournalEntry`).
+## `FoundryState` — Direct API Access
 
-- `foundry.createActor(data: object): Promise<string>` (returns UUID)
-- `foundry.createItem(actorId: string, data: object): Promise<string>`
-- `foundry.updateDocument(uuid: string, changes: object)`
+All methods run inside the browser via `page.evaluate`. They communicate with Foundry's internal `game` object and are significantly faster than UI interactions.
 
-#### B. Settings & Flags
-
-Directly manipulate world or module settings.
-
-- `foundry.setSetting(module: string, key: string, value: any)`
-- `foundry.getFlag(uuid: string, scope: string, key: string)`
-
-#### C. Deterministic Polling (Persistence Stability)
-
-Foundry's backend persistence is asynchronous. Use these helpers to wait for state changes deterministically:
-
-- `waitForSetting(page, module, key, expected)`
-- `waitForActorFlag(page, actorId, scope, key, expected)`
-- `waitForActorData(page, actorId, path, expected)`
-
-These helpers use `page.waitForFunction` to poll the internal `game` object, ensuring the test only proceeds once the state has been persisted.
-
-#### D. Hook & Event Simulation
-
-Manually trigger Foundry hooks to test reactive logic.
-
-- `foundry.triggerHook(hookName: string, ...args: any[])`
-- Example: Simulating a drop event on a sheet without performing a real drag-and-drop.
-
-### 3. Implementation Detail: `page.evaluate` Serialization
-
-Since `page.evaluate` runs in the browser context, all data passed must be serializable. The library will handle the boilerplate of wrapping these calls:
+### Document Management
 
 ```typescript
-// Inside FoundryUtils
-async createActor(data: object) {
-  return await this.page.evaluate(async (actorData) => {
-    const actor = await Actor.create(actorData);
-    return actor.uuid;
-  }, data);
-}
+// Create any document type
+await foundry.state.createDocument("Actor", { name: "Hero", type: "character" });
+await foundry.state.createDocument("Item", { name: "Sword", type: "weapon" });
+
+// Update by document ID
+await foundry.state.updateDocument("Actor", actorId, { "system.attributes.hp.value": 50 });
+
+// Delete by ID
+await foundry.state.deleteDocument("Actor", actorId);
+
+// Read
+const actor = await foundry.state.getDocument("Actor", actorId);
+const byName = await foundry.state.getDocumentByName("Actor", "Hero");
 ```
 
-### 4. Socket Interaction (Advanced)
+### Actor Helpers
 
-For testing multi-user scenarios (e.g., a GM action triggering a UI update for a Player), the library will provide utilities to listen for or emit socket events directly, allowing for precise verification of network synchronization.
+```typescript
+// Create a system-appropriate test actor (type resolved by SystemStateAdapter)
+await foundry.state.createTestActor("Test Actor");
+
+// Grant currency (system-aware)
+await foundry.state.grantCurrency("Hero", 100, "gp");
+
+// Set HP
+await foundry.state.setActorHP("Hero", 42, /* max */ 100);
+
+// Roll a formula
+await foundry.state.roll("Hero", "1d20+5", "Attack Roll");
+
+// Execute a macro by name
+await foundry.state.executeMacro("My Macro");
+```
+
+### User Management
+
+```typescript
+import { UserRole } from "@thefehr/foundry-playwright";
+
+const userId = await foundry.state.createUser("Player One", UserRole.PLAYER, "password");
+await foundry.state.setUserRole(userId, UserRole.TRUSTED);
+await foundry.state.updateUser(userId, { color: "#ff0000" });
+await foundry.state.assignActorToUser(userId, actorId);
+
+// Grant a core permission to a role
+await foundry.state.setRolePermission("FILES_BROWSE", UserRole.PLAYER, true);
+```
+
+### Settings
+
+```typescript
+await foundry.state.setSetting("my-module", "my-key", "value");
+```
+
+### Hooks & Sockets
+
+```typescript
+// Trigger a hook and capture its arguments
+const [arg] = await foundry.state.waitForHook("myHook");
+
+// Emit a socket event and wait for the response
+await foundry.state.emitSocket("myEvent", { data: 123 });
+const payload = await foundry.state.waitForSocket("myEvent");
+
+// Fire a hook without waiting (for testing reactive code)
+await foundry.state.triggerHook("myHook", { foo: "bar" });
+```
+
+---
+
+## `FoundryUI` — Sheet & Dialog Helpers
+
+```typescript
+// Switch a tab inside an actor sheet or ApplicationV2 app
+await foundry.ui.switchTab("#my-app", "Inventory");
+
+// Simulate a drag-and-drop onto a sheet
+await foundry.ui.simulateDrop(".actor-sheet", { type: "Item", uuid: "Item.abc123" });
+
+// Expand or collapse a collapsible section
+await foundry.ui.handleCollapsibleSection(".actor-sheet", "Features", true);
+```
+
+---
+
+## `FoundryCanvas` — WebGL Canvas
+
+```typescript
+// Convert a grid position to canvas pixels
+const { x, y } = await foundry.canvas.gridToPixels(3, 5);
+
+// Click a token by its actor name
+await foundry.canvas.clickToken("Hero");
+
+// Drag a token from one grid cell to another
+await foundry.canvas.dragToken("Hero", { row: 2, col: 4 });
+```
+
+---
+
+## `FP_VERIFY` — Event Logging
+
+`FP_VERIFY` is a global object injected by the `fake-module` that ships with the library's internal test suite. It intercepts Foundry hooks (`createActor`, `updateActor`, etc.) and logs them for test assertions.
+
+### `verifyResult(page, key, predicate, extra?, options?)`
+
+Polls `FP_VERIFY.logs[key]` until the predicate returns true or a timeout is reached.
+
+```typescript
+await foundry.state.grantCurrency("Hero", 100, "gp");
+await verifyResult(
+  page,
+  "currency-update",
+  (data, extra) => data.amount === extra.amount,
+  { amount: 100 },
+  { timeout: 10000 },
+);
+```
+
+### `waitForActorFlag(page, actorName, scope, key, expected?)`
+
+Polls `game.actors.getName(actorName).getFlag(scope, key)` until it matches the expected value.
+
+### `waitForActorData(page, actorName, path, expected?)`
+
+Polls a dot-notation path on the actor's data object.

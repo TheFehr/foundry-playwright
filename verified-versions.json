@@ -2,30 +2,34 @@
   {
     "fvtt": "13.351.0",
     "system": "dnd5e",
+    "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-05-24T20:16:01.596Z",
+    "timestamp": "2026-06-04T16:26:06.102Z",
     "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "14.360.0",
     "system": "dnd5e",
+    "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-05-24T20:17:59.525Z",
+    "timestamp": "2026-06-04T16:30:37.012Z",
     "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
+    "systemMinor": "7.12",
     "systemVersion": "7.12.2",
     "status": "stable",
-    "timestamp": "2026-05-24T20:20:30.251Z",
+    "timestamp": "2026-06-04T16:35:52.699Z",
     "notes": "Verified locally with pf2e v7.12.2."
   },
   {
     "fvtt": "14.360.0",
     "system": "pf2e",
+    "systemMinor": "8.1",
     "systemVersion": "8.1.2",
     "status": "stable",
     "timestamp": "2026-05-24T20:23:03.989Z",
@@ -34,25 +38,28 @@
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
+    "systemMinor": "8.1",
     "systemVersion": "8.1.2",
-    "status": "pending",
-    "timestamp": "2026-05-17T07:16:19.265Z",
-    "notes": "Automated detection: newer system version available."
+    "status": "incompatible",
+    "timestamp": "2026-06-04T00:00:00.000Z",
+    "notes": "System declares compatibility minimum: 14; incompatible with FVTT 13."
   },
   {
     "fvtt": "13.351.0",
     "system": "pf2e",
+    "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-06-02T08:47:51.720Z",
-    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 13.351.0 --system pf2e --update-registry --git-commit`"
+    "status": "incompatible",
+    "timestamp": "2026-06-04T00:00:00.000Z",
+    "notes": "System declares compatibility minimum: 14; incompatible with FVTT 13."
   },
   {
     "fvtt": "14.360.0",
     "system": "pf2e",
+    "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-06-02T08:47:51.720Z",
-    "notes": "Automated detection: newer system version available. Run verification: `npm run verify:local -- --docker --version 14.360.0 --system pf2e --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-06-04T16:46:54.787Z",
+    "notes": "Verified locally with pf2e v8.2.0."
   }
 ]
