@@ -196,7 +196,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
   console.log(`[foundrySetup] Starting setup for world: ${worldId} (System: ${systemId})`);
 
   let done = false;
-  let maxAttempts = 10;
+  let maxAttempts = 30;
   for (let attempt = 1; attempt <= maxAttempts && !done; attempt++) {
     if (page.url() === "about:blank") await page.goto("/").catch(() => null);
     await disableTour(page);
@@ -255,19 +255,46 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
       console.log("[foundrySetup] On setup screen. Proceeding with configuration...");
       const adapter = await getSetupAdapter(page, version);
 
-      // Aggressively clear Usage Data/Sharing dialogs (Shadow DOM included)
-      await page.evaluate(() => {
-        document.querySelectorAll("dialog, .application, foundry-app").forEach((d) => {
-          const text = d.textContent?.toLowerCase() || "";
-          if (
-            (text.includes("usage data") || text.includes("sharing")) &&
-            !text.includes("license")
-          ) {
-            if (d.tagName.toLowerCase() === "dialog") (d as HTMLDialogElement).close?.();
-            d.remove();
+      // Dismiss the "Allow Sharing Usage Data" analytics dialog. Waits briefly for it to
+      // appear (it renders async), then clicks "No" to save the preference so it stays gone.
+      const reDismissDialogs = async () => {
+        const analyticsLocator = page
+          .locator("dialog, .window-app, .application, foundry-app")
+          .filter({ hasText: /usage data/i })
+          .first();
+        // Wait up to 2s for the dialog to appear (it's shown asynchronously after tab activation)
+        await analyticsLocator.waitFor({ state: "visible", timeout: 2000 }).catch(() => null);
+        if (await analyticsLocator.isVisible()) {
+          const noBtn = analyticsLocator
+            .locator(
+              'button[data-action="no"], button[data-button="no"], button:has-text("No"), button:has-text("Decline")',
+            )
+            .filter({ visible: true })
+            .first();
+          if (await noBtn.isVisible()) {
+            await noBtn.evaluate((el: Element) => (el as HTMLElement).click());
+            await page.waitForTimeout(500);
           }
-        });
-      });
+        }
+        // Fallback DOM removal for any lingering elements
+        await page
+          .evaluate(() => {
+            document.querySelectorAll("dialog, .application, foundry-app").forEach((d) => {
+              const text = d.textContent?.toLowerCase() || "";
+              if (
+                (text.includes("usage data") || text.includes("sharing")) &&
+                !text.includes("license")
+              ) {
+                if (d.tagName.toLowerCase() === "dialog") (d as HTMLDialogElement).close?.();
+                d.remove();
+              }
+            });
+          })
+          .catch(() => null);
+      };
+
+      // Pre-dismiss any analytics dialog on setup screen entry (it appears async on first load)
+      await reDismissDialogs();
 
       // MANDATORY ORDER: Install system FIRST so Worlds tab is enabled in V14
       if (systemManifest) {
@@ -285,9 +312,11 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
       }
 
       // 5. World Management (NOW SAFE in V14 as system exists)
+      await reDismissDialogs();
       if (deleteIfExists && worldId) await adapter.deleteWorldIfExists(page, worldId);
 
       if (createWorld && worldId) {
+        await reDismissDialogs();
         await adapter.createWorld(page, worldId, systemLabel, systemId);
 
         // Final redirection check
@@ -299,14 +328,8 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
           done = true;
         } else {
           console.log(`[foundrySetup] Manually launching world "${worldId}"...`);
-          await adapter.switchTab(page, "Worlds");
-          const worldBox = page
-            .locator(`[data-package-id="${worldId}"], [data-module-id="${worldId}"]`)
-            .first();
-          const launchBtn = worldBox
-            .locator('[data-action="worldLaunch"], button:has-text("Launch")')
-            .first();
-          await launchBtn.evaluate((el: Element) => (el as HTMLElement).click());
+          await reDismissDialogs();
+          await adapter.launchWorld(page, worldId);
           done = true;
         }
       } else {

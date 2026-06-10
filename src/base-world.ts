@@ -197,15 +197,17 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
     const page = (await browser.newPage()) as FoundryPage;
     try {
       // Navigate first so getSetupAdapter can probe the DOM when version is not explicit.
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 30; i++) {
         try {
           await page.goto("/setup");
           await page.waitForLoadState("networkidle");
           if (page.url().startsWith("http")) break;
         } catch {
-          console.log(`[useBaseWorld] Server not ready (attempt ${i + 1}/10), retrying in 10s...`);
-          await page.waitForTimeout(10000);
+          // page.goto threw (connection refused etc.)
         }
+        // Server not accessible (either threw or returned chrome-error://)
+        console.log(`[useBaseWorld] Server not ready (attempt ${i + 1}/30), retrying in 10s...`);
+        await page.waitForTimeout(10000);
       }
 
       const adapter = await getSetupAdapter(page, version);

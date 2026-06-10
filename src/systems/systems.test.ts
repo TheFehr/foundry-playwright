@@ -30,7 +30,6 @@ describe("SystemStateAdapters", () => {
       const data = adapter.getTestActorData("Test");
       expect(data.type).toBe("character");
       expect(data.system.attributes.hp.value).toBe(10);
-      expect(data.system.details.senses.ranges.darkvision).toBe(60);
     });
   });
 

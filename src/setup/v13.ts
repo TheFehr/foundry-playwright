@@ -1,9 +1,6 @@
 import { expect, Locator } from "@playwright/test";
 import { SetupAdapter, BaseGameAdapter } from "./base.js";
-import {
-  installSystemFromManifest as helperInstallSystemFromManifest,
-  installModuleFromManifest as helperInstallModuleFromManifest,
-} from "../helpers.js";
+import { installModuleFromManifest as helperInstallModuleFromManifest } from "../helpers.js";
 
 import { FoundryPage } from "../types/index.js";
 
@@ -49,10 +46,9 @@ export class V13SetupAdapter implements SetupAdapter {
     const tabText = await tabLocator.innerText();
     console.log(`[V13SetupAdapter] Found tab: "${tabText}". Clicking...`);
 
-    // Click and wait for active class
-    await tabLocator
-      .click()
-      .catch(() => tabLocator.evaluate((el: Element) => (el as HTMLElement).click()));
+    // Use evaluate to bypass Playwright's overlay-blocking actionability check.
+    // Standard click() inherits the test timeout and hangs when a modal dialog is present.
+    await tabLocator.evaluate((el: Element) => (el as HTMLElement).click());
 
     await page.waitForFunction(
       ({ name, dt }) => {
@@ -224,7 +220,46 @@ export class V13SetupAdapter implements SetupAdapter {
   }
 
   async installSystemFromManifest(page: FoundryPage, manifestUrl: string): Promise<void> {
-    await helperInstallSystemFromManifest(page, manifestUrl);
+    console.log(`[V13SetupAdapter] Installing system from manifest: ${manifestUrl}`);
+
+    // Extract system id from URL so we can scope the verification selector.
+    const systemIdMatch = /github\.com\/foundryvtt\/([^/]+)\/releases/.exec(manifestUrl);
+    const systemId = systemIdMatch?.[1]; // e.g. "dnd5e"
+
+    // Skip if already installed.
+    await this.switchTab(page, "Systems");
+    if (systemId) {
+      const already = page
+        .locator(`#setup-packages-systems [data-package-id="${systemId}"]`)
+        .first();
+      if (await already.isVisible()) {
+        console.log(`[V13SetupAdapter] System ${systemId} already installed — skipping.`);
+        return;
+      }
+    }
+
+    const installDialog = await this.openSystemInstallDialog(page);
+
+    // Fill the manifest URL input and click its adjacent install button via evaluate
+    // to avoid actionability issues and to precisely target the form-group button.
+    await page.evaluate((url) => {
+      const input = document.querySelector<HTMLInputElement>('input[name="manifestURL"]');
+      if (!input) return;
+      input.value = url;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      const btn =
+        input.closest(".form-group, footer, .form-fields")?.querySelector<HTMLElement>("button") ??
+        document.querySelector<HTMLElement>('button.bright, button[data-action="installUrl"]');
+      btn?.click();
+    }, manifestUrl);
+
+    // Scope the verificationSelector to the Systems section so we don't accidentally
+    // match the hidden fake-module element that lives in the Modules section of the DOM.
+    const verificationSelector = systemId
+      ? `#setup-packages-systems [data-package-id="${systemId}"]`
+      : "#setup-packages-systems [data-package-id]";
+    await this.waitForInstallation(page, installDialog, verificationSelector, "Systems");
   }
 
   async installModuleFromManifest(page: FoundryPage, manifestUrl: string): Promise<void> {
@@ -234,6 +269,7 @@ export class V13SetupAdapter implements SetupAdapter {
   async openSystemInstallDialog(page: FoundryPage): Promise<Locator> {
     console.log("[V13SetupAdapter] Opening System Install Dialog...");
     await this.switchTab(page, "Systems");
+    await this.dismissAnalyticsDialog(page);
 
     const installBtn = page
       .locator("button:visible")
@@ -281,20 +317,18 @@ export class V13SetupAdapter implements SetupAdapter {
   ): Promise<void> {
     console.log(`[V13SetupAdapter] Creating world: ${worldId}`);
     await this.switchTab(page, "Worlds");
+    await this.dismissAnalyticsDialog(page);
 
     const createBtn = page
       .locator("button")
       .filter({ hasText: /Create World/i })
       .first();
     console.log("[V13SetupAdapter] Clicking Create World button...");
-    await createBtn
-      .click()
-      .catch(() => createBtn.evaluate((el: Element) => (el as HTMLElement).click()));
+    await createBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
-    // Target the specific world-config form or its containing dialog
-    const createDialog = page
-      .locator("form#world-config, .window-app:has(form#world-config)")
-      .last();
+    // V13 WorldConfig Application renders with id="world-config" on the outer container div,
+    // not on the inner <form> element — so `form#world-config` never matches.
+    const createDialog = page.locator("#world-config, .window-app#world-config").last();
 
     await createDialog.waitFor({ state: "visible", timeout: 20000 });
     console.log("[V13SetupAdapter] World creation dialog is visible.");
@@ -336,8 +370,8 @@ export class V13SetupAdapter implements SetupAdapter {
       .click()
       .catch(() => submitBtn.evaluate((el: Element) => (el as HTMLElement).click()));
 
-    // Wait for the specific form to be removed
-    await expect(page.locator("form#world-config")).toBeHidden({ timeout: 20000 });
+    // Wait for the world-config dialog to close (id is on the outer container, not the form)
+    await expect(page.locator("#world-config")).toBeHidden({ timeout: 20000 });
   }
 
   async launchWorld(page: FoundryPage, worldId: string): Promise<void> {
@@ -349,15 +383,16 @@ export class V13SetupAdapter implements SetupAdapter {
     const launchBtn = worldBox
       .locator('[data-action="worldLaunch"], button:has-text("Launch")')
       .first();
-    await launchBtn
-      .click()
-      .catch(() => launchBtn.evaluate((el: Element) => (el as HTMLElement).click()));
+    // The launch button in V13 is hidden by default (shown on hover); wait for it to be
+    // attached to the DOM, then dispatch the click — bypasses both actionability and CSS visibility.
+    await launchBtn.waitFor({ state: "attached", timeout: 15000 });
+    await launchBtn.dispatchEvent("click");
     await page.waitForURL(
       (u) =>
         u.pathname.includes("/join") ||
         u.pathname.includes("/game") ||
         u.pathname.includes("/players"),
-      { timeout: 60000 },
+      { timeout: 120000 },
     );
   }
 
@@ -400,6 +435,7 @@ export class V13SetupAdapter implements SetupAdapter {
   async deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void> {
     console.log(`[V13SetupAdapter] Deleting world if exists: ${worldId}`);
     await this.switchTab(page, "Worlds");
+    await this.dismissAnalyticsDialog(page);
     const worldBox = page.locator(`[data-package-id="${worldId}"]`).first();
 
     if ((await worldBox.count()) === 1 && (await worldBox.isVisible())) {
@@ -436,16 +472,28 @@ export class V13SetupAdapter implements SetupAdapter {
     verificationSelector: string,
     tabName: string,
   ): Promise<void> {
-    await page.waitForTimeout(5000);
-    const progressNotification = page.locator(".notification", {
-      hasText: /Downloading|Installing/i,
-    });
-    try {
-      await progressNotification.waitFor({ state: "visible", timeout: 15000 });
-      await progressNotification.waitFor({ state: "hidden", timeout: 300000 });
-    } catch {
-      console.log("[V13SetupAdapter] Installation notification not seen or finished very quickly.");
-    }
+    // Wait for progress indicator to appear (up to 10s), then wait for it to disappear.
+    // Using waitForFunction is more efficient than locator.waitFor for polling DOM state.
+    await page
+      .waitForFunction(
+        () =>
+          !!document.querySelector(
+            ".notification.info, .progress-bar.active, .notification.warning",
+          ),
+        { timeout: 10000 },
+      )
+      .catch(() => {
+        console.log("[V13SetupAdapter] Installation progress indicator not detected.");
+      });
+    await page
+      .waitForFunction(
+        () =>
+          !document.querySelector(
+            ".notification.info, .progress-bar.active, .notification.warning",
+          ),
+        { timeout: 300000 },
+      )
+      .catch(() => null);
 
     const closeBtn = dialog.locator('button.header-button.control.close, [data-action="close"]');
     if (await closeBtn.isVisible()) {
@@ -466,6 +514,42 @@ export class V13SetupAdapter implements SetupAdapter {
         .first()
         .waitFor({ state: "visible", timeout: 30000 });
     }
+  }
+
+  private async dismissAnalyticsDialog(page: FoundryPage): Promise<void> {
+    const analyticsLocator = page
+      .locator("dialog, .window-app, .application")
+      .filter({ hasText: /usage data/i })
+      .first();
+    await analyticsLocator.waitFor({ state: "visible", timeout: 2000 }).catch(() => null);
+    if (await analyticsLocator.isVisible()) {
+      const noBtn = analyticsLocator
+        .locator(
+          'button[data-action="no"], button[data-button="no"], button:has-text("No"), button:has-text("Decline")',
+        )
+        .filter({ visible: true })
+        .first();
+      if (await noBtn.isVisible()) {
+        await noBtn.evaluate((el: Element) => (el as HTMLElement).click());
+        await page.waitForTimeout(500);
+        return;
+      }
+    }
+    // Fallback DOM removal
+    await page
+      .evaluate(() => {
+        document.querySelectorAll("dialog, .application, foundry-app").forEach((d) => {
+          const text = d.textContent?.toLowerCase() || "";
+          if (
+            (text.includes("usage data") || text.includes("sharing")) &&
+            !text.includes("license")
+          ) {
+            if (d.tagName.toLowerCase() === "dialog") (d as HTMLDialogElement).close?.();
+            d.remove();
+          }
+        });
+      })
+      .catch(() => null);
   }
 }
 

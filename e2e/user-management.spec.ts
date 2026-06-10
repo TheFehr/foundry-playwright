@@ -6,7 +6,7 @@ test.describe("User Management Verification", () => {
   const adminPassword = process.env.FOUNDRY_ADMIN_KEY || "password";
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(300000); // 5 minutes
+    test.setTimeout(900000); // 15 minutes — V13 Docker + system install + world setup can be slow
     const page = await browser.newPage();
     await foundrySetup(page, {
       worldId,
