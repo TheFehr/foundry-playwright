@@ -13,6 +13,8 @@ import {
   foundryTeardown,
   loginAs,
   returnToSetup,
+  extractVersionFromManifest,
+  getInstalledSystemVersion,
 } from "./auth.js";
 import { FoundryState } from "./state.js";
 import { FoundryUI } from "./ui/index.js";
@@ -197,15 +199,17 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
     const page = (await browser.newPage()) as FoundryPage;
     try {
       // Navigate first so getSetupAdapter can probe the DOM when version is not explicit.
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 30; i++) {
         try {
           await page.goto("/setup");
           await page.waitForLoadState("networkidle");
           if (page.url().startsWith("http")) break;
         } catch {
-          console.log(`[useBaseWorld] Server not ready (attempt ${i + 1}/10), retrying in 10s...`);
-          await page.waitForTimeout(10000);
+          // page.goto threw (connection refused etc.)
         }
+        // Server not accessible (either threw or returned chrome-error://)
+        console.log(`[useBaseWorld] Server not ready (attempt ${i + 1}/30), retrying in 10s...`);
+        await page.waitForTimeout(10000);
       }
 
       const adapter = await getSetupAdapter(page, version);
@@ -249,6 +253,26 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
       if (isV14) {
         await returnToSetup(tempPage, adminPw, version);
         const adapter = await getSetupAdapter(tempPage, version);
+
+        // Verify the system version hasn't changed since the base backup was taken.
+        if (config.systemManifest) {
+          const systemId = config.systemId ?? process.env.FOUNDRY_SYSTEM_ID ?? "dnd5e";
+          const expectedVersion = extractVersionFromManifest(config.systemManifest);
+          if (expectedVersion) {
+            const installedVersion = await getInstalledSystemVersion(tempPage, systemId);
+            console.log(
+              `[useBaseWorld] System version: ${systemId} installed=${installedVersion ?? "unknown"}, expected=${expectedVersion}`,
+            );
+            if (installedVersion !== null && installedVersion !== expectedVersion) {
+              throw new Error(
+                `[useBaseWorld] System version mismatch for ${systemId}: ` +
+                  `expected v${expectedVersion} but found v${installedVersion} installed. ` +
+                  `The base backup was created with a different system version.`,
+              );
+            }
+          }
+        }
+
         await adapter.restoreWorldBackup(tempPage, worldId, backupName);
         await adapter.launchWorld(tempPage, worldId);
       } else {

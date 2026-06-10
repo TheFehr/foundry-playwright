@@ -10,7 +10,9 @@ export class DnD5eStateAdapter extends BaseSystemStateAdapter {
   constructor(page?: FoundryPage) {
     super(page);
     if (page?.deprecationTracker) {
-      page.deprecationTracker.registerFailure(["has moved to", "senses", "dnd5e"]);
+      // Ignore dnd5e-internal deprecation shims (e.g. ActorSheetMixin in dnd5e 5.1.x).
+      // These are emitted by dnd5e's own backwards-compat layer, not by Foundry itself.
+      page.deprecationTracker.registerIgnore(["ActorSheetMixin", "BaseActorSheet"]);
     }
   }
 
@@ -18,13 +20,6 @@ export class DnD5eStateAdapter extends BaseSystemStateAdapter {
     return {
       type: "character",
       system: {
-        details: {
-          senses: {
-            ranges: {
-              darkvision: 60,
-            },
-          },
-        },
         attributes: {
           hp: { value: 10, max: 10 },
         },
