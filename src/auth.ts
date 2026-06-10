@@ -142,6 +142,69 @@ export async function returnToSetup(
   }
 }
 
+/**
+ * Extracts the pinned system version from a manifest URL.
+ * Handles dnd5e (`release-5.2.5`) and pf2e (`pf2e-8.0.3`) URL conventions.
+ */
+export function extractVersionFromManifest(manifestUrl: string): string | null {
+  const m = /(?:release|pf2e)-(\d+(?:\.\d+)+)/.exec(manifestUrl);
+  return m?.[1] ?? null;
+}
+
+/**
+ * Reads the installed version of a game system from the Foundry setup screen.
+ * Returns null if the system is not found or the version cannot be determined.
+ * Must be called while the browser is on the setup screen.
+ */
+export async function getInstalledSystemVersion(
+  page: Page,
+  systemId: string,
+): Promise<string | null> {
+  return page.evaluate((sysId) => {
+    const g = window.game as Game & {
+      packages?: { systems?: { get?: (id: string) => { version?: string } | undefined } };
+      data?: {
+        systems?: Array<{ id: string; version?: string }>;
+        packages?: { systems?: Array<{ id: string; version?: string }> };
+      };
+    };
+
+    // V14: game.packages.systems (Collection)
+    const sys14 = g.packages?.systems?.get?.(sysId);
+    if (sys14?.version) return sys14.version;
+
+    // V13: game.data.systems (array)
+    const sysArr = g.data?.systems ?? g.data?.packages?.systems;
+    if (Array.isArray(sysArr)) {
+      const sys13 = sysArr.find((s) => s.id === sysId);
+      if (sys13?.version) return sys13.version;
+    }
+
+    // DOM fallback: read version text from the package card on the setup screen.
+    // V13 keeps all tab sections in the DOM simultaneously, so #setup-packages-systems
+    // is always queryable. V14 may only render the active tab.
+    const card = document.querySelector<HTMLElement>(
+      `#setup-packages-systems [data-package-id="${sysId}"], ` +
+        `[data-application-part="systems"] [data-package-id="${sysId}"], ` +
+        `[data-package-id="${sysId}"]`,
+    );
+    if (!card) return null;
+
+    const vEl = card.querySelector<HTMLElement>(".version, .tag.version, [data-version]");
+    if (vEl?.textContent) {
+      const text = vEl.textContent.trim().replace(/^[vV]ersion\s*/i, "");
+      if (/^\d+\./.test(text)) return text;
+    }
+
+    for (const el of card.querySelectorAll<HTMLElement>("span, .tag")) {
+      const text = (el.textContent ?? "").trim().replace(/^[vV]ersion\s*/i, "");
+      if (/^\d+\.\d+/.test(text)) return text;
+    }
+
+    return null;
+  }, systemId);
+}
+
 export const SYSTEM_LABELS: Record<string, string> = {
   dnd5e: "D&D 5th Edition",
   pf2e: "Pathfinder 2e",
@@ -301,6 +364,25 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
         await adapter.installSystemFromManifest(page, systemManifest);
       } else if (systemId) {
         await adapter.installSystem(page, systemId, systemLabel);
+      }
+
+      // Verify the installed system version matches the pinned manifest before touching worlds.
+      // Catches stale cached installations (e.g. "already installed" guard skipped the upgrade).
+      if (systemManifest) {
+        const expectedVersion = extractVersionFromManifest(systemManifest);
+        if (expectedVersion) {
+          const installedVersion = await getInstalledSystemVersion(page, systemId);
+          console.log(
+            `[foundrySetup] System version: ${systemId} installed=${installedVersion ?? "unknown"}, expected=${expectedVersion}`,
+          );
+          if (installedVersion !== null && installedVersion !== expectedVersion) {
+            throw new Error(
+              `[foundrySetup] System version mismatch for ${systemId}: ` +
+                `expected v${expectedVersion} but found v${installedVersion} installed. ` +
+                `A cached installation may be preventing the correct version from being used.`,
+            );
+          }
+        }
       }
 
       // 4. Module Installation

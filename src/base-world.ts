@@ -13,6 +13,8 @@ import {
   foundryTeardown,
   loginAs,
   returnToSetup,
+  extractVersionFromManifest,
+  getInstalledSystemVersion,
 } from "./auth.js";
 import { FoundryState } from "./state.js";
 import { FoundryUI } from "./ui/index.js";
@@ -251,6 +253,26 @@ export function useBaseWorld(test: UseFoundryTest, config: BaseWorldConfig): voi
       if (isV14) {
         await returnToSetup(tempPage, adminPw, version);
         const adapter = await getSetupAdapter(tempPage, version);
+
+        // Verify the system version hasn't changed since the base backup was taken.
+        if (config.systemManifest) {
+          const systemId = config.systemId ?? process.env.FOUNDRY_SYSTEM_ID ?? "dnd5e";
+          const expectedVersion = extractVersionFromManifest(config.systemManifest);
+          if (expectedVersion) {
+            const installedVersion = await getInstalledSystemVersion(tempPage, systemId);
+            console.log(
+              `[useBaseWorld] System version: ${systemId} installed=${installedVersion ?? "unknown"}, expected=${expectedVersion}`,
+            );
+            if (installedVersion !== null && installedVersion !== expectedVersion) {
+              throw new Error(
+                `[useBaseWorld] System version mismatch for ${systemId}: ` +
+                  `expected v${expectedVersion} but found v${installedVersion} installed. ` +
+                  `The base backup was created with a different system version.`,
+              );
+            }
+          }
+        }
+
         await adapter.restoreWorldBackup(tempPage, worldId, backupName);
         await adapter.launchWorld(tempPage, worldId);
       } else {
