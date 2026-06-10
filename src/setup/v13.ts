@@ -242,17 +242,24 @@ export class V13SetupAdapter implements SetupAdapter {
 
     // Fill the manifest URL input and click its adjacent install button via evaluate
     // to avoid actionability issues and to precisely target the form-group button.
-    await page.evaluate((url) => {
+    const installed = await page.evaluate((url) => {
       const input = document.querySelector<HTMLInputElement>('input[name="manifestURL"]');
-      if (!input) return;
+      if (!input) return { ok: false, reason: "manifestURL input not found" };
       input.value = url;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
       const btn =
         input.closest(".form-group, footer, .form-fields")?.querySelector<HTMLElement>("button") ??
         document.querySelector<HTMLElement>('button.bright, button[data-action="installUrl"]');
-      btn?.click();
+      if (!btn) return { ok: false, reason: "install button not found" };
+      btn.click();
+      return { ok: true, reason: "" };
     }, manifestUrl);
+    if (!installed.ok) {
+      console.warn(
+        `[V13SetupAdapter] installSystemFromManifest: ${installed.reason} — install may not have started.`,
+      );
+    }
 
     // Scope the verificationSelector to the Systems section so we don't accidentally
     // match the hidden fake-module element that lives in the Modules section of the DOM.
