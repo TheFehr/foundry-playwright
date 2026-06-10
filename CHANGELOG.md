@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1](https://github.com/TheFehr/foundry-playwright/compare/v0.6.0...v0.6.1) (2026-06-10)
+
+### Bug Fixes
+
+- **setup:** V13 setup fixes, dnd5e deprecation handling, and system version verification ([#21](https://github.com/TheFehr/foundry-playwright/issues/21)) ([6ccd9fd](https://github.com/TheFehr/foundry-playwright/commit/6ccd9fd86d392495ba644f06b6d616321a24fbe7))
+
 # [0.6.0](https://github.com/TheFehr/foundry-playwright/compare/v0.5.0...v0.6.0) (2026-06-05)
 
 ### Features
