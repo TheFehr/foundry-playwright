@@ -115,5 +115,14 @@
     "status": "stable",
     "timestamp": "2026-06-10T07:30:38.755Z",
     "notes": "Verified locally with pf2e v8.0.3."
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "dnd5e",
+    "systemMinor": "5.2",
+    "systemVersion": "5.2.5",
+    "status": "pending",
+    "timestamp": "2026-06-11T08:55:52.614Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.360.0 --system dnd5e --system-minor 5.2 --update-registry --git-commit`"
   }
 ]
