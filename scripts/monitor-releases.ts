@@ -214,35 +214,13 @@ async function run() {
           const latestPatch = latestByMinor.get(minor)!;
 
           // Registry key is (fvtt, system, systemMinor) — one entry per minor.
-          // Any existing stable or pending row for this minor suppresses a new entry.
-          const hasCurrentStable = registry.some(
-            (e) =>
-              e.fvtt === fvtt &&
-              e.system === systemId &&
-              e.systemMinor === minor &&
-              e.status === "stable",
+          // Any existing stable, pending, or incompatible row suppresses a new entry.
+          const hasExistingEntry = registry.some(
+            (e) => e.fvtt === fvtt && e.system === systemId && e.systemMinor === minor,
           );
-          if (hasCurrentStable) continue;
-
-          const hasCurrentPending = registry.some(
-            (e) =>
-              e.fvtt === fvtt &&
-              e.system === systemId &&
-              e.systemMinor === minor &&
-              e.status === "pending",
-          );
-          if (hasCurrentPending) continue;
+          if (hasExistingEntry) continue;
 
           if (!isCompatibleWithFvtt(systemId, latestPatch, fvtt)) {
-            const alreadyIncompatible = registry.some(
-              (e) =>
-                e.fvtt === fvtt &&
-                e.system === systemId &&
-                e.systemMinor === minor &&
-                e.status === "incompatible",
-            );
-            if (alreadyIncompatible) continue;
-
             const { minimum, maximum } = fetchCompatRange(systemId, latestPatch);
             const rangeNote = [
               minimum !== undefined ? `minimum: ${minimum}` : null,
