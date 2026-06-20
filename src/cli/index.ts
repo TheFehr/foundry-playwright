@@ -26,10 +26,11 @@ program
   .action(async (options) => {
     const { version, system, docker, updateRegistry, playwright } = options;
     let orchestrator: DockerFoundryOrchestrator | null = null;
+    let tmpDataDir: string | null = null;
 
     try {
       if (docker) {
-        const tmpDataDir = path.join(
+        tmpDataDir = path.join(
           process.cwd(),
           ".foundry_test_data",
           `.foundry_data_tmp_${Date.now()}`,
@@ -113,6 +114,10 @@ program
     } finally {
       if (orchestrator) {
         await orchestrator.stopAndRemove();
+      }
+      if (tmpDataDir) {
+        console.log(`[CLI] Cleaning up temporary data directory: ${tmpDataDir}`);
+        fs.rmSync(tmpDataDir, { recursive: true, force: true });
       }
     }
   });

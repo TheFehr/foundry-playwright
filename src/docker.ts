@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
 import net from "net";
+import os from "os";
 
 export interface DockerOrchestratorConfig {
   version: string;
@@ -32,7 +33,7 @@ export class DockerFoundryOrchestrator {
       username: config.username || process.env.FOUNDRY_USERNAME || "",
       password: config.password || process.env.FOUNDRY_PASSWORD || "",
       dataDir: config.dataDir || path.join(process.cwd(), "foundry_data"),
-      cacheDir: config.cacheDir || path.join(process.cwd(), ".foundry_cache"),
+      cacheDir: config.cacheDir || path.join(os.homedir(), ".cache", "foundry-playwright"),
       containerName:
         config.containerName || `foundry-playwright-${config.version.replace(/\./g, "-")}`,
       envFile: config.envFile || ".env",
