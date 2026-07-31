@@ -1,0 +1,52 @@
+# Install: /etc/systemd/system/foundry-verify.service
+# Then: systemctl daemon-reload && systemctl enable --now foundry-verify.timer
+#
+# Credentials (FOUNDRY_USERNAME/PASSWORD/ADMIN_KEY) live in
+# /opt/foundry-playwright/.env and the push/issue token lives in `gh`'s own
+# config (`gh auth login`) — nothing is passed via this unit.
+#
+# Runs as a dedicated non-root user rather than root, with NO docker-group
+# membership - containers run rootless via Podman (see below), since this
+# box fetches and executes third-party FoundryVTT/system/module content on
+# every run, and docker-group access is root-equivalent. Before enabling:
+#   sudo useradd --system --create-home --shell /usr/sbin/nologin foundry-verify
+#   sudo apt install podman podman-docker uidmap slirp4netns
+#   sudo usermod --add-subuids 200000-265535 --add-subgids 200000-265535 foundry-verify
+#   sudo loginctl enable-linger foundry-verify
+#   sudo chown -R foundry-verify:foundry-verify /opt/foundry-playwright
+# (the .env file - which must set FOUNDRY_PLAYWRIGHT_ROOTLESS=1 - and
+# gh/git credentials need to be set up as that user too)
+#
+# podman-docker makes the `docker` binary a Podman wrapper, so nothing in
+# this repo needs to know it isn't talking to real Docker.
+#
+# Commits are SSH-signed. One-time setup (as foundry-verify):
+#   ssh-keygen -t ed25519 -N "" -C "foundry-verify commit signing" -f ~/.ssh/foundry-verify-signing
+#   git config --global gpg.format ssh
+#   git config --global user.signingkey ~/.ssh/foundry-verify-signing.pub
+#   git config --global commit.gpgsign true
+#   git config --global user.email "<id>+<github-username>@users.noreply.github.com"
+#   echo "<that email> $(cat ~/.ssh/foundry-verify-signing.pub)" > ~/.ssh/allowed_signers
+#   git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+# Then register the public key on GitHub as a *Signing key* (not an
+# authentication key - it's never used for repo access, only for the
+# cryptographic signature) under the account matching that noreply email:
+# `gh ssh-key add ~/.ssh/foundry-verify-signing.pub --type signing --title "foundry-verify"`.
+# No passphrase, since this runs unattended with no agent/terminal - the
+# key's blast radius if leaked is "forge signed commits as this identity",
+# not repo or account access, so this is an acceptable tradeoff here.
+
+[Unit]
+Description=Foundry Playwright nightly compatibility verification
+After=network-online.target
+Wants=network-online.target
+# No Requires=docker.service: containers run via rootless Podman, which is
+# daemonless - there's no system-wide service for this unit to depend on.
+
+[Service]
+Type=oneshot
+User=foundry-verify
+Group=foundry-verify
+WorkingDirectory=/opt/foundry-playwright
+ExecStart=/opt/foundry-playwright/ops/vm/verify-nightly.sh
+TimeoutStartSec=6h

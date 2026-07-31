@@ -112,12 +112,30 @@ program
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
     } finally {
+      let cleanupFailed = false;
       if (orchestrator) {
-        await orchestrator.stopAndRemove();
+        try {
+          await orchestrator.stopAndRemove();
+        } catch (e) {
+          // A real cleanup failure (not just "container didn't exist" -
+          // stopAndRemove() already tolerates that). Retain tmpDataDir
+          // instead of removing it out from under a container that may
+          // still be running.
+          cleanupFailed = true;
+          console.error(
+            `[CLI] Failed to clean up the Docker container: ${(e as Error).message}. Retaining ${tmpDataDir} for inspection.`,
+          );
+        }
       }
-      if (tmpDataDir) {
+      if (tmpDataDir && !cleanupFailed) {
         console.log(`[CLI] Cleaning up temporary data directory: ${tmpDataDir}`);
-        fs.rmSync(tmpDataDir, { recursive: true, force: true });
+        try {
+          fs.rmSync(tmpDataDir, { recursive: true, force: true });
+        } catch (e) {
+          console.error(
+            `[CLI] Failed to remove temporary data directory ${tmpDataDir}: ${(e as Error).message}`,
+          );
+        }
       }
     }
   });

@@ -2,6 +2,7 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import { minorOf } from "./version-utils.js";
 
 /**
  * Release Monitoring Script
@@ -17,7 +18,7 @@ interface RegistryEntry {
   systemMinor: string;
   systemVersion: string;
   modules?: { id: string; version: string }[];
-  status: "stable" | "pending" | "incompatible";
+  status: "stable" | "pending" | "incompatible" | "failed";
   timestamp: string;
   notes: string;
 }
@@ -47,11 +48,6 @@ function extractVersion(tag: string, systemId: string): string | null {
   }
   if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
   return null;
-}
-
-function minorOf(version: string): string {
-  const [major, minor] = version.split(".");
-  return `${major}.${minor}`;
 }
 
 function compareVersions(a: string, b: string): number {
@@ -121,8 +117,8 @@ function buildManifestUrl(systemId: string, version: string): string | null {
 }
 
 interface CompatRange {
-  minimum?: number;
-  maximum?: number;
+  minimum?: string;
+  maximum?: string;
 }
 
 const compatCache = new Map<string, CompatRange>();
@@ -139,8 +135,8 @@ function fetchCompatRange(systemId: string, version: string): CompatRange {
     const manifest = JSON.parse(json) as { compatibility?: Record<string, string> };
     const compat = manifest.compatibility ?? {};
     const result: CompatRange = {};
-    if (compat["minimum"]) result.minimum = parseInt(String(compat["minimum"]).split(".")[0], 10);
-    if (compat["maximum"]) result.maximum = parseInt(String(compat["maximum"]).split(".")[0], 10);
+    if (compat["minimum"]) result.minimum = String(compat["minimum"]);
+    if (compat["maximum"]) result.maximum = String(compat["maximum"]);
     compatCache.set(key, result);
     return result;
   } catch {
@@ -149,15 +145,26 @@ function fetchCompatRange(systemId: string, version: string): CompatRange {
   }
 }
 
+// A bare-major maximum (e.g. "14") means "compatible through all of 14.x" -
+// normalize it to an exclusive ceiling at the next major so a full version
+// compare against e.g. "14.360.0" doesn't wrongly treat it as exceeding "14".
+// A bare-major minimum needs no such adjustment: compareVersions already
+// treats missing components as 0, so "14" naturally floors at 14.0.0.
+function normalizeMaximum(bound: string): string {
+  const parts = bound.split(".");
+  if (parts.length > 1) return bound;
+  return `${parseInt(parts[0]!, 10) + 1}.0.0`;
+}
+
 function isCompatibleWithFvtt(
   systemId: string,
   systemVersion: string,
   fvttVersion: string,
 ): boolean {
-  const fvttMajor = parseInt(fvttVersion.split(".")[0], 10);
   const { minimum, maximum } = fetchCompatRange(systemId, systemVersion);
-  if (minimum !== undefined && fvttMajor < minimum) return false;
-  if (maximum !== undefined && fvttMajor > maximum) return false;
+  if (minimum !== undefined && compareVersions(fvttVersion, minimum) < 0) return false;
+  if (maximum !== undefined && compareVersions(fvttVersion, normalizeMaximum(maximum)) >= 0)
+    return false;
   return true;
 }
 
@@ -186,19 +193,22 @@ async function run() {
       ...new Set(registry.filter((e) => e.status === "stable").map((e) => e.fvtt)),
     ];
 
-    // Include new Foundry generation if no stable row exists for it yet.
-    // A pending/incompatible row is not enough — keep checking until something is verified.
+    // Always include the current latest build alongside every historically-
+    // stable one, not just as a one-time gate for a brand-new generation -
+    // otherwise, once a generation's first build goes stable, later patches
+    // within that same generation (e.g. 14.360 -> 14.365) never get checked
+    // again, silently missing any system that bumps its minimum FVTT build
+    // requirement past the one we happen to be pinned on. Old stable rows
+    // for superseded builds are untouched history (registry key includes
+    // fvtt, so a new build just adds new rows).
     const majorFoundry = foundryLatest.split(".")[0];
     const hasGenerationStable = registry.some(
       (e) => e.status === "stable" && e.fvtt.startsWith(`${majorFoundry}.`),
     );
-    const fvttToCheck = hasGenerationStable
-      ? stableFvttVersions
-      : [...stableFvttVersions, foundryLatest];
-
     if (!hasGenerationStable) {
       console.log(`[monitor] New Foundry generation detected: ${foundryLatest}`);
     }
+    const fvttToCheck = [...new Set([...stableFvttVersions, foundryLatest])];
 
     console.log(
       `[monitor] FVTT latest: ${foundryLatest} | Checking ${fvttToCheck.length} version(s)`,
@@ -238,7 +248,7 @@ async function run() {
               systemVersion: latestPatch,
               status: "incompatible",
               timestamp: new Date().toISOString(),
-              notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${fvtt.split(".")[0]}.`,
+              notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${fvtt}.`,
             });
             updated = true;
             continue;
