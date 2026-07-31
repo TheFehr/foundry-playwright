@@ -376,11 +376,13 @@ async function verifyVersion(
       const rawContent = fs.readFileSync(reportPath, "utf8");
       fs.unlinkSync(reportPath);
       let validReport = false;
+      let specCount = 0;
       try {
         const rawReport: unknown = JSON.parse(rawContent);
         if (isPlaywrightReport(rawReport)) {
           validReport = true;
           failures = extractFailures(rawReport);
+          specCount = countSpecs(rawReport);
         }
       } catch {
         // Corrupted/truncated report - fold into the same "malformed"
@@ -388,15 +390,31 @@ async function verifyVersion(
         // escape and override execError precedence.
         validReport = false;
       }
-      if (!validReport || (failures.length === 0 && execError)) {
-        // Either the report doesn't have the expected shape (corrupted or
-        // unexpected content) or the process genuinely failed despite a
-        // clean-looking report - in both cases, don't silently treat this
-        // as success just because some report file exists.
+      if (!validReport) {
+        // The report doesn't have the expected shape (corrupted or
+        // unexpected content) - don't silently treat this as success just
+        // because some report file exists.
         throw (
           execError ??
           new Error(`Malformed Playwright report at ${reportPath}: missing "suites" array.`)
         );
+      }
+      if (specCount === 0) {
+        // A well-formed report with zero specs (e.g. a test-file pattern
+        // matched nothing, or a config issue skipped everything) is no
+        // evidence anything was actually verified - don't record it as a
+        // pass just because it happens to show zero failures too.
+        throw (
+          execError ??
+          new Error(
+            `Playwright report at ${reportPath} shows zero specs executed - treating as an infrastructure failure.`,
+          )
+        );
+      }
+      if (failures.length === 0 && execError) {
+        // The process genuinely failed despite an otherwise clean-looking
+        // report.
+        throw execError;
       }
     } else if (execError) {
       // Playwright failed to start or crashed without producing a report.
@@ -669,6 +687,18 @@ function extractFailures(report: PlaywrightReport): string[] {
 
   if (report.suites) report.suites.forEach(traverse);
   return failures;
+}
+
+function countSpecs(report: PlaywrightReport): number {
+  let count = 0;
+
+  function traverse(suite: PlaywrightSuite) {
+    if (suite.suites) suite.suites.forEach(traverse);
+    if (suite.specs) count += suite.specs.length;
+  }
+
+  if (report.suites) report.suites.forEach(traverse);
+  return count;
 }
 
 interface VerifyTarget {

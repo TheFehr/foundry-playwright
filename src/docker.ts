@@ -121,16 +121,20 @@ export class DockerFoundryOrchestrator {
     const image = `ghcr.io/felddy/foundryvtt:${this.config.version}`;
     const imageExists =
       execFileSync("docker", ["images", "-q", image], { encoding: "utf8" }).trim() !== "";
+    // A hung pull (bad network/registry issue) would otherwise block silently
+    // until whatever much longer timeout wraps this whole process - fail
+    // clearly and quickly instead.
+    const PULL_TIMEOUT_MS = 5 * 60 * 1000;
 
     if (!imageExists) {
       console.log(`[DockerOrchestrator] Image ${image} not found locally. Pulling...`);
-      execFileSync("docker", ["pull", image], { stdio: "inherit" });
+      execFileSync("docker", ["pull", image], { stdio: "inherit", timeout: PULL_TIMEOUT_MS });
     } else {
       console.log(`[DockerOrchestrator] Image ${image} already exists locally.`);
       // Optional: try to pull to update, but ignore failures
       try {
         console.log(`[DockerOrchestrator] Attempting to update image ${image}...`);
-        execFileSync("docker", ["pull", image], { stdio: "ignore" });
+        execFileSync("docker", ["pull", image], { stdio: "ignore", timeout: PULL_TIMEOUT_MS });
       } catch {
         console.warn(`[DockerOrchestrator] Failed to update image ${image}, using local version.`);
       }
@@ -290,11 +294,13 @@ export class DockerFoundryOrchestrator {
     const gid = process.getgid!();
     const expectedOwner = `${uid}:${gid}`;
 
-    // Ensure destination directory exists via an ephemeral container or exec (if running)
-    // (docker exec defaults to the same identity getRunCommand() configured
-    // via --user, so this directory is already owned by that identity.)
-    // Array-form execFileSync avoids shell interpretation of localPath/
-    // containerPath/containerName entirely (no `sh -c`, no metacharacters).
+    // Creates the destination directory inside the already-running container
+    // via `docker exec` - this requires the configured container to already
+    // be running (no ephemeral container is involved). docker exec defaults
+    // to the same identity getRunCommand() configured via --user, so this
+    // directory is already owned by that identity. Array-form execFileSync
+    // avoids shell interpretation of localPath/containerPath/containerName
+    // entirely (no `sh -c`, no metacharacters).
     execFileSync(
       "docker",
       ["exec", this.config.containerName, "mkdir", "-p", path.dirname(containerPath)],
@@ -317,15 +323,42 @@ export class DockerFoundryOrchestrator {
     // Foundry can't read/write: this process runs docker exec as the
     // container's own non-root identity (matching getRunCommand()'s
     // --user), so it has no privilege to chown the file after the fact
-    // either - there's no fixup to fall back to here.
-    const actualOwner = execFileSync(
-      "docker",
-      ["exec", this.config.containerName, "stat", "-c", "%u:%g", containerPath],
-      { encoding: "utf8" },
-    ).trim();
-    if (actualOwner !== expectedOwner) {
+    // either - there's no fixup to fall back to here. Directory copies are
+    // verified recursively (every entry, not just the top-level path),
+    // since a partial-ownership regression on nested content wouldn't be
+    // caught by only checking containerPath itself.
+    const mismatches = fs.statSync(localPath).isDirectory()
+      ? execFileSync(
+          "docker",
+          [
+            "exec",
+            this.config.containerName,
+            "find",
+            containerPath,
+            "-exec",
+            "stat",
+            "-c",
+            "%u:%g %n",
+            "{}",
+            "+",
+          ],
+          { encoding: "utf8" },
+        )
+          .trim()
+          .split("\n")
+          .filter((line) => line.length > 0 && !line.startsWith(`${expectedOwner} `))
+      : (() => {
+          const actualOwner = execFileSync(
+            "docker",
+            ["exec", this.config.containerName, "stat", "-c", "%u:%g", containerPath],
+            { encoding: "utf8" },
+          ).trim();
+          return actualOwner === expectedOwner ? [] : [`${actualOwner} ${containerPath}`];
+        })();
+
+    if (mismatches.length > 0) {
       throw new Error(
-        `[DockerOrchestrator] Copied ${containerPath} is owned by ${actualOwner}, not the expected ${expectedOwner} - archive-mode copy didn't attribute ownership as expected on this Docker/Podman version.`,
+        `[DockerOrchestrator] Copied path(s) not owned by the expected ${expectedOwner}: ${mismatches.join(", ")} - archive-mode copy didn't attribute ownership as expected on this Docker/Podman version.`,
       );
     }
   }
