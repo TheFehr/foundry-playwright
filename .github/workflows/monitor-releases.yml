@@ -5,12 +5,16 @@ on:
     - cron: "23 4 * * *" # Daily at 4:23 AM UTC
   workflow_dispatch: # Allow manual trigger
 
+concurrency:
+  group: monitor-releases
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -26,19 +30,42 @@ jobs:
       - name: Run Monitor Script
         run: npx tsx scripts/monitor-releases.ts
 
-      - name: Commit Changes
-        id: commit
+      - name: Check for changes
+        id: diff
         run: |
           if git diff --exit-code verified-versions.json; then
             echo "updated=false" >> $GITHUB_OUTPUT
           else
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add verified-versions.json
-            git commit -m "chore(registry): update pending verification matrix"
-            git push
             echo "updated=true" >> $GITHUB_OUTPUT
           fi
+
+      # main requires all changes via PR (zero approvals needed, but no
+      # direct push allowed even for bots) - open a PR from a reused branch
+      # and merge it immediately ourselves rather than pushing directly.
+      - name: Open PR with registry updates
+        if: steps.diff.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v7
+        id: cpr
+        with:
+          commit-message: "chore(registry): update pending verification matrix"
+          title: "chore(registry): update pending verification matrix"
+          body: "Automated update from the Monitor Releases workflow."
+          branch: monitor-releases-updates
+          delete-branch: true
+          sign-commits: true
+
+      - name: Merge the registry-update PR
+        id: commit
+        # Not gated on pull-request-operation == 'created' - an open PR left
+        # over from a prior failed run (e.g. this same merge step erroring
+        # out) would come back as 'updated' on the reused branch, and should
+        # still be merged now rather than silently left open again.
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
+          echo "updated=true" >> $GITHUB_OUTPUT
 
       - name: Create Issues for Pending
         if: steps.commit.outputs.updated == 'true'

@@ -14,6 +14,7 @@ REPO_DIR="${FP_REPO_DIR:-/opt/foundry-playwright}"
 # only writable by foundry-verify itself.
 LOCK_FILE="$REPO_DIR/.verify-nightly.lock"
 MAX_DISK_USED_PCT=85
+BRANCH="foundry-verify-nightly-update"
 
 cd "$REPO_DIR"
 
@@ -35,7 +36,16 @@ if [ "$used_pct" -gt "$MAX_DISK_USED_PCT" ]; then
   exit 1
 fi
 
+# Always start from main, regardless of what branch a crashed previous run
+# may have left checked out.
+git checkout main
 git pull --rebase --autostash
+
+# main requires all changes via PR (zero approvals needed, but no direct push
+# allowed even for signed bot commits) - verify-local.ts's --git-commit below
+# still just does a local commit; it lands on this reused branch instead of
+# main, then gets pushed and merged via PR further down.
+git checkout -B "$BRANCH" main
 
 # Don't let a genuine test failure abort the script — --record-failures already
 # writes it to the registry as "failed" so it stops being retried; we still want
@@ -46,20 +56,33 @@ verify_status=0
 npm run verify:local -- --all-pending --docker --update-registry --record-failures --git-commit ||
   verify_status=$?
 
-git pull --rebase --autostash
+# verify-local.ts only commits when something actually changed - if nothing
+# did, there's nothing to open a PR for.
+if [ "$(git rev-list --count main.."$BRANCH")" -gt 0 ]; then
+  git push --force origin "$BRANCH"
 
-# The 20:00 CEST schedule is chosen to sit well clear of the Mon/Tue/Thu/Fri
-# 07:30-16:30 CEST push blackout, but this system user's git isn't wired to
-# the global pre-push hook that enforces it interactively - so check again
-# here, right before the one action (the push) that actually leaves the VM.
-tz_day=$(TZ="Europe/Berlin" date +%u)
-tz_hm=$((10#$(TZ="Europe/Berlin" date +%H%M)))
-if [[ "$tz_day" =~ ^[1245]$ ]] && [ "$tz_hm" -ge 730 ] && [ "$tz_hm" -lt 1630 ]; then
-  echo "[verify-nightly] Within the Mon/Tue/Thu/Fri 07:30-16:30 Europe/Berlin push blackout; leaving results committed locally and skipping push/reconciliation for tonight." >&2
-  exit "$verify_status"
+  # The 20:00 CEST schedule is chosen to sit well clear of the Mon/Tue/Thu/Fri
+  # 07:30-16:30 CEST push blackout, but this system user's git isn't wired to
+  # the global pre-push hook that enforces it interactively - check again
+  # here, right before the one action (merging into main) that actually makes
+  # results live/visible, rather than before the branch push above.
+  tz_day=$(TZ="Europe/Berlin" date +%u)
+  tz_hm=$((10#$(TZ="Europe/Berlin" date +%H%M)))
+  if [[ "$tz_day" =~ ^[1245]$ ]] && [ "$tz_hm" -ge 730 ] && [ "$tz_hm" -lt 1630 ]; then
+    echo "[verify-nightly] Within the Mon/Tue/Thu/Fri 07:30-16:30 Europe/Berlin push blackout; PR pushed but left unmerged for tonight." >&2
+    git checkout main
+    exit "$verify_status"
+  fi
+
+  gh pr create --title "chore(registry): nightly verification update" \
+    --body "Automated update from foundry-verify." \
+    --base main --head "$BRANCH" 2>&1 ||
+    echo "[verify-nightly] PR create failed (may already exist for $BRANCH) - continuing to merge."
+  gh pr merge --squash --delete-branch "$BRANCH"
 fi
 
-git push
+git checkout main
+git pull --ff-only origin main
 
 npm run close-resolved-issues
 
