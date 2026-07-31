@@ -1,4 +1,14 @@
-# Install: /etc/systemd/system/foundry-verify.service
+# Install: copy this file to /etc/systemd/system/foundry-verify.service
+# (a real copy, NOT a symlink into this repo checkout - this unit file
+# controls User=/ExecStart=/etc. for what runs on the VM, so it must only
+# change via a deliberate manual step, not an unattended `git pull` picking
+# up whatever landed on main. main only requires a PR with zero mandatory
+# approving reviews, so a symlink here would let any merged PR silently
+# rewrite what this unit executes and as whom, taking effect on the next
+# `daemon-reload` (routine maintenance, unrelated `systemctl edit`/`enable`
+# calls, a reboot, etc.) with no separate review gate for that specific
+# risk. Re-copy and re-run daemon-reload by hand after any change to this
+# file, same as foundry-verify.timer below.
 # Then: systemctl daemon-reload && systemctl enable --now foundry-verify.timer
 #
 # Credentials (FOUNDRY_USERNAME/PASSWORD/ADMIN_KEY) live in

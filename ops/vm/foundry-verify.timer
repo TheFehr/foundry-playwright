@@ -1,4 +1,7 @@
-# Install: /etc/systemd/system/foundry-verify.timer
+# Install: copy this file to /etc/systemd/system/foundry-verify.timer (a
+# real copy, NOT a symlink into this repo checkout - see foundry-verify.service
+# for why). Re-copy and re-run `systemctl daemon-reload` by hand after any
+# change to this file.
 
 [Unit]
 Description=Run Foundry Playwright compatibility verification nightly
