@@ -2,10 +2,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { execFileSync } from "child_process";
 import { DockerFoundryOrchestrator } from "./docker.js";
 import path from "path";
+import fs from "fs";
+import os from "os";
 
 vi.mock("child_process", () => ({ execFileSync: vi.fn<typeof execFileSync>() }));
 
 const expectedUserFlag = [`--user`, `${process.getuid!()}:${process.getgid!()}`];
+
+function callEnsureWritableDir(orchestrator: DockerFoundryOrchestrator, dir: string): void {
+  (orchestrator as unknown as { ensureWritableDir: (d: string) => void }).ensureWritableDir(dir);
+}
+
+function dockerErrorWithStderr(stderr: string): Error & { stderr: string } {
+  return Object.assign(new Error("Command failed"), { stderr });
+}
 
 describe("DockerFoundryOrchestrator", () => {
   beforeEach(() => {
@@ -99,5 +109,98 @@ describe("DockerFoundryOrchestrator", () => {
     });
     const config = (orchestrator as unknown as { config: { maxPortRetries: number } }).config;
     expect(config.maxPortRetries).toBe(10);
+  });
+
+  describe("ensureWritableDir (real filesystem, not mocked)", () => {
+    let tmpBase: string;
+
+    beforeEach(() => {
+      tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "fp-docker-test-"));
+    });
+
+    it("creates the directory if it doesn't exist", () => {
+      const dir = path.join(tmpBase, "new-subdir");
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
+      expect(fs.existsSync(dir)).toBe(false);
+      callEnsureWritableDir(orchestrator, dir);
+      expect(fs.existsSync(dir)).toBe(true);
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    });
+
+    it("does not throw when the directory and its contents are already owned by the current user", () => {
+      fs.writeFileSync(path.join(tmpBase, "file.txt"), "hi");
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
+      expect(() => callEnsureWritableDir(orchestrator, tmpBase)).not.toThrow();
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    });
+
+    it("throws a clear, actionable error when the directory can't be made writable/accessible", () => {
+      const dir = path.join(tmpBase, "locked");
+      fs.mkdirSync(dir);
+      fs.chmodSync(dir, 0o000);
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
+      try {
+        expect(() => callEnsureWritableDir(orchestrator, dir)).toThrow(
+          /isn't writable\/accessible/,
+        );
+      } finally {
+        fs.chmodSync(dir, 0o700);
+        fs.rmSync(tmpBase, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("stopAndRemove", () => {
+    it("tolerates a container that doesn't exist yet (Docker's error phrasing)", () => {
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw dockerErrorWithStderr("Error response from daemon: No such container: x\n");
+      });
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0", containerName: "x" });
+      expect(() => orchestrator.stopAndRemove()).not.toThrow();
+    });
+
+    it("tolerates a container that doesn't exist yet (Podman's error phrasing)", () => {
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw dockerErrorWithStderr(
+          'Error: no container with name or ID "x" found: no such container\n',
+        );
+      });
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0", containerName: "x" });
+      expect(() => orchestrator.stopAndRemove()).not.toThrow();
+    });
+
+    it("propagates a real cleanup failure instead of swallowing it", () => {
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw dockerErrorWithStderr(
+          "Cannot connect to the Docker daemon. Is the docker daemon running?\n",
+        );
+      });
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0", containerName: "x" });
+      expect(() => orchestrator.stopAndRemove()).toThrow(/Failed to stop container x/);
+    });
+  });
+
+  describe("copyToContainer", () => {
+    const expectedOwner = `${process.getuid!()}:${process.getgid!()}`;
+
+    it("succeeds when the copied file's ownership matches the configured identity", () => {
+      vi.mocked(execFileSync)
+        .mockReturnValueOnce("") // mkdir -p
+        .mockReturnValueOnce("") // cp -a
+        .mockReturnValueOnce(`${expectedOwner}\n`); // stat
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0", containerName: "x" });
+      expect(() => orchestrator.copyToContainer("/local/path", "/container/path")).not.toThrow();
+    });
+
+    it("throws when the copied file's ownership doesn't match the configured identity", () => {
+      vi.mocked(execFileSync)
+        .mockReturnValueOnce("") // mkdir -p
+        .mockReturnValueOnce("") // cp -a
+        .mockReturnValueOnce("0:0\n"); // stat - unexpectedly root-owned
+      const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0", containerName: "x" });
+      expect(() => orchestrator.copyToContainer("/local/path", "/container/path")).toThrow(
+        /didn't attribute ownership as expected/,
+      );
+    });
   });
 });

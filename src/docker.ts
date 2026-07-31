@@ -205,10 +205,14 @@ export class DockerFoundryOrchestrator {
     const unfixable = new Set<string>();
 
     const fixOwnership = (entryPath: string) => {
-      if (fs.statSync(entryPath).uid === uid) return;
       try {
+        if (fs.statSync(entryPath).uid === uid) return;
         fs.chownSync(entryPath, uid, gid);
       } catch {
+        // Covers both a failed chown AND a failed stat (e.g. a dangling
+        // symlink, or the entry vanishing between readdirSync and here) -
+        // either way, fold into the same diagnostic below instead of
+        // letting a raw fs exception escape this function.
         unfixable.add(entryPath);
       }
     };

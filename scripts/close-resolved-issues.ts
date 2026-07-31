@@ -86,45 +86,61 @@ async function run() {
   const token = getGithubToken();
   const repo = repoSlug();
 
-  const openIssues = await githubRequest<GhIssue[]>(
-    token,
-    "GET",
-    `/repos/${repo}/issues?labels=verification-required&state=open&per_page=100`,
-  );
+  // Paginate - a single page could silently miss issues once there are more
+  // than 100 open verification-required issues at once.
+  const openIssues: GhIssue[] = [];
+  for (let page = 1; ; page++) {
+    const batch = await githubRequest<GhIssue[]>(
+      token,
+      "GET",
+      `/repos/${repo}/issues?labels=verification-required&state=open&per_page=100&page=${page}`,
+    );
+    openIssues.push(...batch);
+    if (batch.length < 100) break;
+  }
 
   for (const entry of resolved) {
     const title = `Verification Required: FVTT ${entry.fvtt} + ${entry.system} v${entry.systemVersion}`;
-    const issue = openIssues.find((i) => i.title === title);
-    if (!issue) continue;
+    try {
+      const issue = openIssues.find((i) => i.title === title);
+      if (!issue) continue;
 
-    const outcome =
-      entry.status === "stable"
-        ? `✅ Verified stable.\n\n${entry.notes}`
-        : entry.status === "incompatible"
-          ? `❌ Confirmed incompatible.\n\n${entry.notes}`
-          : `⚠️ Automated verification failed and needs investigation.\n\n${entry.notes}`;
+      const outcome =
+        entry.status === "stable"
+          ? `✅ Verified stable.\n\n${entry.notes}`
+          : entry.status === "incompatible"
+            ? `❌ Confirmed incompatible.\n\n${entry.notes}`
+            : `⚠️ Automated verification failed and needs investigation.\n\n${entry.notes}`;
 
-    console.log(`[close-resolved-issues] #${issue.number}: ${title} -> ${entry.status}`);
-    await githubRequest(token, "POST", `/repos/${repo}/issues/${issue.number}/comments`, {
-      body: outcome,
-    });
-
-    if (entry.status === "failed") {
-      await githubRequest(token, "POST", `/repos/${repo}/issues/${issue.number}/labels`, {
-        labels: ["needs-investigation"],
+      console.log(`[close-resolved-issues] #${issue.number}: ${title} -> ${entry.status}`);
+      await githubRequest(token, "POST", `/repos/${repo}/issues/${issue.number}/comments`, {
+        body: outcome,
       });
-      // Drop the label this query selects on, or a "failed" entry (which
-      // stays "failed" forever - it's not re-verified by --all-pending)
-      // would get re-commented and re-labeled every single night.
-      await githubRequest(
-        token,
-        "DELETE",
-        `/repos/${repo}/issues/${issue.number}/labels/verification-required`,
+
+      if (entry.status === "failed") {
+        await githubRequest(token, "POST", `/repos/${repo}/issues/${issue.number}/labels`, {
+          labels: ["needs-investigation"],
+        });
+        // Drop the label this query selects on, or a "failed" entry (which
+        // stays "failed" forever - it's not re-verified by --all-pending)
+        // would get re-commented and re-labeled every single night.
+        await githubRequest(
+          token,
+          "DELETE",
+          `/repos/${repo}/issues/${issue.number}/labels/verification-required`,
+        );
+      } else {
+        await githubRequest(token, "PATCH", `/repos/${repo}/issues/${issue.number}`, {
+          state: "closed",
+        });
+      }
+    } catch (e) {
+      // One entry's GitHub API call failing (rate limit, deleted issue,
+      // transient network error) shouldn't abort reconciliation for every
+      // other independent entry in this run.
+      console.error(
+        `[close-resolved-issues] Failed to reconcile "${title}": ${(e as Error).message}`,
       );
-    } else {
-      await githubRequest(token, "PATCH", `/repos/${repo}/issues/${issue.number}`, {
-        state: "closed",
-      });
     }
   }
 }

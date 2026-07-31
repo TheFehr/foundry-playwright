@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { DockerFoundryOrchestrator, isPodmanRuntime } from "../src/docker.js";
 import { Command } from "commander";
+import { minorOf } from "./version-utils.js";
 
 /**
  * Local Verification Script
@@ -32,11 +33,6 @@ function extractVersionTag(tag: string, systemId: string): string | null {
   return null;
 }
 
-function minorOf(version: string): string {
-  const [major, minor] = version.split(".");
-  return major && minor ? `${major}.${minor}` : "unknown";
-}
-
 function compareVersions(a: string, b: string): number {
   const ap = a.split(".").map(Number);
   const bp = b.split(".").map(Number);
@@ -56,6 +52,31 @@ function buildManifestUrl(systemId: string, version: string): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Applies one consistent trust rule for both the success and failure
+ * registry-write paths: only ever record a system version we actually know,
+ * either from validated captured metadata, or from the originally-requested
+ * systemVersion when it was actually pinned via a manifest URL this run
+ * (manifestUrl only supports dnd5e/pf2e - for any other system, or no
+ * version requested at all, Foundry just installs whatever "latest" its own
+ * resolver picks, which may have no relation to the requested version at
+ * all). Returns "unknown" when neither source establishes it.
+ */
+function resolveVerifiedSystemVersion(
+  capturedVersion: string,
+  manifestUrl: string | null,
+  requestedSystemVersion: string | undefined,
+): string {
+  if (capturedVersion !== "unknown") return capturedVersion;
+  return manifestUrl ? (requestedSystemVersion ?? "unknown") : "unknown";
+}
+
+function filterRealModules(
+  modules: { id: string; version: string }[],
+): { id: string; version: string }[] {
+  return modules.filter((m) => m.id !== "fake-module");
 }
 
 function getGithubAuthHeader(): string {
@@ -189,17 +210,29 @@ function runPlaywrightInContainer(
   );
 }
 
+interface VerifyVersionOptions {
+  system: string;
+  modules: string[];
+  systemVersion: string | undefined;
+  isDocker: boolean;
+  updateRegistry: boolean;
+  recordFailures: boolean;
+  keepContainer: boolean;
+}
+
 async function verifyVersion(
   version: string,
-  system: string,
-  modules: string[],
-  systemVersion: string | undefined,
-  systemMinor: string | undefined,
-  isDocker: boolean,
-  updateRegistry: boolean,
-  recordFailures: boolean,
-  keepContainer: boolean,
+  options: VerifyVersionOptions,
 ): Promise<{ success: boolean; failures: string[] }> {
+  const {
+    system,
+    modules,
+    systemVersion,
+    isDocker,
+    updateRegistry,
+    recordFailures,
+    keepContainer,
+  } = options;
   console.log(
     `\n--- Verifying Version: ${version} (System: ${system}${systemVersion ? ` v${systemVersion}` : ""}, Modules: ${modules.join(", ") || "none"}) ---`,
   );
@@ -463,22 +496,12 @@ async function verifyVersion(
 
     // Registry update — key is (fvtt, system, systemMinor)
     if (updateRegistry) {
-      const realModules = meta.modules.filter((m) => m.id !== "fake-module");
-      // installedSystemVersion can still be "unknown" here even on a passing
-      // run (metadata missing or rejected by isCapturedMetadata). Only trust
-      // a fallback to the originally-requested systemVersion when it was
-      // actually pinned via a manifest URL this run (manifestUrl,
-      // buildManifestUrl only supports dnd5e/pf2e) - for any other system,
-      // or no version requested at all, Foundry just installs whatever
-      // "latest" its own resolver picks, which may have no relation to
-      // systemVersion at all. Recording it anyway would fabricate a
-      // "verified" claim for a version we never actually pinned or observed.
-      const resolvedSystemVersion =
-        installedSystemVersion !== "unknown"
-          ? installedSystemVersion
-          : manifestUrl
-            ? (systemVersion ?? "unknown")
-            : "unknown";
+      const realModules = filterRealModules(meta.modules);
+      const resolvedSystemVersion = resolveVerifiedSystemVersion(
+        installedSystemVersion,
+        manifestUrl,
+        systemVersion,
+      );
 
       if (resolvedSystemVersion === "unknown") {
         console.warn(
@@ -508,19 +531,15 @@ async function verifyVersion(
       // Only genuine test failures land here - Docker/Playwright/report-parsing/
       // metadata errors fall through below, since "failed" is permanent (never
       // retried by --all-pending) and an infra hiccup isn't a real incompatibility.
-      const realModules = meta.modules.filter((m) => m.id !== "fake-module");
-      // A genuine failure almost always means the metadata-capture test never
-      // ran, so meta.system.version is still its "unknown" default. Same
-      // manifestUrl-gated fallback as the success path above (recomputed -
-      // manifestUrl there is out of scope in this catch block): only trust
-      // systemVersion when it was actually pinned via a manifest this run.
+      const realModules = filterRealModules(meta.modules);
+      // manifestUrl is recomputed here since the one from the try block above
+      // is out of scope in this catch block - same resolution rule either way.
       const manifestUrl = systemVersion ? buildManifestUrl(system, systemVersion) : null;
-      const resolvedSystemVersion =
-        meta.system.version !== "unknown"
-          ? meta.system.version
-          : manifestUrl
-            ? (systemVersion ?? "unknown")
-            : "unknown";
+      const resolvedSystemVersion = resolveVerifiedSystemVersion(
+        meta.system.version,
+        manifestUrl,
+        systemVersion,
+      );
 
       if (resolvedSystemVersion === "unknown") {
         console.log(
@@ -623,6 +642,7 @@ function isModuleEntry(value: unknown): value is { id: string; version: string }
 function isCapturedMetadata(value: unknown): value is CapturedMetadata {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
+  if (typeof v["foundry"] !== "string") return false;
   const sys = v["system"];
   if (typeof sys !== "object" || sys === null) return false;
   const sysRecord = sys as Record<string, unknown>;
@@ -788,17 +808,15 @@ program
     const results: { key: string; success: boolean; failures: string[] }[] = [];
 
     for (const target of targets) {
-      const result = await verifyVersion(
-        target.version,
-        target.system,
-        target.modules,
-        target.systemVersion,
-        target.systemMinor,
-        options.docker,
-        options.updateRegistry,
-        options.recordFailures,
-        options.keepContainer,
-      );
+      const result = await verifyVersion(target.version, {
+        system: target.system,
+        modules: target.modules,
+        systemVersion: target.systemVersion,
+        isDocker: options.docker,
+        updateRegistry: options.updateRegistry,
+        recordFailures: options.recordFailures,
+        keepContainer: options.keepContainer,
+      });
       const sysLabel = target.systemVersion
         ? `${target.system} v${target.systemVersion}`
         : target.system;

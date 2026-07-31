@@ -2,6 +2,7 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import { minorOf } from "./version-utils.js";
 
 /**
  * Release Monitoring Script
@@ -47,11 +48,6 @@ function extractVersion(tag: string, systemId: string): string | null {
   }
   if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
   return null;
-}
-
-function minorOf(version: string): string {
-  const [major, minor] = version.split(".");
-  return `${major}.${minor}`;
 }
 
 function compareVersions(a: string, b: string): number {
