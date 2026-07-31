@@ -36,6 +36,7 @@
     "format": "oxfmt . --check",
     "format:fix": "oxfmt .",
     "verify:local": "tsx scripts/verify-local.ts",
+    "close-resolved-issues": "tsx scripts/close-resolved-issues.ts",
     "release": "release-it",
     "prepublishOnly": "npm run build",
     "prepare": "husky"

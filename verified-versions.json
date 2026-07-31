@@ -130,8 +130,8 @@
     "system": "pf2e",
     "systemMinor": "8.3",
     "systemVersion": "8.3.0",
-    "status": "pending",
-    "timestamp": "2026-07-07T07:54:16.728Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.360.0 --system pf2e --system-minor 8.3 --update-registry --git-commit`"
+    "status": "incompatible",
+    "timestamp": "2026-07-28T18:26:32.343Z",
+    "notes": "System declares compatibility minimum: 14.361; incompatible with FVTT 14.360.0 (one build below the required minimum). The earlier \"failed\"/rate-limit diagnoses were misdiagnoses of this same genuine incompatibility - monitor-releases.ts's compatibility check only compared major-version integers and missed the build-level minimum bump, and separately never re-checked newer 14.x builds once 14.360.0 went stable for this generation. Both fixed."
   }
 ]

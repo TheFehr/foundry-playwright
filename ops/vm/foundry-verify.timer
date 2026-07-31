@@ -1,0 +1,20 @@
+# Install: /etc/systemd/system/foundry-verify.timer
+
+[Unit]
+Description=Run Foundry Playwright compatibility verification nightly
+
+[Timer]
+# 20:00 CEST: ~5h clear of the host's ~01:00-01:30/04:30-06:00 CEST backup-job
+# CPU peaks (from a week of RRD history on the PBS VM sharing this host), and
+# ~11.5h clear of the next weekday's 07:30 CEST push blackout - both wider
+# margins than a 02:00 slot would give.
+OnCalendar=*-*-* 20:00:00 Europe/Berlin
+RandomizedDelaySec=600
+# Deliberately no Persistent=true: a missed run should be skipped, not caught
+# up. Persistent=true fires as soon as the timer becomes active again (e.g.
+# right at boot) regardless of the time of day, which could land the git push
+# inside the Mon/Tue/Thu/Fri 07:30-16:30 CEST blackout this schedule exists to
+# avoid. Waiting for the next 20:00 keeps that guarantee unconditional.
+
+[Install]
+WantedBy=timers.target

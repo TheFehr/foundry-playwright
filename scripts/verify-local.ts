@@ -2,7 +2,7 @@ import { execSync, execFileSync } from "child_process";
 import "dotenv/config";
 import path from "path";
 import fs from "fs";
-import { DockerFoundryOrchestrator } from "../src/docker.js";
+import { DockerFoundryOrchestrator, isPodmanRuntime } from "../src/docker.js";
 import { Command } from "commander";
 
 /**
@@ -30,6 +30,11 @@ function extractVersionTag(tag: string, systemId: string): string | null {
   }
   if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
   return null;
+}
+
+function minorOf(version: string): string {
+  const [major, minor] = version.split(".");
+  return major && minor ? `${major}.${minor}` : "unknown";
 }
 
 function compareVersions(a: string, b: string): number {
@@ -90,13 +95,109 @@ async function resolveLatestPatch(systemId: string, minor: string): Promise<stri
   return latest;
 }
 
+interface RegistryEntryWrite {
+  fvtt: string;
+  system: string;
+  systemMinor: string;
+  systemVersion: string;
+  modules?: { id: string; version: string }[];
+  status: "stable" | "failed";
+  timestamp: string;
+  notes: string;
+}
+
+function upsertRegistryEntry(entry: RegistryEntryWrite): void {
+  const registryPath = path.join(process.cwd(), "verified-versions.json");
+  const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+
+  if (!Array.isArray(registry)) {
+    throw new Error(
+      `${registryPath} does not contain a JSON array (got ${typeof registry}); refusing to overwrite it with an empty registry. Fix the file manually.`,
+    );
+  }
+
+  const entryIdx = (registry as Record<string, unknown>[]).findIndex(
+    (e) =>
+      e["fvtt"] === entry.fvtt &&
+      e["system"] === entry.system &&
+      e["systemMinor"] === entry.systemMinor,
+  );
+  if (entryIdx !== -1) {
+    registry[entryIdx] = entry;
+  } else {
+    registry.push(entry);
+  }
+
+  fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
+}
+
+function getPlaywrightImageTag(): string {
+  const pkgPath = path.join(process.cwd(), "node_modules", "@playwright", "test", "package.json");
+  const { version } = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { version: string };
+  return `mcr.microsoft.com/playwright:v${version}-noble`;
+}
+
+/**
+ * Runs the Playwright test suite inside Microsoft's official Playwright image
+ * instead of on the host. Keeps the host OS entirely out of Playwright's
+ * browser/dependency support matrix. Only explicitly listed env vars are
+ * forwarded (not the full host environment, which would clobber the
+ * container's own PATH/HOME) and secret values are never placed in argv —
+ * `-e KEY` (no value) makes docker forward it from its own process env.
+ */
+function runPlaywrightInContainer(
+  testFiles: string[],
+  playwrightArgs: string[],
+  containerEnv: Record<string, string | undefined>,
+  rootless: boolean,
+): void {
+  const image = getPlaywrightImageTag();
+  const envFlags = Object.entries(containerEnv)
+    .filter(([, v]) => v !== undefined)
+    .flatMap(([k]) => ["-e", k]);
+
+  execFileSync(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--network",
+      "host",
+      "--user",
+      `${process.getuid!()}:${process.getgid!()}`,
+      // See DockerOrchestratorConfig.rootless / isPodmanRuntime in
+      // src/docker.ts - --userns=keep-id is Podman-specific syntax, so only
+      // add it when the docker binary is actually Podman under the hood.
+      ...(rootless && isPodmanRuntime() ? ["--userns=keep-id"] : []),
+      "-e",
+      "HOME=/tmp",
+      ...envFlags,
+      "-v",
+      `${process.cwd()}:/work`,
+      "-w",
+      "/work",
+      image,
+      "npx",
+      "playwright",
+      "test",
+      ...testFiles,
+      "--workers=1",
+      "--reporter=line,json",
+      ...playwrightArgs,
+    ],
+    { stdio: "inherit", env: { ...process.env, ...containerEnv } },
+  );
+}
+
 async function verifyVersion(
   version: string,
   system: string,
   modules: string[],
   systemVersion: string | undefined,
+  systemMinor: string | undefined,
   isDocker: boolean,
   updateRegistry: boolean,
+  recordFailures: boolean,
   keepContainer: boolean,
 ): Promise<{ success: boolean; failures: string[] }> {
   console.log(
@@ -104,12 +205,19 @@ async function verifyVersion(
   );
 
   let foundryUrl = process.env.FOUNDRY_URL || "http://localhost:30000";
+  const rootless = process.env.FOUNDRY_PLAYWRIGHT_ROOTLESS === "1";
   let orchestrator: DockerFoundryOrchestrator | null = null;
+  let tmpDataDir: string | null = null;
   let failures: string[] = [];
+  let meta = {
+    foundry: version,
+    system: { id: system, version: "unknown" },
+    modules: [] as { id: string; version: string }[],
+  };
 
   try {
     if (isDocker) {
-      const tmpDataDir = path.join(
+      tmpDataDir = path.join(
         process.cwd(),
         ".foundry_test_data",
         `.foundry_data_tmp_${version}_${Date.now()}`,
@@ -119,6 +227,7 @@ async function verifyVersion(
         version: version,
         adminKey: process.env.FOUNDRY_ADMIN_KEY || "password",
         dataDir: tmpDataDir,
+        rootless,
       });
 
       // Inject all local modules from e2e/ into the container
@@ -169,46 +278,128 @@ async function verifyVersion(
       (a) => a.startsWith("--ui") || a.startsWith("--headed") || a.startsWith("--debug"),
     );
 
-    const testFiles = ["e2e/verify.spec.ts", "e2e/user-management.spec.ts"].join(" ");
-    const reportPath = path.join(process.cwd(), `.playwright-report-${version}.json`);
+    const testFiles = ["e2e/verify.spec.ts", "e2e/user-management.spec.ts"];
+    // Unique per run (not just per version), and removed up front - a
+    // previous run at this same path that crashed before reaching its own
+    // cleanup could otherwise leave a stale report behind for this run to
+    // misread as its own results.
+    const reportPath = path.join(
+      process.cwd(),
+      `.playwright-report-${version}-${Date.now()}-${process.pid}.json`,
+    );
+    fs.rmSync(reportPath, { force: true });
+    const metaPath = path.join(process.cwd(), ".foundry_metadata.json");
+    fs.rmSync(metaPath, { force: true });
     let execError: Error | null = null;
     try {
-      execSync(
-        `npx playwright test ${testFiles} --workers=1 --reporter=line,json ${playwrightArgs.join(" ")}`,
-        {
-          stdio: "inherit",
-          env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath },
-        },
-      );
+      if (isDocker) {
+        // The container mounts process.cwd() at /work, so the path we hand
+        // to Playwright's own JSON reporter (running inside the container)
+        // must be rewritten relative to that mount point - the host's
+        // absolute reportPath doesn't exist inside the container's
+        // filesystem at all.
+        const reportPathInContainer = `/work/${path.relative(process.cwd(), reportPath)}`;
+        runPlaywrightInContainer(
+          testFiles,
+          playwrightArgs,
+          {
+            FOUNDRY_URL: env["FOUNDRY_URL"],
+            FOUNDRY_VERSION: env["FOUNDRY_VERSION"],
+            FOUNDRY_SYSTEM_ID: env["FOUNDRY_SYSTEM_ID"],
+            FOUNDRY_UI_ADAPTER: env["FOUNDRY_UI_ADAPTER"],
+            FOUNDRY_MODULE_IDS: env["FOUNDRY_MODULE_IDS"],
+            FOUNDRY_SYSTEM_MANIFEST: env["FOUNDRY_SYSTEM_MANIFEST"],
+            FOUNDRY_ADMIN_KEY: process.env.FOUNDRY_ADMIN_KEY,
+            FOUNDRY_ADMIN_PASSWORD: process.env.FOUNDRY_ADMIN_PASSWORD,
+            FOUNDRY_USERNAME: process.env.FOUNDRY_USERNAME,
+            FOUNDRY_PASSWORD: process.env.FOUNDRY_PASSWORD,
+            FOUNDRY_LICENSE_KEY: process.env.FOUNDRY_LICENSE_KEY,
+            PLAYWRIGHT_JSON_OUTPUT_NAME: reportPathInContainer,
+          },
+          rootless,
+        );
+      } else {
+        execFileSync(
+          "npx",
+          [
+            "playwright",
+            "test",
+            ...testFiles,
+            "--workers=1",
+            "--reporter=line,json",
+            ...playwrightArgs,
+          ],
+          {
+            stdio: "inherit",
+            env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath },
+          },
+        );
+      }
     } catch (e) {
       execError = e as Error;
     }
 
     if (fs.existsSync(reportPath)) {
-      const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-      failures = extractFailures(report);
+      const rawContent = fs.readFileSync(reportPath, "utf8");
       fs.unlinkSync(reportPath);
+      let validReport = false;
+      try {
+        const rawReport: unknown = JSON.parse(rawContent);
+        if (isPlaywrightReport(rawReport)) {
+          validReport = true;
+          failures = extractFailures(rawReport);
+        }
+      } catch {
+        // Corrupted/truncated report - fold into the same "malformed"
+        // diagnostic below instead of letting a raw JSON.parse error
+        // escape and override execError precedence.
+        validReport = false;
+      }
+      if (!validReport || (failures.length === 0 && execError)) {
+        // Either the report doesn't have the expected shape (corrupted or
+        // unexpected content) or the process genuinely failed despite a
+        // clean-looking report - in both cases, don't silently treat this
+        // as success just because some report file exists.
+        throw (
+          execError ??
+          new Error(`Malformed Playwright report at ${reportPath}: missing "suites" array.`)
+        );
+      }
     } else if (execError) {
       // Playwright failed to start or crashed without producing a report.
       throw execError;
+    } else {
+      // Exited "successfully" but produced no report at all - no evidence
+      // any test actually ran. Don't silently treat that as a pass.
+      throw new Error(
+        `Playwright exited successfully but produced no report at ${reportPath} - treating as an infrastructure failure.`,
+      );
+    }
+
+    // Capture versions for the report (best-effort — the metadata test may have
+    // run and written this even if a later test in the same run failed).
+    console.log("[verifyVersion] Capturing system and module versions...");
+    if (fs.existsSync(metaPath)) {
+      const rawContent = fs.readFileSync(metaPath, "utf8");
+      fs.unlinkSync(metaPath);
+      try {
+        const rawMeta: unknown = JSON.parse(rawContent);
+        if (isCapturedMetadata(rawMeta)) {
+          meta = rawMeta;
+        } else {
+          console.warn(
+            `[verifyVersion] Ignoring malformed ${metaPath} - missing expected system.id/version/modules shape; keeping "unknown" version metadata.`,
+          );
+        }
+      } catch (e) {
+        console.warn(
+          `[verifyVersion] Failed to parse ${metaPath} (${(e as Error).message}); keeping "unknown" version metadata.`,
+        );
+      }
     }
 
     if (failures.length > 0) {
       throw new Error(`Verification failed with ${failures.length} test failures.`);
-    }
-
-    // Capture versions for the report
-    console.log("[verifyVersion] Capturing system and module versions...");
-    let meta = {
-      foundry: version,
-      system: { id: system, version: "unknown" },
-      modules: [] as { id: string; version: string }[],
-    };
-
-    const metaPath = path.join(process.cwd(), ".foundry_metadata.json");
-    if (fs.existsSync(metaPath)) {
-      meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      fs.unlinkSync(metaPath);
     }
 
     console.log(`--- Verification Successful for ${version} ---`);
@@ -272,53 +463,119 @@ async function verifyVersion(
 
     // Registry update — key is (fvtt, system, systemMinor)
     if (updateRegistry) {
-      console.log(`Updating verified-versions.json for ${version}...`);
-      const registryPath = path.join(process.cwd(), "verified-versions.json");
-      let registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
-
-      if (!Array.isArray(registry)) {
-        console.warn("Registry is not an array. Performing migration...");
-        registry = [];
-      }
-
       const realModules = meta.modules.filter((m) => m.id !== "fake-module");
-      const [sysMajor, sysMinor] = installedSystemVersion.split(".");
-      const systemMinor = `${sysMajor}.${sysMinor}`;
+      // installedSystemVersion can still be "unknown" here even on a passing
+      // run (metadata missing or rejected by isCapturedMetadata). Only trust
+      // a fallback to the originally-requested systemVersion when it was
+      // actually pinned via a manifest URL this run (manifestUrl,
+      // buildManifestUrl only supports dnd5e/pf2e) - for any other system,
+      // or no version requested at all, Foundry just installs whatever
+      // "latest" its own resolver picks, which may have no relation to
+      // systemVersion at all. Recording it anyway would fabricate a
+      // "verified" claim for a version we never actually pinned or observed.
+      const resolvedSystemVersion =
+        installedSystemVersion !== "unknown"
+          ? installedSystemVersion
+          : manifestUrl
+            ? (systemVersion ?? "unknown")
+            : "unknown";
 
-      const entry = {
-        fvtt: version,
-        system: meta.system.id,
-        systemMinor,
-        systemVersion: installedSystemVersion,
-        modules: realModules.length > 0 ? realModules : undefined,
-        status: "stable" as const,
-        timestamp: new Date().toISOString(),
-        notes: `Verified locally with ${meta.system.id} v${installedSystemVersion}.`,
-      };
-
-      const entryIdx = (registry as Record<string, unknown>[]).findIndex(
-        (e) =>
-          e["fvtt"] === version &&
-          e["system"] === meta.system.id &&
-          e["systemMinor"] === systemMinor,
-      );
-      if (entryIdx !== -1) {
-        registry[entryIdx] = entry;
+      if (resolvedSystemVersion === "unknown") {
+        console.warn(
+          `[verifyVersion] Cannot determine the installed system version for ${version} (metadata missing/invalid and no manifest pin this run) - skipping registry update rather than recording an unverifiable "stable" entry.`,
+        );
       } else {
-        registry.push(entry);
+        console.log(`Updating verified-versions.json for ${version}...`);
+        upsertRegistryEntry({
+          fvtt: version,
+          system: meta.system.id,
+          systemMinor: minorOf(resolvedSystemVersion),
+          systemVersion: resolvedSystemVersion,
+          modules: realModules.length > 0 ? realModules : undefined,
+          status: "stable",
+          timestamp: new Date().toISOString(),
+          notes: `Verified locally with ${meta.system.id} v${resolvedSystemVersion}.`,
+        });
+        console.log("Registry updated successfully.");
       }
-
-      fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
-      console.log("Registry updated successfully.");
     }
     return { success: true, failures: [] };
   } catch (error: unknown) {
     console.error(`--- Verification Failed for ${version} ---`);
     console.error((error as Error).message);
+
+    if (updateRegistry && recordFailures && failures.length > 0) {
+      // Only genuine test failures land here - Docker/Playwright/report-parsing/
+      // metadata errors fall through below, since "failed" is permanent (never
+      // retried by --all-pending) and an infra hiccup isn't a real incompatibility.
+      const realModules = meta.modules.filter((m) => m.id !== "fake-module");
+      // A genuine failure almost always means the metadata-capture test never
+      // ran, so meta.system.version is still its "unknown" default. Same
+      // manifestUrl-gated fallback as the success path above (recomputed -
+      // manifestUrl there is out of scope in this catch block): only trust
+      // systemVersion when it was actually pinned via a manifest this run.
+      const manifestUrl = systemVersion ? buildManifestUrl(system, systemVersion) : null;
+      const resolvedSystemVersion =
+        meta.system.version !== "unknown"
+          ? meta.system.version
+          : manifestUrl
+            ? (systemVersion ?? "unknown")
+            : "unknown";
+
+      if (resolvedSystemVersion === "unknown") {
+        console.log(
+          `Not recording a failure entry for ${version}: cannot determine which system version was actually tested (metadata missing/invalid and no manifest pin this run). Leaving the entry pending so --all-pending retries it.`,
+        );
+      } else {
+        console.log(`Recording failure in verified-versions.json for ${version}...`);
+        upsertRegistryEntry({
+          fvtt: version,
+          system: meta.system.id || system,
+          systemMinor: minorOf(resolvedSystemVersion),
+          systemVersion: resolvedSystemVersion,
+          modules: realModules.length > 0 ? realModules : undefined,
+          status: "failed",
+          timestamp: new Date().toISOString(),
+          notes: `Automated verification failed: ${failures.join("; ")}`,
+        });
+        console.log("Registry updated with failure entry.");
+      }
+    } else if (updateRegistry && recordFailures) {
+      console.log(
+        `Not recording a failure entry for ${version}: no test failures were collected, so this looks like an infrastructure error rather than a real incompatibility. Leaving the entry pending so --all-pending retries it.`,
+      );
+    }
+
     return { success: false, failures };
   } finally {
+    let cleanupFailed = false;
     if (orchestrator && !keepContainer) {
-      await orchestrator.stopAndRemove();
+      try {
+        await orchestrator.stopAndRemove();
+      } catch (e) {
+        // A real cleanup failure (not just "container didn't exist" -
+        // stopAndRemove() already tolerates that) - don't let this override
+        // the actual verification result above, or crash the rest of an
+        // --all-pending batch. Retain tmpDataDir instead of removing it out
+        // from under a container that may still be running.
+        cleanupFailed = true;
+        console.error(
+          `[verifyVersion] Failed to clean up the Docker container: ${(e as Error).message}. Retaining ${tmpDataDir} for inspection.`,
+        );
+      }
+    }
+    if (tmpDataDir && !keepContainer && !cleanupFailed) {
+      console.log(`Cleaning up temporary data directory: ${tmpDataDir}`);
+      try {
+        fs.rmSync(tmpDataDir, { recursive: true, force: true });
+      } catch (e) {
+        // Same reasoning as the container-cleanup catch above - don't let
+        // this override the actual verification result or crash the rest
+        // of an --all-pending batch.
+        console.error(
+          `[verifyVersion] Failed to remove temporary data directory ${tmpDataDir}: ${(e as Error).message}`,
+        );
+      }
     }
   }
 }
@@ -341,6 +598,36 @@ interface PlaywrightSuite {
 
 interface PlaywrightReport {
   suites?: PlaywrightSuite[];
+}
+
+function isPlaywrightReport(value: unknown): value is PlaywrightReport {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as { suites?: unknown }).suites)
+  );
+}
+
+interface CapturedMetadata {
+  foundry: string;
+  system: { id: string; version: string };
+  modules: { id: string; version: string }[];
+}
+
+function isModuleEntry(value: unknown): value is { id: string; version: string } {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v["id"] === "string" && typeof v["version"] === "string";
+}
+
+function isCapturedMetadata(value: unknown): value is CapturedMetadata {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const sys = v["system"];
+  if (typeof sys !== "object" || sys === null) return false;
+  const sysRecord = sys as Record<string, unknown>;
+  if (typeof sysRecord["id"] !== "string" || typeof sysRecord["version"] !== "string") return false;
+  return Array.isArray(v["modules"]) && v["modules"].every(isModuleEntry);
 }
 
 function extractFailures(report: PlaywrightReport): string[] {
@@ -368,6 +655,7 @@ interface VerifyTarget {
   version: string;
   system: string;
   systemVersion?: string;
+  systemMinor?: string;
   modules: string[];
 }
 
@@ -397,7 +685,16 @@ program
   )
   .option("--all", "Verify all pairings (pending and stable) in the registry", false)
   .option("--update-registry", "Update verified-versions.json on successful verification", false)
-  .option("--git-commit", "Automatically commit changes on success", false)
+  .option(
+    "--record-failures",
+    "On genuine verification failure, write a 'failed' status entry to the registry so --all-pending stops retrying it. Only takes effect with --update-registry.",
+    false,
+  )
+  .option(
+    "--git-commit",
+    "Automatically commit registry/report changes whenever they exist, regardless of pass/fail",
+    false,
+  )
   .option(
     "--keep-container",
     "Do not stop and remove the Docker container after verification",
@@ -409,6 +706,10 @@ program
     // Build the library once
     console.log("Building library...");
     execSync("npm run build", { stdio: "inherit" });
+
+    if (options.recordFailures && !options.updateRegistry) {
+      console.warn("[verify] --record-failures has no effect without --update-registry; ignoring.");
+    }
 
     const modules = options.modules ? options.modules.split(",").map((m: string) => m.trim()) : [];
     let targets: VerifyTarget[] = [];
@@ -426,6 +727,7 @@ program
               version: e["fvtt"] as string,
               system: e["system"] as string,
               systemVersion: e["systemVersion"] as string | undefined,
+              systemMinor: e["systemMinor"] as string | undefined,
               modules: Array.isArray(e["modules"])
                 ? (e["modules"] as Record<string, unknown>[]).map(
                     (m: Record<string, unknown>) => m["id"] as string,
@@ -444,6 +746,7 @@ program
               system: e["system"] as string,
               // Don't pin systemVersion for re-verify: let installSystem handle already-installed
               // systems; the registry update records whatever version is actually installed.
+              systemMinor: e["systemMinor"] as string | undefined,
               modules: Array.isArray(e["modules"])
                 ? (e["modules"] as Record<string, unknown>[]).map(
                     (m: Record<string, unknown>) => m["id"] as string,
@@ -466,7 +769,15 @@ program
         systemVersion = await resolveLatestPatch(options.system, options.systemMinor);
       }
 
-      targets = [{ version: versionArg, system: options.system, systemVersion, modules }];
+      targets = [
+        {
+          version: versionArg,
+          system: options.system,
+          systemVersion,
+          systemMinor: options.systemMinor,
+          modules,
+        },
+      ];
     }
 
     if (targets.length === 0) {
@@ -482,8 +793,10 @@ program
         target.system,
         target.modules,
         target.systemVersion,
+        target.systemMinor,
         options.docker,
         options.updateRegistry,
+        options.recordFailures,
         options.keepContainer,
       );
       const sysLabel = target.systemVersion
@@ -517,9 +830,9 @@ program
       }
     });
 
-    if (allPassed && changedFiles.length > 0) {
-      const verifiedKeys = results.map((r) => r.key).join(", ");
-      const commitMsg = `chore(registry): verify ${verifiedKeys}`;
+    if (changedFiles.length > 0) {
+      const summary = results.map((r) => `${r.key} [${r.success ? "PASS" : "FAIL"}]`).join(", ");
+      const commitMsg = `chore(registry): verify ${summary}`;
 
       if (options.gitCommit) {
         console.log(`\n--- Auto-committing changes ---`);
