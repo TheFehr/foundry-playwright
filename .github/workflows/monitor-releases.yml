@@ -16,7 +16,23 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      # The default GITHUB_TOKEN cannot create or approve pull requests
+      # (a separate repo-level restriction) - generate a token from the
+      # existing GitHub App instead, matching the established pattern in
+      # other repos, scoped to only what this workflow actually needs.
+      - name: Generate Token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ secrets.CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          token: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -44,9 +60,10 @@ jobs:
       # and merge it immediately ourselves rather than pushing directly.
       - name: Open PR with registry updates
         if: steps.diff.outputs.updated == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         id: cpr
         with:
+          token: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
           commit-message: "chore(registry): update pending verification matrix"
           title: "chore(registry): update pending verification matrix"
           body: "Automated update from the Monitor Releases workflow."
@@ -62,9 +79,10 @@ jobs:
         # still be merged now rather than silently left open again.
         if: steps.cpr.outputs.pull-request-number != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
-          gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
+          gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}" ||
+            gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
           echo "updated=true" >> $GITHUB_OUTPUT
 
       - name: Create Issues for Pending
