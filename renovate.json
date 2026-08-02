@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "ignorePaths": ["docker-compose.yml"],
+  "platformAutomerge": true,
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "commitMessageSuffix": "[no-release]"
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "commitMessageSuffix": "[no-release]"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "automerge": true,
+      "automergeType": "pr",
+      "commitMessageSuffix": "[no-release]"
+    }
+  ]
+}

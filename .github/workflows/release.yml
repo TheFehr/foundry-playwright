@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Renovate-authored commits (and this workflow's own version-bump PRs,
+    # before they're detected as the release commit below) carry this
+    # suffix specifically so they don't re-enter this pipeline.
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[no-release]')
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      # The default GITHUB_TOKEN cannot create/merge pull requests and is
+      # excluded from triggering other workflows (needed so the tag push in
+      # the release-commit phase below actually fires publish.yml) - use the
+      # existing GitHub App token instead, same as monitor-releases.yml.
+      - name: Generate Token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ secrets.CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0 # conventional-changelog needs full history since the last tag
+          persist-credentials: false
+          token: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      # main's ruleset forces every change through a squash-merged PR, so the
+      # commit that lands here is never the one release-it originally made -
+      # detect via the PR's label rather than string-matching the message.
+      - name: Detect release commit
+        id: detect
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+        run: |
+          IS_RELEASE=$(gh api "repos/${{ github.repository }}/commits/$(git rev-parse HEAD)/pulls" \
+            --jq '[.[] | select(.labels[].name == "release")] | length > 0')
+          echo "is_release_commit=$IS_RELEASE" >> "$GITHUB_OUTPUT"
+
+      # --- Not a release commit: see if there's anything to release ---
+
+      - name: Check for releasable commits
+        id: check
+        if: steps.detect.outputs.is_release_commit == 'false'
+        run: |
+          NEXT=$(npx release-it --release-version --ci || true)
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version and changelog
+        if: steps.detect.outputs.is_release_commit == 'false' && steps.check.outputs.next != ''
+        # Commit/tag/push/GitHub-release are all deferred: tagging has to
+        # happen against the real post-squash-merge commit, not this one.
+        run: npx release-it --ci --no-git.commit --no-git.tag --no-git.push --no-github.release
+
+      - name: Ensure release label exists
+        if: steps.detect.outputs.is_release_commit == 'false' && steps.check.outputs.next != ''
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+        run: gh label create release --color 0E8A16 --description "Automated release PR" --force
+
+      - name: Open version-bump PR
+        if: steps.detect.outputs.is_release_commit == 'false' && steps.check.outputs.next != ''
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        id: cpr
+        with:
+          token: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+          commit-message: "chore(release): v${{ steps.check.outputs.next }}"
+          title: "chore(release): v${{ steps.check.outputs.next }}"
+          body: "Automated version bump from the Release workflow."
+          branch: "release/v${{ steps.check.outputs.next }}"
+          delete-branch: true
+          labels: release
+          sign-commits: true
+
+      - name: Merge the release PR
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}" ||
+            gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
+
+      # --- Is a release commit: tag the real merge commit and publish ---
+
+      - name: Tag and create GitHub release
+        if: steps.detect.outputs.is_release_commit == 'true'
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists, skipping."
+            exit 0
+          fi
+          # Created via the API (not `git push`) with the App token, not the
+          # default GITHUB_TOKEN, so it actually fires publish.yml's tag trigger.
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/v$VERSION" \
+            -f sha="$(git rev-parse HEAD)"
+          gh release create "v$VERSION" --title "v$VERSION" --generate-notes
