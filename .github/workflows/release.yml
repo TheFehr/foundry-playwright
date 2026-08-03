@@ -96,17 +96,29 @@ jobs:
           # key. Create the commit through the GraphQL API instead (the same
           # mechanism peter-evans/create-pull-request's sign-commits:true uses
           # in monitor-releases.yml) so GitHub signs it directly.
-          gh api "repos/${{ github.repository }}/git/refs" \
-            -f ref="refs/heads/$BRANCH" -f sha="$BASE_SHA"
+          #
+          # -f sha=... makes this idempotent: if a prior run created the ref
+          # but failed before the commit landed, this just re-points it.
+          gh api --method PATCH "repos/${{ github.repository }}/git/refs/heads/$BRANCH" \
+            -f sha="$BASE_SHA" -F force=true 2>/dev/null ||
+            gh api "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/heads/$BRANCH" -f sha="$BASE_SHA"
+
+          # package-lock.json's base64 is too large to pass as a jq --arg on
+          # this runner (Argument list too long against its already-large
+          # environment) - --rawfile reads it from disk instead, avoiding argv.
+          base64 -w0 package.json | tr -d '\n' >/tmp/pkg.b64
+          base64 -w0 package-lock.json | tr -d '\n' >/tmp/lock.b64
+          base64 -w0 CHANGELOG.md | tr -d '\n' >/tmp/changelog.b64
 
           jq -n \
             --arg repo "${{ github.repository }}" \
             --arg branch "$BRANCH" \
             --arg oid "$BASE_SHA" \
             --arg headline "chore(release): v$NEXT" \
-            --arg pkg "$(base64 -w0 package.json)" \
-            --arg lock "$(base64 -w0 package-lock.json)" \
-            --arg changelog "$(base64 -w0 CHANGELOG.md)" \
+            --rawfile pkg /tmp/pkg.b64 \
+            --rawfile lock /tmp/lock.b64 \
+            --rawfile changelog /tmp/changelog.b64 \
             '{
               query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
               variables: {
