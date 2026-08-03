@@ -18,12 +18,18 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      issues: write
     steps:
       # The default GITHUB_TOKEN cannot create/merge pull requests and is
       # excluded from triggering other workflows (needed so the tag push in
       # the release-commit phase below actually fires publish.yml) - use the
       # existing GitHub App token instead, same as monitor-releases.yml.
+      #
+      # Deliberately not requesting permission-issues here: the installation
+      # doesn't have Issues granted, and requesting an ungranted permission
+      # fails the whole token mint. Labels still work below because the
+      # "release" label already exists in the repo and attaching an existing
+      # label to a PR you're creating doesn't need that scope (verified
+      # against n8n-nodes-actual's identical, currently-working workflow).
       - name: Generate Token
         id: generate_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
@@ -32,7 +38,6 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
-          permission-issues: write
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -77,33 +82,31 @@ jobs:
         # happen against the real post-squash-merge commit, not this one.
         run: npx release-it --ci --no-git.commit --no-git.tag --no-git.push --no-github.release
 
-      - name: Ensure release label exists
-        if: steps.detect.outputs.is_release_commit == 'false' && steps.check.outputs.next != ''
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
-        run: gh label create release --color 0E8A16 --description "Automated release PR" --force
-
       - name: Open version-bump PR
         if: steps.detect.outputs.is_release_commit == 'false' && steps.check.outputs.next != ''
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
-        id: cpr
-        with:
-          token: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
-          commit-message: "chore(release): v${{ steps.check.outputs.next }}"
-          title: "chore(release): v${{ steps.check.outputs.next }}"
-          body: "Automated version bump from the Release workflow."
-          branch: "release/v${{ steps.check.outputs.next }}"
-          delete-branch: true
-          labels: release
-          sign-commits: true
-
-      - name: Merge the release PR
-        if: steps.cpr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+          NEXT: ${{ steps.check.outputs.next }}
         run: |
-          gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}" ||
-            gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          BRANCH="release/v$NEXT"
+          git checkout -b "$BRANCH"
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore(release): v$NEXT"
+
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git push "$REMOTE" "$BRANCH"
+
+          gh label create release --color 0e8a16 --description "Automated release PR" 2>/dev/null || true
+
+          gh pr create --title "chore(release): v$NEXT" \
+            --body "Automated version bump from the Release workflow." \
+            --base main --head "$BRANCH" --label release
+
+          gh pr merge --auto --squash "$BRANCH" ||
+            gh pr merge --squash "$BRANCH"
 
       # --- Is a release commit: tag the real merge commit and publish ---
 
