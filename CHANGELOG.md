@@ -1,5 +1,24 @@
 # Changelog
 
+# [0.7.0](https://github.com/TheFehr/foundry-playwright/compare/v0.6.1...v0.7.0) (2026-08-03)
+
+
+### Bug Fixes
+
+* **ci:** avoid argv-size limit when building the release commit payload ([#34](https://github.com/TheFehr/foundry-playwright/issues/34)) ([80c1e23](https://github.com/TheFehr/foundry-playwright/commit/80c1e23d134bd76b8a3ece7a82e282ddc229c5d0))
+* **ci:** create the release commit via the GraphQL API so it's signed ([#33](https://github.com/TheFehr/foundry-playwright/issues/33)) ([866a8f0](https://github.com/TheFehr/foundry-playwright/commit/866a8f0e4706b3626eb13ab6e718f0ef6def214d))
+* **ci:** drop ungranted issues permission from release workflow token ([#31](https://github.com/TheFehr/foundry-playwright/issues/31)) ([ba1f0f4](https://github.com/TheFehr/foundry-playwright/commit/ba1f0f493a6d9375a81b5d2007ae055c067e3285))
+* **ci:** route automated registry commits through PRs, not direct pushes ([4ee1440](https://github.com/TheFehr/foundry-playwright/commit/4ee14401415eda1c0f6afb9739ee7cd6f1e693b1))
+* **ci:** use a GitHub App token so Monitor Releases can create PRs ([630930f](https://github.com/TheFehr/foundry-playwright/commit/630930fc9007a1bf34033dd0d3c7db7a4baf9334))
+* **cli:** clean up temp data dirs and use shared cache ([#23](https://github.com/TheFehr/foundry-playwright/issues/23)) ([a7c9b08](https://github.com/TheFehr/foundry-playwright/commit/a7c9b086ed091a42508f96fbf2771212728a7c7f))
+* **monitor:** suppress re-queuing already-incompatible minors ([f767e1d](https://github.com/TheFehr/foundry-playwright/commit/f767e1d30d07095fc68368cdb42faae1ea559b1b))
+
+
+### Features
+
+* automate nightly compatibility verification on a standalone VM ([2bd67e9](https://github.com/TheFehr/foundry-playwright/commit/2bd67e9e8c0acad75fc696f5257c9805b1087d3b))
+* **ci:** add Renovate config and a fully-automatic release pipeline ([#30](https://github.com/TheFehr/foundry-playwright/issues/30)) ([706ce78](https://github.com/TheFehr/foundry-playwright/commit/706ce78ca352f7e6f22b7df833b3120f4391ba06))
+
 ## [0.6.1](https://github.com/TheFehr/foundry-playwright/compare/v0.6.0...v0.6.1) (2026-06-10)
 
 ### Bug Fixes
