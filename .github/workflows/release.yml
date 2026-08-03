@@ -88,17 +88,48 @@ jobs:
           GH_TOKEN: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
           NEXT: ${{ steps.check.outputs.next }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-
           BRANCH="release/v$NEXT"
-          git checkout -b "$BRANCH"
-          git add package.json package-lock.json CHANGELOG.md
-          git commit -m "chore(release): v$NEXT"
+          BASE_SHA=$(git rev-parse HEAD)
 
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-          git push "$REMOTE" "$BRANCH"
+          # A raw `git commit` + `git push` here would land unsigned - main's
+          # ruleset requires verified signatures, and the runner has no signing
+          # key. Create the commit through the GraphQL API instead (the same
+          # mechanism peter-evans/create-pull-request's sign-commits:true uses
+          # in monitor-releases.yml) so GitHub signs it directly.
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/heads/$BRANCH" -f sha="$BASE_SHA"
 
+          jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "$BRANCH" \
+            --arg oid "$BASE_SHA" \
+            --arg headline "chore(release): v$NEXT" \
+            --arg pkg "$(base64 -w0 package.json)" \
+            --arg lock "$(base64 -w0 package-lock.json)" \
+            --arg changelog "$(base64 -w0 CHANGELOG.md)" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {
+                input: {
+                  branch: { repositoryNameWithOwner: $repo, branchName: $branch },
+                  message: { headline: $headline },
+                  expectedHeadOid: $oid,
+                  fileChanges: {
+                    additions: [
+                      { path: "package.json", contents: $pkg },
+                      { path: "package-lock.json", contents: $lock },
+                      { path: "CHANGELOG.md", contents: $changelog }
+                    ]
+                  }
+                }
+              }
+            }' | gh api graphql --input -
+
+          # peter-evans/create-pull-request's labels input uses the REST
+          # issues/labels endpoint, which needs Issues permission this
+          # installation doesn't have - gh pr create's --label bundles the
+          # label into the same PR-creation mutation instead, which this
+          # token can do, as long as the label already exists in the repo.
           gh label create release --color 0e8a16 --description "Automated release PR" 2>/dev/null || true
 
           gh pr create --title "chore(release): v$NEXT" \
