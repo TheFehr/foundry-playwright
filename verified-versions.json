@@ -139,27 +139,27 @@
     "system": "dnd5e",
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
-    "status": "pending",
-    "timestamp": "2026-07-31T20:24:46.892Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.365 --system dnd5e --system-minor 5.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-03T18:08:56.848Z",
+    "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "14.365",
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "pending",
-    "timestamp": "2026-07-31T20:24:47.044Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.365 --system dnd5e --system-minor 5.2 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-08-03T18:17:36.424Z",
+    "notes": "Automated verification failed: user management: create, update, and login; foundry.state: document management; foundry.ui: drop simulation"
   },
   {
     "fvtt": "14.365",
     "system": "dnd5e",
     "systemMinor": "5.1",
     "systemVersion": "5.1.10",
-    "status": "pending",
-    "timestamp": "2026-07-31T20:24:47.211Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.365 --system dnd5e --system-minor 5.1 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-03T18:23:14.656Z",
+    "notes": "Verified locally with dnd5e v5.1.10."
   },
   {
     "fvtt": "13.351.0",
@@ -184,26 +184,26 @@
     "system": "pf2e",
     "systemMinor": "8.4",
     "systemVersion": "8.4.0",
-    "status": "pending",
-    "timestamp": "2026-07-31T20:24:48.081Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.365 --system pf2e --system-minor 8.4 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-03T18:30:32.686Z",
+    "notes": "Verified locally with pf2e v8.4.0."
   },
   {
     "fvtt": "14.365",
     "system": "pf2e",
     "systemMinor": "8.3",
     "systemVersion": "8.3.0",
-    "status": "pending",
-    "timestamp": "2026-07-31T20:24:48.244Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.365 --system pf2e --system-minor 8.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-03T18:37:24.090Z",
+    "notes": "Verified locally with pf2e v8.3.0."
   },
   {
     "fvtt": "14.365",
     "system": "pf2e",
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-07-31T20:24:48.420Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.365 --system pf2e --system-minor 8.2 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-03T18:44:13.818Z",
+    "notes": "Verified locally with pf2e v8.2.0."
   }
 ]
