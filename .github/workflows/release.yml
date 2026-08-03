@@ -80,7 +80,14 @@ jobs:
         if: steps.detect.outputs.is_release_commit == 'false' && steps.check.outputs.next != ''
         # Commit/tag/push/GitHub-release are all deferred: tagging has to
         # happen against the real post-squash-merge commit, not this one.
-        run: npx release-it --ci --no-git.commit --no-git.tag --no-git.push --no-github.release
+        #
+        # Normal commits go through husky/lint-staged, which runs
+        # format:fix automatically - this commit is created via the API
+        # instead (see below), bypassing git hooks entirely, so format:fix
+        # has to run explicitly or CHANGELOG.md fails the Format Check.
+        run: |
+          npx release-it --ci --no-git.commit --no-git.tag --no-git.push --no-github.release
+          npm run format:fix
 
       - name: Open version-bump PR
         if: steps.detect.outputs.is_release_commit == 'false' && steps.check.outputs.next != ''
