@@ -152,6 +152,67 @@ function upsertRegistryEntry(entry: RegistryEntryWrite): void {
   fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
 }
 
+interface MarkdownSummaryRow {
+  version: string;
+  system: string;
+  modules: string;
+  status: "PASS" | "FAIL";
+  date: string;
+  docker: string;
+}
+
+// Shared by both the pass and fail paths in verifyVersion so a genuine test
+// failure still shows up here, not just in verified-versions.json - a FAIL
+// row silently missing from this report previously hid real results (caught
+// by CodeRabbit on the first PR that actually recorded one).
+function upsertMarkdownSummary(row: MarkdownSummaryRow): void {
+  const summaryPath = path.join(process.cwd(), "verification-report.md");
+  let summaryContent =
+    "# Verification Summary Report\n\n| Version | System | Modules | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+
+  let existingResults: Record<string, unknown>[] = [];
+  if (fs.existsSync(summaryPath)) {
+    const lines = fs.readFileSync(summaryPath, "utf8").split("\n");
+    const rows = lines.filter(
+      (l) => l.startsWith("|") && !l.includes("Version | System") && !l.includes(":---"),
+    );
+    existingResults = rows.map((r) => {
+      const parts = r
+        .split("|")
+        .map((p) => p.trim())
+        .filter((p) => p !== "");
+      return {
+        version: parts[0],
+        system: parts[1],
+        modules: parts[2],
+        status: parts[3],
+        date: parts[4],
+        docker: parts[5],
+      };
+    });
+  }
+
+  const existingIdx = existingResults.findIndex(
+    (r) => r.version === row.version && r.system === row.system,
+  );
+  if (existingIdx !== -1) {
+    existingResults[existingIdx] = row;
+  } else {
+    existingResults.push(row);
+  }
+
+  existingResults.sort((a, b) =>
+    (b.version as string).localeCompare(a.version as string, undefined, { numeric: true }),
+  );
+
+  existingResults.forEach((r) => {
+    summaryContent += `| ${r.version} | ${r.system} | ${r.modules} | ${r.status} | ${r.date} | ${r.docker} |\n`;
+  });
+
+  fs.writeFileSync(summaryPath, summaryContent);
+  console.log(`Summary updated: ${summaryPath}`);
+}
+
 function getPlaywrightImageTag(): string {
   const pkgPath = path.join(process.cwd(), "node_modules", "@playwright", "test", "package.json");
   const { version } = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { version: string };
@@ -456,61 +517,15 @@ async function verifyVersion(
     console.log(`--- Verification Successful for ${version} ---`);
 
     // Update Cumulative Summary Report
-    const summaryPath = path.join(process.cwd(), "verification-report.md");
-    let summaryContent =
-      "# Verification Summary Report\n\n| Version | System | Modules | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n";
-
-    let existingResults: Record<string, unknown>[] = [];
-    if (fs.existsSync(summaryPath)) {
-      const lines = fs.readFileSync(summaryPath, "utf8").split("\n");
-      const rows = lines.filter(
-        (l) => l.startsWith("|") && !l.includes("Version | System") && !l.includes(":---"),
-      );
-      existingResults = rows.map((r) => {
-        const parts = r
-          .split("|")
-          .map((p) => p.trim())
-          .filter((p) => p !== "");
-        return {
-          version: parts[0],
-          system: parts[1],
-          modules: parts[2],
-          status: parts[3],
-          date: parts[4],
-          docker: parts[5],
-        };
-      });
-    }
-
     const installedSystemVersion = meta.system.version;
-    const currentResult = {
-      version: version,
+    upsertMarkdownSummary({
+      version,
       system: `${meta.system.id} (v${installedSystemVersion})`,
       modules: meta.modules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
       status: "PASS",
       date: new Date().toISOString().split("T")[0],
       docker: isDocker ? "Yes" : "No",
-    };
-
-    const existingIdx = existingResults.findIndex(
-      (r) => r.version === version && r.system === currentResult.system,
-    );
-    if (existingIdx !== -1) {
-      existingResults[existingIdx] = currentResult;
-    } else {
-      existingResults.push(currentResult);
-    }
-
-    existingResults.sort((a, b) =>
-      (b.version as string).localeCompare(a.version as string, undefined, { numeric: true }),
-    );
-
-    existingResults.forEach((r) => {
-      summaryContent += `| ${r.version} | ${r.system} | ${r.modules} | ${r.status} | ${r.date} | ${r.docker} |\n`;
     });
-
-    fs.writeFileSync(summaryPath, summaryContent);
-    console.log(`Summary updated: ${summaryPath}`);
 
     // Registry update — key is (fvtt, system, systemMinor)
     if (updateRegistry) {
@@ -574,6 +589,14 @@ async function verifyVersion(
           status: "failed",
           timestamp: new Date().toISOString(),
           notes: `Automated verification failed: ${failures.join("; ")}`,
+        });
+        upsertMarkdownSummary({
+          version,
+          system: `${meta.system.id || system} (v${resolvedSystemVersion})`,
+          modules: realModules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
+          status: "FAIL",
+          date: new Date().toISOString().split("T")[0],
+          docker: isDocker ? "Yes" : "No",
         });
         console.log("Registry updated with failure entry.");
       }

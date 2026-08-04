@@ -3,6 +3,7 @@
 | Version  | System          | Modules           | Status | Date       | Docker |
 | :------- | :-------------- | :---------------- | :----- | :--------- | :----- |
 | 14.365   | dnd5e (v5.3.3)  | fake-module@1.0.0 | PASS   | 2026-08-03 | Yes    |
+| 14.365   | dnd5e (v5.2.5)  | fake-module@1.0.0 | FAIL   | 2026-08-03 | Yes    |
 | 14.365   | dnd5e (v5.1.10) | fake-module@1.0.0 | PASS   | 2026-08-03 | Yes    |
 | 14.365   | pf2e (v8.4.0)   | fake-module@1.0.0 | PASS   | 2026-08-03 | Yes    |
 | 14.365   | pf2e (v8.3.0)   | fake-module@1.0.0 | PASS   | 2026-08-03 | Yes    |
