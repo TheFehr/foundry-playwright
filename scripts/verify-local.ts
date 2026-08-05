@@ -525,15 +525,18 @@ async function verifyVersion(
     // on which one ran). Caught rather than thrown: a disk-write hiccup here
     // shouldn't override a real test pass with a misleading failure result.
     try {
-      const installedSystemVersion = meta.system.version;
-      if (updateRegistry) {
-        const realModules = filterRealModules(meta.modules);
-        const resolvedSystemVersion = resolveVerifiedSystemVersion(
-          installedSystemVersion,
-          manifestUrl,
-          systemVersion,
-        );
+      // Computed unconditionally (not just under updateRegistry) so the
+      // markdown row below always matches the registry's own normalization
+      // instead of showing a raw "unknown" version or the fake-module test
+      // scaffold when they diverge.
+      const realModules = filterRealModules(meta.modules);
+      const resolvedSystemVersion = resolveVerifiedSystemVersion(
+        meta.system.version,
+        manifestUrl,
+        systemVersion,
+      );
 
+      if (updateRegistry) {
         if (resolvedSystemVersion === "unknown") {
           console.warn(
             `[verifyVersion] Cannot determine the installed system version for ${version} (metadata missing/invalid and no manifest pin this run) - skipping registry update rather than recording an unverifiable "stable" entry.`,
@@ -556,8 +559,8 @@ async function verifyVersion(
 
       upsertMarkdownSummary({
         version,
-        system: `${meta.system.id} (v${installedSystemVersion})`,
-        modules: meta.modules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
+        system: `${meta.system.id} (v${resolvedSystemVersion})`,
+        modules: realModules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
         status: "PASS",
         date: new Date().toISOString().split("T")[0],
         docker: isDocker ? "Yes" : "No",
