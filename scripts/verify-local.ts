@@ -575,10 +575,16 @@ async function verifyVersion(
     console.error(`--- Verification Failed for ${version} ---`);
     console.error((error as Error).message);
 
-    if (updateRegistry && recordFailures && failures.length > 0) {
+    if (failures.length > 0) {
       // Only genuine test failures land here - Docker/Playwright/report-parsing/
       // metadata errors fall through below, since "failed" is permanent (never
       // retried by --all-pending) and an infra hiccup isn't a real incompatibility.
+      //
+      // The markdown summary is written below regardless of updateRegistry/
+      // recordFailures - a report-only run should still show a real failure,
+      // same as the pass path always writes a PASS row regardless of those
+      // flags. Only the permanent verified-versions.json entry is gated by
+      // them.
       const realModules = filterRealModules(meta.modules);
       // manifestUrl is recomputed here since the one from the try block above
       // is out of scope in this catch block - same resolution rule either way.
@@ -591,7 +597,7 @@ async function verifyVersion(
 
       if (resolvedSystemVersion === "unknown") {
         console.log(
-          `Not recording a failure entry for ${version}: cannot determine which system version was actually tested (metadata missing/invalid and no manifest pin this run). Leaving the entry pending so --all-pending retries it.`,
+          `Not recording failure details for ${version}: cannot determine which system version was actually tested (metadata missing/invalid and no manifest pin this run).`,
         );
       } else {
         // Same order and error containment as the pass path above: registry
@@ -599,17 +605,20 @@ async function verifyVersion(
         // rather than escaping this already-executing catch block (which
         // would abort the whole run instead of returning the real result).
         try {
-          console.log(`Recording failure in verified-versions.json for ${version}...`);
-          upsertRegistryEntry({
-            fvtt: version,
-            system: meta.system.id || system,
-            systemMinor: minorOf(resolvedSystemVersion),
-            systemVersion: resolvedSystemVersion,
-            modules: realModules.length > 0 ? realModules : undefined,
-            status: "failed",
-            timestamp: new Date().toISOString(),
-            notes: `Automated verification failed: ${failures.join("; ")}`,
-          });
+          if (updateRegistry && recordFailures) {
+            console.log(`Recording failure in verified-versions.json for ${version}...`);
+            upsertRegistryEntry({
+              fvtt: version,
+              system: meta.system.id || system,
+              systemMinor: minorOf(resolvedSystemVersion),
+              systemVersion: resolvedSystemVersion,
+              modules: realModules.length > 0 ? realModules : undefined,
+              status: "failed",
+              timestamp: new Date().toISOString(),
+              notes: `Automated verification failed: ${failures.join("; ")}`,
+            });
+            console.log("Registry updated with failure entry.");
+          }
           upsertMarkdownSummary({
             version,
             system: `${meta.system.id || system} (v${resolvedSystemVersion})`,
@@ -618,7 +627,6 @@ async function verifyVersion(
             date: new Date().toISOString().split("T")[0],
             docker: isDocker ? "Yes" : "No",
           });
-          console.log("Registry updated with failure entry.");
         } catch (persistError) {
           console.error(
             `[verifyVersion] Failed to persist failure results for ${version}: ${(persistError as Error).message}`,
