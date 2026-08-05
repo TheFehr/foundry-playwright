@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.2](https://github.com/TheFehr/foundry-playwright/compare/v0.7.1...v0.7.2) (2026-08-05)
+
+### Bug Fixes
+
+- **verify:** include failed pairings in verification-report.md ([#41](https://github.com/TheFehr/foundry-playwright/issues/41)) ([04516d5](https://github.com/TheFehr/foundry-playwright/commit/04516d522eefed8cf8d61811b5b8a230276f827d))
+
 ## [0.7.1](https://github.com/TheFehr/foundry-playwright/compare/v0.7.0...v0.7.1) (2026-08-03)
 
 # [0.7.0](https://github.com/TheFehr/foundry-playwright/compare/v0.6.1...v0.7.0) (2026-08-03)
