@@ -156,7 +156,7 @@ interface MarkdownSummaryRow {
   version: string;
   system: string;
   modules: string;
-  status: "PASS" | "FAIL";
+  status: string;
   date: string;
   docker: string;
 }
@@ -170,26 +170,30 @@ function upsertMarkdownSummary(row: MarkdownSummaryRow): void {
   let summaryContent =
     "# Verification Summary Report\n\n| Version | System | Modules | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n";
 
-  let existingResults: Record<string, unknown>[] = [];
+  let existingResults: MarkdownSummaryRow[] = [];
   if (fs.existsSync(summaryPath)) {
     const lines = fs.readFileSync(summaryPath, "utf8").split("\n");
-    const rows = lines.filter(
-      (l) => l.startsWith("|") && !l.includes("Version | System") && !l.includes(":---"),
-    );
-    existingResults = rows.map((r) => {
-      const parts = r
-        .split("|")
-        .map((p) => p.trim())
-        .filter((p) => p !== "");
-      return {
-        version: parts[0],
-        system: parts[1],
-        modules: parts[2],
-        status: parts[3],
-        date: parts[4],
-        docker: parts[5],
-      };
-    });
+    existingResults = lines
+      .filter((l) => l.trim().startsWith("|"))
+      .map((r) =>
+        r
+          .split("|")
+          .map((p) => p.trim())
+          .filter((p) => p !== ""),
+      )
+      // A formatter (oxfmt/prettier) pads table cells with extra spaces to
+      // align columns, so the header/separator can't be matched by a fixed
+      // substring like "Version | System" - compare normalized cell values
+      // instead, and drop the separator row by its ":---"-only cell shape.
+      .filter((cells) => cells.length >= 6 && cells[0] !== "Version" && !/^:?-+:?$/.test(cells[0]))
+      .map((cells) => ({
+        version: cells[0],
+        system: cells[1],
+        modules: cells[2],
+        status: cells[3],
+        date: cells[4],
+        docker: cells[5],
+      }));
   }
 
   const existingIdx = existingResults.findIndex(
@@ -516,44 +520,52 @@ async function verifyVersion(
 
     console.log(`--- Verification Successful for ${version} ---`);
 
-    // Update Cumulative Summary Report
-    const installedSystemVersion = meta.system.version;
-    upsertMarkdownSummary({
-      version,
-      system: `${meta.system.id} (v${installedSystemVersion})`,
-      modules: meta.modules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
-      status: "PASS",
-      date: new Date().toISOString().split("T")[0],
-      docker: isDocker ? "Yes" : "No",
-    });
-
-    // Registry update — key is (fvtt, system, systemMinor)
-    if (updateRegistry) {
-      const realModules = filterRealModules(meta.modules);
-      const resolvedSystemVersion = resolveVerifiedSystemVersion(
-        installedSystemVersion,
-        manifestUrl,
-        systemVersion,
-      );
-
-      if (resolvedSystemVersion === "unknown") {
-        console.warn(
-          `[verifyVersion] Cannot determine the installed system version for ${version} (metadata missing/invalid and no manifest pin this run) - skipping registry update rather than recording an unverifiable "stable" entry.`,
+    // Persist results (registry, then the markdown summary derived from it —
+    // same order the fail path below uses, so the two can't silently diverge
+    // on which one ran). Caught rather than thrown: a disk-write hiccup here
+    // shouldn't override a real test pass with a misleading failure result.
+    try {
+      const installedSystemVersion = meta.system.version;
+      if (updateRegistry) {
+        const realModules = filterRealModules(meta.modules);
+        const resolvedSystemVersion = resolveVerifiedSystemVersion(
+          installedSystemVersion,
+          manifestUrl,
+          systemVersion,
         );
-      } else {
-        console.log(`Updating verified-versions.json for ${version}...`);
-        upsertRegistryEntry({
-          fvtt: version,
-          system: meta.system.id,
-          systemMinor: minorOf(resolvedSystemVersion),
-          systemVersion: resolvedSystemVersion,
-          modules: realModules.length > 0 ? realModules : undefined,
-          status: "stable",
-          timestamp: new Date().toISOString(),
-          notes: `Verified locally with ${meta.system.id} v${resolvedSystemVersion}.`,
-        });
-        console.log("Registry updated successfully.");
+
+        if (resolvedSystemVersion === "unknown") {
+          console.warn(
+            `[verifyVersion] Cannot determine the installed system version for ${version} (metadata missing/invalid and no manifest pin this run) - skipping registry update rather than recording an unverifiable "stable" entry.`,
+          );
+        } else {
+          console.log(`Updating verified-versions.json for ${version}...`);
+          upsertRegistryEntry({
+            fvtt: version,
+            system: meta.system.id,
+            systemMinor: minorOf(resolvedSystemVersion),
+            systemVersion: resolvedSystemVersion,
+            modules: realModules.length > 0 ? realModules : undefined,
+            status: "stable",
+            timestamp: new Date().toISOString(),
+            notes: `Verified locally with ${meta.system.id} v${resolvedSystemVersion}.`,
+          });
+          console.log("Registry updated successfully.");
+        }
       }
+
+      upsertMarkdownSummary({
+        version,
+        system: `${meta.system.id} (v${installedSystemVersion})`,
+        modules: meta.modules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
+        status: "PASS",
+        date: new Date().toISOString().split("T")[0],
+        docker: isDocker ? "Yes" : "No",
+      });
+    } catch (persistError) {
+      console.error(
+        `[verifyVersion] Failed to persist results for ${version}: ${(persistError as Error).message}`,
+      );
     }
     return { success: true, failures: [] };
   } catch (error: unknown) {
@@ -579,26 +591,36 @@ async function verifyVersion(
           `Not recording a failure entry for ${version}: cannot determine which system version was actually tested (metadata missing/invalid and no manifest pin this run). Leaving the entry pending so --all-pending retries it.`,
         );
       } else {
-        console.log(`Recording failure in verified-versions.json for ${version}...`);
-        upsertRegistryEntry({
-          fvtt: version,
-          system: meta.system.id || system,
-          systemMinor: minorOf(resolvedSystemVersion),
-          systemVersion: resolvedSystemVersion,
-          modules: realModules.length > 0 ? realModules : undefined,
-          status: "failed",
-          timestamp: new Date().toISOString(),
-          notes: `Automated verification failed: ${failures.join("; ")}`,
-        });
-        upsertMarkdownSummary({
-          version,
-          system: `${meta.system.id || system} (v${resolvedSystemVersion})`,
-          modules: realModules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
-          status: "FAIL",
-          date: new Date().toISOString().split("T")[0],
-          docker: isDocker ? "Yes" : "No",
-        });
-        console.log("Registry updated with failure entry.");
+        // Same order and error containment as the pass path above: registry
+        // first, then the markdown summary, with a write failure logged
+        // rather than escaping this already-executing catch block (which
+        // would abort the whole run instead of returning the real result).
+        try {
+          console.log(`Recording failure in verified-versions.json for ${version}...`);
+          upsertRegistryEntry({
+            fvtt: version,
+            system: meta.system.id || system,
+            systemMinor: minorOf(resolvedSystemVersion),
+            systemVersion: resolvedSystemVersion,
+            modules: realModules.length > 0 ? realModules : undefined,
+            status: "failed",
+            timestamp: new Date().toISOString(),
+            notes: `Automated verification failed: ${failures.join("; ")}`,
+          });
+          upsertMarkdownSummary({
+            version,
+            system: `${meta.system.id || system} (v${resolvedSystemVersion})`,
+            modules: realModules.map((m) => `${m.id}@${m.version}`).join(", ") || "none",
+            status: "FAIL",
+            date: new Date().toISOString().split("T")[0],
+            docker: isDocker ? "Yes" : "No",
+          });
+          console.log("Registry updated with failure entry.");
+        } catch (persistError) {
+          console.error(
+            `[verifyVersion] Failed to persist failure results for ${version}: ${(persistError as Error).message}`,
+          );
+        }
       }
     } else if (updateRegistry && recordFailures) {
       console.log(
