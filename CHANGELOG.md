@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.3](https://github.com/TheFehr/foundry-playwright/compare/v0.7.2...v0.7.3) (2026-08-11)
+
+### Bug Fixes
+
+- **ci:** give Monitor Releases' gh calls the App token ([#43](https://github.com/TheFehr/foundry-playwright/issues/43)) ([15dcaec](https://github.com/TheFehr/foundry-playwright/commit/15dcaeccb46f3431392483b6722256ce8e429533))
+
 ## [0.7.2](https://github.com/TheFehr/foundry-playwright/compare/v0.7.1...v0.7.2) (2026-08-05)
 
 ### Bug Fixes
