@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.4](https://github.com/TheFehr/foundry-playwright/compare/v0.7.3...v0.7.4) (2026-08-14)
+
+### Bug Fixes
+
+- **canvas:** allow FoundryCanvas to be subclassed ([#45](https://github.com/TheFehr/foundry-playwright/issues/45)) ([49e9a69](https://github.com/TheFehr/foundry-playwright/commit/49e9a6959a3c5a62b46dbf7f9cd8d8bef3dc56e7))
+
 ## [0.7.3](https://github.com/TheFehr/foundry-playwright/compare/v0.7.2...v0.7.3) (2026-08-11)
 
 ### Bug Fixes
