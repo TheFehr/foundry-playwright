@@ -19,6 +19,8 @@ export {
   handleModuleActivationFlow,
   dropCompendiumItem,
   useFoundry,
+  getVerificationRegistry,
+  RegistryEntry,
 } from "./helpers.js";
 export * from "./types/index.js";
 export * from "./auth.js";

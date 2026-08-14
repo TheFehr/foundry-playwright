@@ -11,6 +11,7 @@ import {
 } from "@playwright/test";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 
 /**
  * Loads the verification registry from verified-versions.json.
@@ -23,10 +24,36 @@ export interface RegistryEntry {
   notes?: string;
 }
 
+/**
+ * Resolves verified-versions.json in two contexts:
+ *  1. Running inside this repo (e.g. its own scripts/tests) — cwd is the
+ *     repo root, where the file lives at the top level.
+ *  2. Running as an installed dependency — cwd is the *consumer's*
+ *     project, not this package, so fall back to a path relative to
+ *     this module's own location. `verified-versions.json` ships
+ *     alongside `dist/` (see package.json's `files`), so it's one
+ *     directory up from this compiled file.
+ */
+function resolveRegistryPath(): string | undefined {
+  const cwdPath = path.join(process.cwd(), "verified-versions.json");
+  if (fs.existsSync(cwdPath)) return cwdPath;
+
+  const packagePath = fileURLToPath(new URL("../verified-versions.json", import.meta.url));
+  if (fs.existsSync(packagePath)) return packagePath;
+
+  return undefined;
+}
+
+/**
+ * Reads the library's `verified-versions.json` registry of confirmed
+ * (Foundry x system) compatibility results. Works both inside this
+ * repo and when `@thefehr/foundry-playwright` is installed as a
+ * dependency — see {@link resolveRegistryPath}.
+ */
 export function getVerificationRegistry(): RegistryEntry[] {
   try {
-    const registryPath = path.join(process.cwd(), "verified-versions.json");
-    if (fs.existsSync(registryPath)) {
+    const registryPath = resolveRegistryPath();
+    if (registryPath) {
       return JSON.parse(fs.readFileSync(registryPath, "utf8"));
     }
   } catch (e) {
