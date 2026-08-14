@@ -4,7 +4,13 @@ import { Page } from "@playwright/test";
  * Utilities for interacting with the Foundry VTT WebGL Canvas.
  */
 export class FoundryCanvas {
-  constructor(private page: Page) {}
+  /**
+   * Exposed as `protected` (not `private`) so consumers can subclass
+   * FoundryCanvas to add their own page-driven interaction helpers
+   * (e.g. touch/gesture helpers) while reusing the protected `page` and
+   * public helpers such as `gridToPixels`.
+   */
+  constructor(protected page: Page) {}
 
   /**
    * Converts grid coordinates (row, col) to viewport pixels.
