@@ -7,8 +7,8 @@ export class FoundryCanvas {
   /**
    * Exposed as `protected` (not `private`) so consumers can subclass
    * FoundryCanvas to add their own page-driven interaction helpers
-   * (e.g. touch/gesture helpers) without reimplementing coordinate
-   * lookups like getTokenCanvasPosition/gridToPixels from scratch.
+   * (e.g. touch/gesture helpers) while reusing the protected `page` and
+   * public helpers such as `gridToPixels`.
    */
   constructor(protected page: Page) {}
 
