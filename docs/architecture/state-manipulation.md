@@ -62,12 +62,18 @@ await foundry.state.executeMacro("My Macro");
 ### User Management
 
 ```typescript
-import { UserRole } from "@thefehr/foundry-playwright";
+import { UserRole, DocumentOwnershipLevel } from "@thefehr/foundry-playwright";
 
 const userId = await foundry.state.createUser("Player One", UserRole.PLAYER, "password");
 await foundry.state.setUserRole(userId, UserRole.TRUSTED);
 await foundry.state.updateUser(userId, { color: "#ff0000" });
+
+// Sets user.character — a UI convenience, NOT document ownership.
 await foundry.state.assignActorToUser(userId, actorId);
+
+// Sets actor.ownership[userId] — what most modules actually check for
+// "does this user own this actor" (Owner/Observer/Limited/None).
+await foundry.state.setActorOwnership(actorId, userId, DocumentOwnershipLevel.OWNER);
 
 // Grant a core permission to a role
 await foundry.state.setRolePermission("FILES_BROWSE", UserRole.PLAYER, true);

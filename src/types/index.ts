@@ -18,3 +18,16 @@ export enum UserRole {
   ASSISTANT = 3,
   GAMEMASTER = 4,
 }
+
+/**
+ * Foundry VTT Document Ownership Levels as defined in
+ * CONST.DOCUMENT_OWNERSHIP_LEVELS. Distinct from {@link UserRole}: this
+ * is per-document (e.g. `actor.ownership[userId]`), not per-user.
+ */
+export enum DocumentOwnershipLevel {
+  INHERIT = -1,
+  NONE = 0,
+  LIMITED = 1,
+  OBSERVER = 2,
+  OWNER = 3,
+}
