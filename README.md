@@ -85,6 +85,8 @@ npm run verify:local -- --docker --version 14.360.0 --system dnd5e
 | `FOUNDRY_ADMIN_PASSWORD` / `FOUNDRY_ADMIN_KEY` | Admin password for setup operations                                  |
 | `FOUNDRY_USERNAME` / `FOUNDRY_PASSWORD`        | Foundry account credentials for Docker image download                |
 
+> `UIAdapter` (and `registerUIAdapter`) is scoped to actor-sheet-shaped UIs — an application selector plus tabs/collapsible sections. If the module under test has its own UI that isn't an actor sheet variant (a HUD, a control bar, a custom fullscreen layout), define plain selector constants in your own test suite instead of forcing that UI through the adapter interface.
+
 ## Documentation
 
 - [Authentication & World Setup](docs/architecture/auth-and-world.md)
