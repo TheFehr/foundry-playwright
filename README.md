@@ -73,6 +73,11 @@ npx playwright test
 
 # With a Docker-managed Foundry instance
 npm run verify:local -- --docker --version 14.360.0 --system dnd5e
+
+# foundry-playwright test --docker auto-mounts e2e/<name>/module.json folders and a
+# root module.json in the CWD. For a module that needs a build step first (e.g. a
+# git-submodule checkout built into its own dist/), point at the built output directly:
+npx foundry-playwright test --docker --module-dir ../my-module/dist
 ```
 
 ## Configuration

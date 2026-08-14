@@ -15,6 +15,22 @@ program
 
 program.command("init").description("Initialize a new Foundry E2E test project").action(initAction);
 
+/**
+ * Copies a directory containing a module.json straight into
+ * Data/modules/<id>, keyed by the id/name field inside that
+ * module.json (not the source directory's name).
+ */
+function mountModuleFromManifest(sourceDir: string, tmpDataDir: string): void {
+  const manifestPath = path.join(sourceDir, "module.json");
+  const moduleData = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const moduleId = moduleData.id || moduleData.name;
+  if (!moduleId) return;
+
+  const modulesDir = path.join(tmpDataDir, "Data", "modules", moduleId);
+  fs.mkdirSync(modulesDir, { recursive: true });
+  fs.cpSync(sourceDir, modulesDir, { recursive: true });
+}
+
 program
   .command("test")
   .description("Run E2E tests with an optional Docker-orchestrated Foundry instance")
@@ -23,8 +39,17 @@ program
   .option("--docker", "Use Docker for the Foundry instance")
   .option("--update-registry", "Update verified-versions.json on success")
   .option("--playwright <command>", "Playwright command to run", "npx playwright test")
+  .option(
+    "--module-dir <path>",
+    "Mount a pre-built module directory (containing its own module.json) into " +
+      "Data/modules/<id>, keyed by the id/name inside that module.json. Repeatable. " +
+      "Use this for modules that need a build step first (e.g. a submodule's dist/ " +
+      "output) and so don't fit the e2e/<name>/module.json auto-mount convention.",
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
   .action(async (options) => {
-    const { version, system, docker, updateRegistry, playwright } = options;
+    const { version, system, docker, updateRegistry, playwright, moduleDir } = options;
     let orchestrator: DockerFoundryOrchestrator | null = null;
     let tmpDataDir: string | null = null;
 
@@ -76,6 +101,16 @@ program
               fs.cpSync(srcPath, destPath, { recursive: true });
             }
           }
+        }
+
+        // Explicit --module-dir mounts, for modules that need a build
+        // step first and so aren't in e2e/ or the CWD root as-is.
+        for (const dir of moduleDir as string[]) {
+          const sourceDir = path.resolve(process.cwd(), dir);
+          if (!fs.existsSync(path.join(sourceDir, "module.json"))) {
+            throw new Error(`--module-dir "${dir}" does not contain a module.json`);
+          }
+          mountModuleFromManifest(sourceDir, tmpDataDir);
         }
 
         const url = await orchestrator.start();
