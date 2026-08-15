@@ -30,4 +30,16 @@ describe("getVerificationRegistry", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("falls back to the package-relative registry when cwd's verified-versions.json is malformed", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-registry-test-"));
+    fs.writeFileSync(path.join(tmpDir, "verified-versions.json"), "{ not valid json");
+    vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+    try {
+      const registry = getVerificationRegistry();
+      expect(registry.length).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

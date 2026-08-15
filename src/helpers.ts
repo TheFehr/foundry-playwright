@@ -25,7 +25,8 @@ export interface RegistryEntry {
 }
 
 /**
- * Resolves verified-versions.json in two contexts:
+ * Candidate paths for verified-versions.json, in priority order, for two
+ * contexts:
  *  1. Running inside this repo (e.g. its own scripts/tests) — cwd is the
  *     repo root, where the file lives at the top level.
  *  2. Running as an installed dependency — cwd is the *consumer's*
@@ -34,30 +35,30 @@ export interface RegistryEntry {
  *     alongside `dist/` (see package.json's `files`), so it's one
  *     directory up from this compiled file.
  */
-function resolveRegistryPath(): string | undefined {
-  const cwdPath = path.join(process.cwd(), "verified-versions.json");
-  if (fs.existsSync(cwdPath)) return cwdPath;
-
-  const packagePath = fileURLToPath(new URL("../verified-versions.json", import.meta.url));
-  if (fs.existsSync(packagePath)) return packagePath;
-
-  return undefined;
+function registryPathCandidates(): string[] {
+  return [
+    path.join(process.cwd(), "verified-versions.json"),
+    fileURLToPath(new URL("../verified-versions.json", import.meta.url)),
+  ];
 }
 
 /**
  * Reads the library's `verified-versions.json` registry of confirmed
  * (Foundry x system) compatibility results. Works both inside this
  * repo and when `@thefehr/foundry-playwright` is installed as a
- * dependency — see {@link resolveRegistryPath}.
+ * dependency — see {@link registryPathCandidates}. If a candidate exists
+ * but is unreadable or contains invalid JSON, falls through to the next
+ * candidate instead of giving up (e.g. a consumer project with a stale
+ * or malformed `verified-versions.json` still gets the bundled registry).
  */
 export function getVerificationRegistry(): RegistryEntry[] {
-  try {
-    const registryPath = resolveRegistryPath();
-    if (registryPath) {
+  for (const registryPath of registryPathCandidates()) {
+    if (!fs.existsSync(registryPath)) continue;
+    try {
       return JSON.parse(fs.readFileSync(registryPath, "utf8"));
+    } catch (e) {
+      console.warn(`[getVerificationRegistry] Failed to load registry at ${registryPath}:`, e);
     }
-  } catch (e) {
-    console.warn("[getVerificationRegistry] Failed to load registry:", e);
   }
   return [];
 }
