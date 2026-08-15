@@ -11,6 +11,7 @@ A robust, multi-version E2E testing library for FoundryVTT modules and systems, 
 - **UI Helpers:** Tab switching, drop simulation, aggressive tour suppression, and dialog automation across V13 and V14 sheet layouts.
 - **System Adapters:** First-class support for dnd5e and PF2e with pluggable `SystemStateAdapter` and `UIAdapter` interfaces.
 - **Verified Versions Matrix:** A continuously updated `verified-versions.json` registry of confirmed-working (Foundry × system) combinations, maintained by a nightly release monitor.
+- **Screen vs. Viewport:** `withScreenSize`/`setScreenSize` let `window.screen.width`/`height` (the physical display, used by some modules for mobile detection) diverge from `viewport` (`window.innerWidth`/`height`), which Playwright's `viewport` option alone can't do.
 
 ## Getting Started
 
