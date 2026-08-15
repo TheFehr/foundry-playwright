@@ -20,7 +20,7 @@ export interface RegistryEntry {
   fvtt: string;
   system: string;
   systemVersion: string;
-  status: "stable" | "incompatible";
+  status: "stable" | "incompatible" | "pending" | "failed";
   notes?: string;
 }
 
@@ -42,20 +42,42 @@ function registryPathCandidates(): string[] {
   ];
 }
 
+function isRegistryEntryArray(value: unknown): value is RegistryEntry[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entry) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as Record<string, unknown>).fvtt === "string" &&
+        typeof (entry as Record<string, unknown>).system === "string" &&
+        typeof (entry as Record<string, unknown>).systemVersion === "string" &&
+        ["stable", "incompatible", "pending", "failed"].includes(
+          (entry as Record<string, unknown>).status as string,
+        ),
+    )
+  );
+}
+
 /**
  * Reads the library's `verified-versions.json` registry of confirmed
  * (Foundry x system) compatibility results. Works both inside this
  * repo and when `@thefehr/foundry-playwright` is installed as a
  * dependency — see {@link registryPathCandidates}. If a candidate exists
- * but is unreadable or contains invalid JSON, falls through to the next
- * candidate instead of giving up (e.g. a consumer project with a stale
- * or malformed `verified-versions.json` still gets the bundled registry).
+ * but is unreadable, contains invalid JSON, or doesn't parse to a valid
+ * `RegistryEntry[]` shape, falls through to the next candidate instead of
+ * giving up (e.g. a consumer project with a stale or malformed
+ * `verified-versions.json` still gets the bundled registry).
  */
 export function getVerificationRegistry(): RegistryEntry[] {
   for (const registryPath of registryPathCandidates()) {
     if (!fs.existsSync(registryPath)) continue;
     try {
-      return JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      const parsed: unknown = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      if (!isRegistryEntryArray(parsed)) {
+        throw new Error("Parsed JSON is not a valid RegistryEntry[]");
+      }
+      return parsed;
     } catch (e) {
       console.warn(`[getVerificationRegistry] Failed to load registry at ${registryPath}:`, e);
     }
