@@ -11,6 +11,7 @@ import {
 } from "@playwright/test";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 
 /**
  * Loads the verification registry from verified-versions.json.
@@ -19,18 +20,69 @@ export interface RegistryEntry {
   fvtt: string;
   system: string;
   systemVersion: string;
-  status: "stable" | "incompatible";
+  status: "stable" | "incompatible" | "pending" | "failed";
   notes?: string;
 }
 
+/**
+ * Candidate paths for verified-versions.json, in priority order, for two
+ * contexts:
+ *  1. Running inside this repo (e.g. its own scripts/tests) — cwd is the
+ *     repo root, where the file lives at the top level.
+ *  2. Running as an installed dependency — cwd is the *consumer's*
+ *     project, not this package, so fall back to a path relative to
+ *     this module's own location. `verified-versions.json` ships
+ *     alongside `dist/` (see package.json's `files`), so it's one
+ *     directory up from this compiled file.
+ */
+function registryPathCandidates(): string[] {
+  return [
+    path.join(process.cwd(), "verified-versions.json"),
+    fileURLToPath(new URL("../verified-versions.json", import.meta.url)),
+  ];
+}
+
+function isRegistryEntryArray(value: unknown): value is RegistryEntry[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entry) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as Record<string, unknown>).fvtt === "string" &&
+        typeof (entry as Record<string, unknown>).system === "string" &&
+        typeof (entry as Record<string, unknown>).systemVersion === "string" &&
+        ["stable", "incompatible", "pending", "failed"].includes(
+          (entry as Record<string, unknown>).status as string,
+        ) &&
+        (typeof (entry as Record<string, unknown>).notes === "undefined" ||
+          typeof (entry as Record<string, unknown>).notes === "string"),
+    )
+  );
+}
+
+/**
+ * Reads the library's `verified-versions.json` registry of confirmed
+ * (Foundry x system) compatibility results. Works both inside this
+ * repo and when `@thefehr/foundry-playwright` is installed as a
+ * dependency — see {@link registryPathCandidates}. If a candidate exists
+ * but is unreadable, contains invalid JSON, or doesn't parse to a valid
+ * `RegistryEntry[]` shape, falls through to the next candidate instead of
+ * giving up (e.g. a consumer project with a stale or malformed
+ * `verified-versions.json` still gets the bundled registry).
+ */
 export function getVerificationRegistry(): RegistryEntry[] {
-  try {
-    const registryPath = path.join(process.cwd(), "verified-versions.json");
-    if (fs.existsSync(registryPath)) {
-      return JSON.parse(fs.readFileSync(registryPath, "utf8"));
+  for (const registryPath of registryPathCandidates()) {
+    if (!fs.existsSync(registryPath)) continue;
+    try {
+      const parsed: unknown = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      if (!isRegistryEntryArray(parsed)) {
+        throw new Error("Parsed JSON is not a valid RegistryEntry[]");
+      }
+      return parsed;
+    } catch (e) {
+      console.warn(`[getVerificationRegistry] Failed to load registry at ${registryPath}:`, e);
     }
-  } catch (e) {
-    console.warn("[getVerificationRegistry] Failed to load registry:", e);
   }
   return [];
 }

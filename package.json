@@ -22,7 +22,8 @@
     "foundry-playwright": "./dist/cli/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "verified-versions.json"
   ],
   "type": "module",
   "main": "./dist/index.js",
