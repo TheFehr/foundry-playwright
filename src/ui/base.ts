@@ -2,6 +2,20 @@ import { Page } from "@playwright/test";
 
 /**
  * Interface for UI-specific logic and selectors in Foundry VTT.
+ *
+ * `UIAdapter` is shaped specifically for actor-sheet-like UIs: an
+ * application selector, tabs, and collapsible sections. It's the right
+ * fit for adapting to different sheet modules (Tidy5e, the default
+ * dnd5e sheet, etc.) via {@link registerUIAdapter}.
+ *
+ * It is *not* a general-purpose "module UI" abstraction. A module whose
+ * UI doesn't look like an actor sheet (e.g. a HUD, a control bar, a
+ * custom fullscreen layout) usually doesn't fit this shape — reach for
+ * a plain exported selector-constants object in the consuming test
+ * suite instead of forcing that UI through `getActorSheetSelector`/
+ * `switchAppTab`/`handleCollapsibleSection`. Only implement `UIAdapter`
+ * for the parts of a module's UI that genuinely are an actor sheet
+ * variant (e.g. an actor sheet rendered inside a custom wrapper).
  */
 export interface UIAdapter {
   /** The unique ID of the module or system this adapter is for. */
