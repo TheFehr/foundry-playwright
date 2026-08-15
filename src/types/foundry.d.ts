@@ -75,6 +75,7 @@ declare global {
       get(module: string, key: string): unknown;
       set(module: string, key: string, value: unknown): Promise<unknown>;
       register(module: string, key: string, data: Record<string, unknown>): void;
+      settings: Map<string, { requiresReload?: boolean; [key: string]: unknown }>;
     };
     socket: {
       emit(event: string, data: unknown): void;

@@ -90,6 +90,13 @@ await foundry.state.setRolePermission("FILES_BROWSE", UserRole.PLAYER, true);
 
 ```typescript
 await foundry.state.setSetting("my-module", "my-key", "value");
+
+// Settings registered with `requiresReload: true` need a page reload
+// before the new value takes effect client-side. This bypasses
+// game.settings' own Settings-form UI, so Foundry's native "Reload
+// required" confirmation dialog never appears — pass `{ reload: true }`
+// to have setSetting reload for you when the setting actually requires it.
+await foundry.state.setSetting("my-module", "requires-reload-key", "value", { reload: true });
 ```
 
 ### Hooks & Sockets

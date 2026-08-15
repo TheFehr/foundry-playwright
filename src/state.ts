@@ -444,13 +444,43 @@ export class FoundryState {
 
   /**
    * Sets or updates a Foundry VTT setting.
+   *
+   * This calls `game.settings.set()` directly, bypassing Foundry's
+   * Settings *form* UI entirely — including the native "Reload
+   * required" confirmation dialog that form shows for settings
+   * registered with `requiresReload: true` (that dialog is form
+   * behavior, not a `game.settings.set()` side effect; see
+   * `handleReload()` in helpers.ts, which only applies to the
+   * UI-driven path). A setting written this way still behaves as
+   * "stale" client-side until a reload happens.
+   *
+   * Pass `{ reload: true }` to have this method reload the page
+   * itself when (and only when) the setting is registered with
+   * `requiresReload: true` — otherwise handle the reload yourself
+   * (`page.reload()` + `waitForReady(page)`) or drive the actual
+   * Settings form UI and use `handleReload()`.
    */
-  async setSetting(module: string, key: string, value: unknown) {
-    return this.page.evaluate(
-      ({ module, key, value }) => {
-        return window.game.settings.set(module, key, value);
+  async setSetting(
+    module: string,
+    key: string,
+    value: unknown,
+    options: { reload?: boolean } = {},
+  ) {
+    const { result, requiresReload } = await this.page.evaluate(
+      async ({ module, key, value }) => {
+        const result = await window.game.settings.set(module, key, value);
+        const config = window.game.settings.settings.get(`${module}.${key}`);
+        return { result, requiresReload: Boolean(config?.requiresReload) };
       },
       { module, key, value },
     );
+
+    if (options.reload && requiresReload) {
+      const { waitForReady } = await import("./helpers.js");
+      await this.page.reload();
+      await waitForReady(this.page);
+    }
+
+    return result;
   }
 }
