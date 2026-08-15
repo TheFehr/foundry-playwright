@@ -39,21 +39,41 @@ export function withScreenSize(
  * for genuinely mid-test changes (e.g. simulating a device rotation or
  * an orientation change within a single test).
  *
- * Does not change the viewport by itself — it reuses the page's current
- * viewport size unless one is passed explicitly.
+ * `Emulation.setDeviceMetricsOverride` replaces the page's *entire*
+ * device metrics state, not just screen size — so this always sets
+ * `deviceScaleFactor`/`mobile` too. Playwright exposes no API to read a
+ * page's current values back, so there's nothing to preserve them from;
+ * pass `deviceScaleFactor`/`mobile` explicitly if the page needs
+ * anything other than the defaults (`1`/`false`). Similarly, if the
+ * page's context was created with `viewport: null`, `page.viewportSize()`
+ * returns `null` — pass `viewport` explicitly in that case, since there's
+ * no existing viewport size to fall back to.
  */
 export async function setScreenSize(
   page: Page,
   size: { width: number; height: number },
-  viewport?: { width: number; height: number },
+  options: {
+    viewport?: { width: number; height: number };
+    deviceScaleFactor?: number;
+    mobile?: boolean;
+  } = {},
 ): Promise<void> {
+  const { deviceScaleFactor = 1, mobile = false } = options;
+  const targetViewport = options.viewport ?? page.viewportSize();
+  if (!targetViewport) {
+    throw new Error(
+      "setScreenSize: page has no viewport (its context was likely created with " +
+        "`viewport: null`). Pass `{ viewport: { width, height } }` explicitly — " +
+        "falling back to the screen size would silently change layout dimensions.",
+    );
+  }
+
   const client = await page.context().newCDPSession(page);
-  const targetViewport = viewport ?? page.viewportSize() ?? size;
   await client.send("Emulation.setDeviceMetricsOverride", {
     width: targetViewport.width,
     height: targetViewport.height,
-    deviceScaleFactor: 1,
-    mobile: false,
+    deviceScaleFactor,
+    mobile,
     screenWidth: size.width,
     screenHeight: size.height,
   });
