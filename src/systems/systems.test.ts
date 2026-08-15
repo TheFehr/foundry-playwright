@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { getSystemStateAdapter } from "./index.js";
+import { getSystemStateAdapter, registerSystemStateAdapter } from "./index.js";
 import { DnD5eStateAdapter } from "./dnd5e.js";
 import { PF2eStateAdapter } from "./pf2e.js";
+import { BaseSystemStateAdapter } from "./base.js";
 
 describe("SystemStateAdapters", () => {
   describe("getSystemStateAdapter", () => {
@@ -17,9 +18,34 @@ describe("SystemStateAdapters", () => {
       expect(adapter.id).toBe("pf2e");
     });
 
-    it("defaults to DnD5eStateAdapter for unknown systems", () => {
-      const adapter = getSystemStateAdapter("unknown-system");
-      expect(adapter).toBeInstanceOf(DnD5eStateAdapter);
+    it("throws a descriptive error for unregistered systems instead of silently defaulting", () => {
+      expect(() => getSystemStateAdapter("unknown-system")).toThrow(/unknown-system/);
+      expect(() => getSystemStateAdapter("unknown-system")).toThrow(/registerSystemStateAdapter/);
+    });
+  });
+
+  describe("registerSystemStateAdapter", () => {
+    class AlienStateAdapter extends BaseSystemStateAdapter {
+      id = "alienrpg";
+    }
+
+    it("makes a previously-unknown system resolvable", () => {
+      registerSystemStateAdapter("alienrpg", (page) => new AlienStateAdapter(page));
+      const adapter = getSystemStateAdapter("alienrpg");
+      expect(adapter).toBeInstanceOf(AlienStateAdapter);
+      expect(adapter.id).toBe("alienrpg");
+    });
+
+    it("can override a built-in adapter", () => {
+      class CustomDnD5eAdapter extends BaseSystemStateAdapter {
+        id = "dnd5e";
+      }
+      registerSystemStateAdapter("dnd5e", (page) => new CustomDnD5eAdapter(page));
+      const adapter = getSystemStateAdapter("dnd5e");
+      expect(adapter).toBeInstanceOf(CustomDnD5eAdapter);
+
+      // restore the built-in for subsequent tests in this module
+      registerSystemStateAdapter("dnd5e", (page) => new DnD5eStateAdapter(page));
     });
   });
 
