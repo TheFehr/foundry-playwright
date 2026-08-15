@@ -1,4 +1,4 @@
-import { FoundryPage, UserRole } from "./types/index.js";
+import { FoundryPage, UserRole, DocumentOwnershipLevel } from "./types/index.js";
 import { getSystemStateAdapter, SystemStateAdapter } from "./systems/index.js";
 import { DeprecationTracker } from "./deprecations.js";
 
@@ -381,7 +381,16 @@ export class FoundryState {
   }
 
   /**
-   * Assigns an actor to a user.
+   * Sets a user's default/"assigned" character by updating `user.character`.
+   *
+   * This does **not** grant the user any ownership of the actor — it only
+   * sets which actor Foundry treats as "theirs" for UI conveniences (e.g.
+   * the character portrait in the player list). Many modules gate actual
+   * visibility/interaction on document ownership instead
+   * (`actor.ownership[userId]`), which this method does not touch. Use
+   * {@link setActorOwnership} for that — and note that raw ownership is
+   * stored data, not effective permission; use `actor.testUserPermission()`
+   * for a real capability check (it also accounts for GM/role overrides).
    */
   async assignActorToUser(userId: string, actorId: string) {
     return this.page.evaluate(
@@ -392,6 +401,23 @@ export class FoundryState {
       },
       { userId, actorId },
     );
+  }
+
+  /**
+   * Sets a user's stored document ownership level on an actor
+   * (`actor.ownership[userId]`), independent of {@link assignActorToUser}.
+   * This is what most modules that gate behavior on "does this user own
+   * this actor" actually read (e.g. Owner-only vs. Observer-or-above
+   * visibility rules). It is stored data, not effective permission — a GM
+   * or elevated role can still have access despite a lower/absent entry
+   * here. For a real capability check, use `actor.testUserPermission()`.
+   */
+  async setActorOwnership(
+    actorId: string,
+    userId: string,
+    level: DocumentOwnershipLevel = DocumentOwnershipLevel.OWNER,
+  ) {
+    return this.updateDocument("Actor", actorId, { [`ownership.${userId}`]: level });
   }
 
   /**
