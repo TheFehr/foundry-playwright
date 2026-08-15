@@ -54,7 +54,9 @@ function isRegistryEntryArray(value: unknown): value is RegistryEntry[] {
         typeof (entry as Record<string, unknown>).systemVersion === "string" &&
         ["stable", "incompatible", "pending", "failed"].includes(
           (entry as Record<string, unknown>).status as string,
-        ),
+        ) &&
+        (typeof (entry as Record<string, unknown>).notes === "undefined" ||
+          typeof (entry as Record<string, unknown>).notes === "string"),
     )
   );
 }
