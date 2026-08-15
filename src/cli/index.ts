@@ -24,9 +24,20 @@ function mountModuleFromManifest(sourceDir: string, tmpDataDir: string): void {
   const manifestPath = path.join(sourceDir, "module.json");
   const moduleData = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   const moduleId = moduleData.id || moduleData.name;
-  if (!moduleId) return;
+  if (!moduleId || typeof moduleId !== "string") {
+    throw new Error(`mountModuleFromManifest: ${manifestPath} has no valid "id" or "name" field.`);
+  }
 
-  const modulesDir = path.join(tmpDataDir, "Data", "modules", moduleId);
+  const modulesRoot = path.join(tmpDataDir, "Data", "modules");
+  const modulesDir = path.join(modulesRoot, moduleId);
+  const relative = path.relative(modulesRoot, modulesDir);
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(
+      `mountModuleFromManifest: module id/name "${moduleId}" from ${manifestPath} ` +
+        `resolves outside the modules directory.`,
+    );
+  }
+
   fs.mkdirSync(modulesDir, { recursive: true });
   fs.cpSync(sourceDir, modulesDir, { recursive: true });
 }
