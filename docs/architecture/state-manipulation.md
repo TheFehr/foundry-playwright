@@ -64,15 +64,22 @@ await foundry.state.executeMacro("My Macro");
 ```typescript
 import { UserRole, DocumentOwnershipLevel } from "@thefehr/foundry-playwright";
 
-const userId = await foundry.state.createUser("Player One", UserRole.PLAYER, "password");
+const user = await foundry.state.createUser("Player One", UserRole.PLAYER, "password");
+const userId = user.id;
 await foundry.state.setUserRole(userId, UserRole.TRUSTED);
 await foundry.state.updateUser(userId, { color: "#ff0000" });
+
+const actor = await foundry.state.createTestActor("Hero");
+const actorId = actor.id;
 
 // Sets user.character — a UI convenience, NOT document ownership.
 await foundry.state.assignActorToUser(userId, actorId);
 
-// Sets actor.ownership[userId] — what most modules actually check for
-// "does this user own this actor" (Owner/Observer/Limited/None).
+// Sets actor.ownership[userId] — stored ownership data, not the same as
+// effective permission. Most modules that gate on "does this user own this
+// actor" read this directly (Owner/Observer/Limited/None); for a real
+// capability check (which also accounts for GM/role overrides) use
+// actor.testUserPermission() instead.
 await foundry.state.setActorOwnership(actorId, userId, DocumentOwnershipLevel.OWNER);
 
 // Grant a core permission to a role

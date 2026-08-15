@@ -23,6 +23,13 @@ export enum UserRole {
  * Foundry VTT Document Ownership Levels as defined in
  * CONST.DOCUMENT_OWNERSHIP_LEVELS. Distinct from {@link UserRole}: this
  * is per-document (e.g. `actor.ownership[userId]`), not per-user.
+ *
+ * These are stored values, not effective permission — for a real
+ * capability check (which also accounts for GM/role overrides), use the
+ * document's `testUserPermission()` instead of reading ownership directly.
+ * `INHERIT` is primarily meaningful on embedded documents (e.g. a token
+ * deferring to its actor's ownership), not something you'd typically set
+ * on a top-level actor.
  */
 export enum DocumentOwnershipLevel {
   INHERIT = -1,
