@@ -65,6 +65,7 @@ describe("getVerificationRegistry", () => {
     try {
       const registry = getVerificationRegistry();
       expect(registry.length).toBeGreaterThan(0);
+      expect(registry[0]).toHaveProperty("system");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
