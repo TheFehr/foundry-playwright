@@ -69,12 +69,18 @@ export async function setScreenSize(
   }
 
   const client = await page.context().newCDPSession(page);
-  await client.send("Emulation.setDeviceMetricsOverride", {
-    width: targetViewport.width,
-    height: targetViewport.height,
-    deviceScaleFactor,
-    mobile,
-    screenWidth: size.width,
-    screenHeight: size.height,
-  });
+  try {
+    await client.send("Emulation.setDeviceMetricsOverride", {
+      width: targetViewport.width,
+      height: targetViewport.height,
+      deviceScaleFactor,
+      mobile,
+      screenWidth: size.width,
+      screenHeight: size.height,
+    });
+  } finally {
+    // Ignore detach failures — the target (e.g. the page/tab) may have
+    // already closed, which detaches the session as a side effect.
+    await client.detach().catch(() => {});
+  }
 }
