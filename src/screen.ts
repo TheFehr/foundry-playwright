@@ -1,5 +1,17 @@
 import { Page } from "@playwright/test";
 
+type CDPSession = Awaited<ReturnType<ReturnType<Page["context"]>["newCDPSession"]>>;
+
+/**
+ * The most recent `setScreenSize` CDP session per page. `Emulation`
+ * overrides are tied to the CDP session that set them — detaching a
+ * session clears its override — so the session that owns the *current*
+ * override must stay attached. Tracking it here lets a later call detach
+ * only the now-superseded previous session, bounding session growth to
+ * one per page instead of leaking one per call.
+ */
+const activeScreenSizeSessions = new WeakMap<Page, CDPSession>();
+
 /**
  * Playwright's `viewport` context option controls `window.innerWidth`/
  * `innerHeight` — the browser's content area. It does **not** control
@@ -78,9 +90,19 @@ export async function setScreenSize(
       screenWidth: size.width,
       screenHeight: size.height,
     });
-  } finally {
-    // Ignore detach failures — the target (e.g. the page/tab) may have
-    // already closed, which detaches the session as a side effect.
+  } catch (error) {
     await client.detach().catch(() => {});
+    throw error;
+  }
+
+  // Detach the previous override session for this page now that this one
+  // has taken over — see activeScreenSizeSessions' doc comment for why
+  // *this* session must stay attached instead. Record the replacement
+  // before awaiting the detach so a concurrent call reading `previous`
+  // can't both target the same (now-stale) session.
+  const previous = activeScreenSizeSessions.get(page);
+  activeScreenSizeSessions.set(page, client);
+  if (previous && previous !== client) {
+    await previous.detach().catch(() => {});
   }
 }
