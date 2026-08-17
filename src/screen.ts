@@ -81,21 +81,28 @@ export async function setScreenSize(
   }
 
   const client = await page.context().newCDPSession(page);
-  await client.send("Emulation.setDeviceMetricsOverride", {
-    width: targetViewport.width,
-    height: targetViewport.height,
-    deviceScaleFactor,
-    mobile,
-    screenWidth: size.width,
-    screenHeight: size.height,
-  });
+  try {
+    await client.send("Emulation.setDeviceMetricsOverride", {
+      width: targetViewport.width,
+      height: targetViewport.height,
+      deviceScaleFactor,
+      mobile,
+      screenWidth: size.width,
+      screenHeight: size.height,
+    });
+  } catch (error) {
+    await client.detach().catch(() => {});
+    throw error;
+  }
 
   // Detach the previous override session for this page now that this one
   // has taken over — see activeScreenSizeSessions' doc comment for why
-  // *this* session must stay attached instead.
+  // *this* session must stay attached instead. Record the replacement
+  // before awaiting the detach so a concurrent call reading `previous`
+  // can't both target the same (now-stale) session.
   const previous = activeScreenSizeSessions.get(page);
+  activeScreenSizeSessions.set(page, client);
   if (previous && previous !== client) {
     await previous.detach().catch(() => {});
   }
-  activeScreenSizeSessions.set(page, client);
 }
