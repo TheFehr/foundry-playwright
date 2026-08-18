@@ -20,8 +20,8 @@ export {
   dropCompendiumItem,
   useFoundry,
   getVerificationRegistry,
-  RegistryEntry,
 } from "./helpers.js";
+export type { RegistryEntry } from "./helpers.js";
 export * from "./types/index.js";
 export * from "./auth.js";
 export * from "./state.js";
