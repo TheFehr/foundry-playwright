@@ -1,5 +1,28 @@
 # Changelog
 
+# [1.0.0](https://github.com/TheFehr/foundry-playwright/compare/v0.7.5...v1.0.0) (2026-08-18)
+
+- fix(systems)!: throw on unregistered system IDs instead of defaulting to dnd5e (#57) ([a7afa3d](https://github.com/TheFehr/foundry-playwright/commit/a7afa3d478f33ec2ef382504fdcbf2fd914e8725)), closes [#57](https://github.com/TheFehr/foundry-playwright/issues/57)
+
+### Bug Fixes
+
+- **index:** export RegistryEntry as a type-only re-export ([#59](https://github.com/TheFehr/foundry-playwright/issues/59)) ([816060f](https://github.com/TheFehr/foundry-playwright/commit/816060f5aac4103f05d312d3c674b8af89771fcc))
+- **registry:** publish verified-versions.json, export getVerificationRegistry ([#52](https://github.com/TheFehr/foundry-playwright/issues/52)) ([0015a69](https://github.com/TheFehr/foundry-playwright/commit/0015a69695480af14b4d3913717c834a86ac4d22))
+- **screen:** don't detach the CDP session that owns the active override ([#58](https://github.com/TheFehr/foundry-playwright/issues/58)) ([1d1d73e](https://github.com/TheFehr/foundry-playwright/commit/1d1d73e12732bfad4f97d31389a80cf555b33598)), closes [#50](https://github.com/TheFehr/foundry-playwright/issues/50)
+
+### Features
+
+- **cli:** add --module-dir flag to foundry-playwright test --docker ([#51](https://github.com/TheFehr/foundry-playwright/issues/51)) ([df8ee81](https://github.com/TheFehr/foundry-playwright/commit/df8ee8101fd06c3b14fec5d6fd2f453afdcb09d1))
+- **screen:** add withScreenSize/setScreenSize (screen.width vs. viewport) ([#50](https://github.com/TheFehr/foundry-playwright/issues/50)) ([dafc757](https://github.com/TheFehr/foundry-playwright/commit/dafc75794d87fa8ee30a8bdfaab7b6185c38eaf0))
+- **state:** add setActorOwnership, clarify assignActorToUser ([#48](https://github.com/TheFehr/foundry-playwright/issues/48)) ([f78e205](https://github.com/TheFehr/foundry-playwright/commit/f78e20523daa2b82fb3f0322c17c204758795d49))
+- **state:** document and optionally handle setSetting's reload gap ([#49](https://github.com/TheFehr/foundry-playwright/issues/49)) ([dae1ad3](https://github.com/TheFehr/foundry-playwright/commit/dae1ad3f53c073ab31c63c38cd188d524e60660b))
+
+### BREAKING CHANGES
+
+- getSystemStateAdapter() now throws for unregistered system IDs instead of silently falling back to the dnd5e adapter. Consumers testing a system other than dnd5e/pf2e must call registerSystemStateAdapter first.
+
+[no-release]
+
 ## [0.7.5](https://github.com/TheFehr/foundry-playwright/compare/v0.7.4...v0.7.5) (2026-08-15)
 
 ## [0.7.4](https://github.com/TheFehr/foundry-playwright/compare/v0.7.3...v0.7.4) (2026-08-14)
