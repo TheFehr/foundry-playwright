@@ -27,8 +27,11 @@ export default defineConfig({
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: process.env.FOUNDRY_URL || "http://localhost:30000",
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "on-first-retry",
+    /* Verification runs use retries: 0, so "on-first-retry" would never actually
+     * capture anything - retain a trace/screenshot whenever a test fails outright.
+     * See https://playwright.dev/docs/trace-viewer */
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
 
   /* Configure projects for major browsers */
