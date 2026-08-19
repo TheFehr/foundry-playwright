@@ -1,5 +1,11 @@
 # Changelog
 
+# [1.1.0](https://github.com/TheFehr/foundry-playwright/compare/v1.0.1...v1.1.0) (2026-08-19)
+
+### Features
+
+- **verify:** make verification failures self-diagnosing ([#69](https://github.com/TheFehr/foundry-playwright/issues/69)) ([55d5f83](https://github.com/TheFehr/foundry-playwright/commit/55d5f830fb58ed9d3684b2cdd55157562fabe72c))
+
 ## [1.0.1](https://github.com/TheFehr/foundry-playwright/compare/v1.0.0...v1.0.1) (2026-08-19)
 
 # [1.0.0](https://github.com/TheFehr/foundry-playwright/compare/v0.7.5...v1.0.0) (2026-08-18)
