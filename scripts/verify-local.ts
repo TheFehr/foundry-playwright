@@ -168,6 +168,18 @@ interface MarkdownSummaryRow {
   status: string;
   date: string;
   docker: string;
+  notes?: string;
+}
+
+// "|" would otherwise break table row parsing/rendering if a raw error
+// message happens to contain one (e.g. a CSS attribute selector). Backslash-
+// escaping it (the usual Markdown convention) doesn't work here because the
+// row parser below does a plain split("|") with no escape awareness - an
+// escaped "\|" still contains a literal "|" that gets split on and silently
+// truncates the cell on the very next read/write round-trip. Substituting a
+// lookalike character instead sidesteps the need for an escape-aware parser.
+function escapeForMarkdownTable(value: string): string {
+  return value.replace(/\|/g, "¦");
 }
 
 // Shared by both the pass and fail paths in verifyVersion so a genuine test
@@ -177,7 +189,7 @@ interface MarkdownSummaryRow {
 function upsertMarkdownSummary(row: MarkdownSummaryRow): void {
   const summaryPath = path.join(process.cwd(), "verification-report.md");
   let summaryContent =
-    "# Verification Summary Report\n\n| Version | System | Modules | Status | Date | Docker |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+    "# Verification Summary Report\n\n| Version | System | Modules | Status | Date | Docker | Notes |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
 
   let existingResults: MarkdownSummaryRow[] = [];
   if (fs.existsSync(summaryPath)) {
@@ -185,15 +197,20 @@ function upsertMarkdownSummary(row: MarkdownSummaryRow): void {
     existingResults = lines
       .filter((l) => l.trim().startsWith("|"))
       .map((r) =>
+        // Slice off only the empty boundary artifacts from the leading/
+        // trailing "|" - filtering all empty strings (as before) would also
+        // drop a legitimately empty interior cell, like a PASS row's notes.
         r
           .split("|")
-          .map((p) => p.trim())
-          .filter((p) => p !== ""),
+          .slice(1, -1)
+          .map((p) => p.trim()),
       )
       // A formatter (oxfmt/prettier) pads table cells with extra spaces to
       // align columns, so the header/separator can't be matched by a fixed
       // substring like "Version | System" - compare normalized cell values
       // instead, and drop the separator row by its ":---"-only cell shape.
+      // Legacy rows (written before the Notes column existed) only have 6
+      // cells - still accepted, notes just comes back empty for those.
       .filter((cells) => cells.length >= 6 && cells[0] !== "Version" && !/^:?-+:?$/.test(cells[0]))
       .map((cells) => ({
         version: cells[0],
@@ -202,6 +219,7 @@ function upsertMarkdownSummary(row: MarkdownSummaryRow): void {
         status: cells[3],
         date: cells[4],
         docker: cells[5],
+        notes: cells[6] || undefined,
       }));
   }
 
@@ -219,7 +237,8 @@ function upsertMarkdownSummary(row: MarkdownSummaryRow): void {
   );
 
   existingResults.forEach((r) => {
-    summaryContent += `| ${r.version} | ${r.system} | ${r.modules} | ${r.status} | ${r.date} | ${r.docker} |\n`;
+    const notes = r.notes ? escapeForMarkdownTable(r.notes) : "";
+    summaryContent += `| ${r.version} | ${r.system} | ${r.modules} | ${r.status} | ${r.date} | ${r.docker} | ${notes} |\n`;
   });
 
   fs.writeFileSync(summaryPath, summaryContent);
@@ -644,6 +663,7 @@ async function verifyVersion(
             status: "FAIL",
             date: new Date().toISOString().split("T")[0],
             docker: isDocker ? "Yes" : "No",
+            notes: formatFailures(failures),
           });
         } catch (persistError) {
           console.error(
@@ -752,7 +772,7 @@ function firstErrorLine(result: PlaywrightTestResult): string | undefined {
   const message = result.errors?.[0]?.message;
   if (!message) return undefined;
   const line = message.split("\n")[0]!.trim();
-  return line.length > 150 ? `${line.slice(0, 150)}...` : line;
+  return line.length > 150 ? `${line.slice(0, 147)}...` : line;
 }
 
 function extractFailures(report: PlaywrightReport): TestFailure[] {

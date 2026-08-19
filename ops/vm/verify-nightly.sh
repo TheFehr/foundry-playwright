@@ -41,7 +41,9 @@ fi
 # failing combo's trace.zip/screenshots for later diagnosis - see its
 # --output handling). Prune anything older than a week so retaining those
 # doesn't slowly erode the disk guard above.
-find "$REPO_DIR" -maxdepth 1 -type d -name 'test-results-*' -mtime +7 -exec rm -rf {} +
+# -mmin rather than -mtime: GNU find's -mtime rounds to whole 24h periods,
+# so -mtime +7 can let a directory survive nearly 8 days before it's caught.
+find "$REPO_DIR" -maxdepth 1 -type d -name 'test-results-*' -mmin +10080 -exec rm -rf {} +
 
 # Always start from main, regardless of what branch a crashed previous run
 # may have left checked out.
