@@ -176,10 +176,17 @@ interface MarkdownSummaryRow {
 // escaping it (the usual Markdown convention) doesn't work here because the
 // row parser below does a plain split("|") with no escape awareness - an
 // escaped "\|" still contains a literal "|" that gets split on and silently
-// truncates the cell on the very next read/write round-trip. Substituting a
-// lookalike character instead sidesteps the need for an escape-aware parser.
+// truncates the cell on the very next read/write round-trip. An HTML numeric
+// entity survives that split intact and is reversible (unlike a lookalike
+// character substitution), so long as "&" is encoded first/decoded last -
+// otherwise a literal "&" in the source text would corrupt the "&#124;"
+// sequence itself.
 function escapeForMarkdownTable(value: string): string {
-  return value.replace(/\|/g, "¦");
+  return value.replace(/&/g, "&amp;").replace(/\|/g, "&#124;");
+}
+
+function unescapeFromMarkdownTable(value: string): string {
+  return value.replace(/&#124;/g, "|").replace(/&amp;/g, "&");
 }
 
 // Shared by both the pass and fail paths in verifyVersion so a genuine test
@@ -203,7 +210,7 @@ function upsertMarkdownSummary(row: MarkdownSummaryRow): void {
         r
           .split("|")
           .slice(1, -1)
-          .map((p) => p.trim()),
+          .map((p) => unescapeFromMarkdownTable(p.trim())),
       )
       // A formatter (oxfmt/prettier) pads table cells with extra spaces to
       // align columns, so the header/separator can't be matched by a fixed
