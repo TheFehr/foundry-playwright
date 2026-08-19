@@ -36,6 +36,13 @@ if [ "$used_pct" -gt "$MAX_DISK_USED_PCT" ]; then
   exit 1
 fi
 
+# verify-local.ts namespaces a test-results-<version>-<timestamp>-<pid>/
+# directory per verified combo and deliberately leaves it behind (holds a
+# failing combo's trace.zip/screenshots for later diagnosis - see its
+# --output handling). Prune anything older than a week so retaining those
+# doesn't slowly erode the disk guard above.
+find "$REPO_DIR" -maxdepth 1 -type d -name 'test-results-*' -mtime +7 -exec rm -rf {} +
+
 # Always start from main, regardless of what branch a crashed previous run
 # may have left checked out.
 git checkout main

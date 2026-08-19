@@ -14,6 +14,15 @@ import { minorOf } from "./version-utils.js";
  * patch for that minor from GitHub) or --system-version (exact version).
  */
 
+interface TestFailure {
+  title: string;
+  error?: string;
+}
+
+function formatFailures(failures: TestFailure[]): string {
+  return failures.map((f) => (f.error ? `${f.title} (${f.error})` : f.title)).join("; ");
+}
+
 const SYSTEM_REPOS: Record<string, string> = {
   dnd5e: "foundryvtt/dnd5e",
   pf2e: "foundryvtt/pf2e",
@@ -288,7 +297,7 @@ interface VerifyVersionOptions {
 async function verifyVersion(
   version: string,
   options: VerifyVersionOptions,
-): Promise<{ success: boolean; failures: string[] }> {
+): Promise<{ success: boolean; failures: TestFailure[] }> {
   const {
     system,
     modules,
@@ -306,7 +315,7 @@ async function verifyVersion(
   const rootless = process.env.FOUNDRY_PLAYWRIGHT_ROOTLESS === "1";
   let orchestrator: DockerFoundryOrchestrator | null = null;
   let tmpDataDir: string | null = null;
-  let failures: string[] = [];
+  let failures: TestFailure[] = [];
   let meta = {
     foundry: version,
     system: { id: system, version: "unknown" },
@@ -386,6 +395,13 @@ async function verifyVersion(
       `.playwright-report-${version}-${Date.now()}-${process.pid}.json`,
     );
     fs.rmSync(reportPath, { force: true });
+    // Namespaced the same way as reportPath - a single --all-pending run does
+    // several separate `playwright test` invocations back to back, and each
+    // one clears its own default test-results/ output dir at startup, which
+    // would otherwise wipe out an earlier combo's trace/screenshot before
+    // anyone gets to look at it.
+    const outputDirName = `test-results-${version}-${Date.now()}-${process.pid}`;
+    const outputDir = path.join(process.cwd(), outputDirName);
     const metaPath = path.join(process.cwd(), ".foundry_metadata.json");
     fs.rmSync(metaPath, { force: true });
     let execError: Error | null = null;
@@ -397,9 +413,10 @@ async function verifyVersion(
         // absolute reportPath doesn't exist inside the container's
         // filesystem at all.
         const reportPathInContainer = `/work/${path.relative(process.cwd(), reportPath)}`;
+        const outputDirInContainer = `/work/${outputDirName}`;
         runPlaywrightInContainer(
           testFiles,
-          playwrightArgs,
+          [...playwrightArgs, `--output=${outputDirInContainer}`],
           {
             FOUNDRY_URL: env["FOUNDRY_URL"],
             FOUNDRY_VERSION: env["FOUNDRY_VERSION"],
@@ -425,6 +442,7 @@ async function verifyVersion(
             ...testFiles,
             "--workers=1",
             "--reporter=line,json",
+            `--output=${outputDir}`,
             ...playwrightArgs,
           ],
           {
@@ -615,7 +633,7 @@ async function verifyVersion(
               modules: realModules.length > 0 ? realModules : undefined,
               status: "failed",
               timestamp: new Date().toISOString(),
-              notes: `Automated verification failed: ${failures.join("; ")}`,
+              notes: `Automated verification failed: ${formatFailures(failures)}`,
             });
             console.log("Registry updated with failure entry.");
           }
@@ -675,6 +693,7 @@ async function verifyVersion(
 
 interface PlaywrightTestResult {
   status: string;
+  errors?: { message: string }[];
 }
 
 interface PlaywrightSpec {
@@ -724,18 +743,30 @@ function isCapturedMetadata(value: unknown): value is CapturedMetadata {
   return Array.isArray(v["modules"]) && v["modules"].every(isModuleEntry);
 }
 
-function extractFailures(report: PlaywrightReport): string[] {
-  const failures: string[] = [];
+// Playwright error messages are multi-line: a short summary line (e.g.
+// "locator.selectOption: Test timeout of 120000ms exceeded.") followed by a
+// verbose "Call log: ..." block. Only the first line is useful in a registry
+// notes field or a GitHub issue comment - the rest is noise there, and the
+// full detail is still available in the retained trace/screenshot.
+function firstErrorLine(result: PlaywrightTestResult): string | undefined {
+  const message = result.errors?.[0]?.message;
+  if (!message) return undefined;
+  const line = message.split("\n")[0]!.trim();
+  return line.length > 150 ? `${line.slice(0, 150)}...` : line;
+}
+
+function extractFailures(report: PlaywrightReport): TestFailure[] {
+  const failures: TestFailure[] = [];
 
   function traverse(suite: PlaywrightSuite) {
     if (suite.suites) suite.suites.forEach(traverse);
     if (suite.specs) {
       suite.specs.forEach((spec) => {
-        const isFailed = spec.tests.some((t) =>
-          t.results.some((r) => r.status === "failed" || r.status === "timedOut"),
-        );
-        if (isFailed) {
-          failures.push(spec.title);
+        const failedResult = spec.tests
+          .flatMap((t) => t.results)
+          .find((r) => r.status === "failed" || r.status === "timedOut");
+        if (failedResult) {
+          failures.push({ title: spec.title, error: firstErrorLine(failedResult) });
         }
       });
     }
@@ -891,7 +922,7 @@ program
       return;
     }
 
-    const results: { key: string; success: boolean; failures: string[] }[] = [];
+    const results: { key: string; success: boolean; failures: TestFailure[] }[] = [];
 
     for (const target of targets) {
       const result = await verifyVersion(target.version, {
@@ -918,7 +949,9 @@ program
       const status = r.success ? "PASS" : "FAIL";
       console.log(`${r.key}: ${status}`);
       if (r.failures.length > 0) {
-        r.failures.forEach((f) => console.log(`  - [FAILED] ${f}`));
+        r.failures.forEach((f) =>
+          console.log(`  - [FAILED] ${f.title}${f.error ? ` (${f.error})` : ""}`),
+        );
       }
     });
 
