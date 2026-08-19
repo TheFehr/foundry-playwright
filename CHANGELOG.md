@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.0.1](https://github.com/TheFehr/foundry-playwright/compare/v1.0.0...v1.0.1) (2026-08-19)
+
 # [1.0.0](https://github.com/TheFehr/foundry-playwright/compare/v0.7.5...v1.0.0) (2026-08-18)
 
 - fix(systems)!: throw on unregistered system IDs instead of defaulting to dnd5e (#57) ([a7afa3d](https://github.com/TheFehr/foundry-playwright/commit/a7afa3d478f33ec2ef382504fdcbf2fd914e8725)), closes [#57](https://github.com/TheFehr/foundry-playwright/issues/57)
