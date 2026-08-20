@@ -179,11 +179,17 @@ export async function getSetupAdapter(
       if (diag.url.includes("/players") || diag.url.includes("/create"))
         return { major: 14 as const };
       if (diag.scripts.some((s) => s.includes("foundry.mjs"))) {
-        // If we are here, we timed out. If it has foundry.mjs and NO foundry-app, it's likely 13.
-        const hasFoundryApp = await page.evaluate(
-          () => document.querySelector("foundry-app") !== null,
+        // If we are here, we timed out. Check the same V14 markers as the
+        // main polling predicate above, not just foundry-app - ApplicationV2
+        // or the "v14" body class alone would otherwise be missed here and
+        // misclassified as V13.
+        const hasV14Markers = await page.evaluate(
+          () =>
+            (window as unknown as Window).foundry?.applications?.api?.ApplicationV2 !== undefined ||
+            document.querySelector("foundry-app") !== null ||
+            document.body.classList.contains("v14"),
         );
-        return hasFoundryApp ? { major: 14 as const } : { major: 13 as const };
+        return hasV14Markers ? { major: 14 as const } : { major: 13 as const };
       }
       return { major: 13 as const }; // Default to 13
     });
