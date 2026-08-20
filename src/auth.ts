@@ -6,11 +6,7 @@ import { getSetupAdapter } from "./setup/index.js";
  * Navigates from within a world or the join screen back to the setup screen.
  * Implements RFC 0008 transition logic.
  */
-export async function returnToSetup(
-  page: Page,
-  adminPassword?: string,
-  _version?: string | number,
-) {
+export async function returnToSetup(page: Page, adminPassword?: string, _version?: string) {
   console.log("[returnToSetup] Returning to setup screen...");
 
   let maxAttempts = 3;
@@ -226,7 +222,7 @@ export interface FoundrySetupConfig {
   password?: string;
   createWorld?: boolean;
   deleteIfExists?: boolean;
-  version?: string | number;
+  version?: string;
   [key: string]: unknown;
 }
 

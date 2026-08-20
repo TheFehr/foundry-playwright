@@ -39,12 +39,12 @@ function selectV14SetupAdapter(page: FoundryPage, build: number | undefined): Se
  */
 export async function getSetupAdapter(
   page: FoundryPage,
-  versionOverride?: string | number,
+  versionOverride?: string,
 ): Promise<SetupAdapter> {
   // 1. Prioritize explicit input
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
-    const v = String(explicitVersion);
+    const v = explicitVersion;
     if (v.startsWith("14")) return selectV14SetupAdapter(page, parseFoundryBuild(v));
     if (v.startsWith("13")) return new V13SetupAdapter(page);
     console.warn(
@@ -151,12 +151,12 @@ export async function getSetupAdapter(
  */
 export async function getGameAdapter(
   page: FoundryPage,
-  versionOverride?: string | number,
+  versionOverride?: string,
 ): Promise<GameAdapter> {
   // 1. Prioritize explicit input
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
-    const v = String(explicitVersion);
+    const v = explicitVersion;
     if (v.startsWith("14")) return new V14GameAdapter(page);
     if (v.startsWith("13")) return new V13GameAdapter(page);
   }
