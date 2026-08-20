@@ -1,11 +1,20 @@
 import { expect, Locator } from "@playwright/test";
-import { SetupAdapter, BaseGameAdapter } from "./base.js";
+import { SetupAdapter, BaseGameAdapter, performLegacyJoin } from "./base.js";
 import { installModuleFromManifest as helperInstallModuleFromManifest } from "../helpers.js";
 
 import { FoundryPage } from "../types/index.js";
 
 /**
- * Setup adapter for Foundry VTT Version 14.
+ * Foundry build at which the join-screen login form changed from a
+ * `<select name="userid">` GM/user picker to free-text
+ * `#join-username`/`#join-password` inputs. getSetupAdapter uses this to pick
+ * between V14SetupAdapter (build >= this, or unknown) and
+ * V14LegacySetupAdapter (build < this).
+ */
+export const V14_USERNAME_LOGIN_BUILD = 366;
+
+/**
+ * Setup adapter for Foundry VTT Version 14, build 366 and newer.
  */
 export class V14SetupAdapter implements SetupAdapter {
   version = 14;
@@ -14,6 +23,14 @@ export class V14SetupAdapter implements SetupAdapter {
     if (page?.deprecationTracker) {
       page.deprecationTracker.registerIgnore(["namespaced under foundry"]);
     }
+  }
+
+  async login(page: FoundryPage, userName: string, password?: string): Promise<void> {
+    await page.locator("#join-username").fill(userName);
+    if (password) await page.locator('input[name="password"]').fill(password);
+    await page
+      .locator('button[name="join"]')
+      .evaluate((el: Element) => (el as HTMLElement).click());
   }
 
   async switchTab(page: FoundryPage, tabName: string): Promise<void> {
@@ -841,6 +858,17 @@ export class V14SetupAdapter implements SetupAdapter {
       await closeBtn.evaluate((el: Element) => (el as HTMLElement).click());
     await this.switchTab(page, "Worlds");
     await this.switchTab(page, tabName);
+  }
+}
+
+/**
+ * Setup adapter for Foundry VTT Version 14 builds before 366, which predate
+ * the join-screen login form change - see V14_USERNAME_LOGIN_BUILD. Every
+ * other V14 behavior is unchanged, so this only overrides login().
+ */
+export class V14LegacySetupAdapter extends V14SetupAdapter {
+  async login(page: FoundryPage, userName: string, password?: string): Promise<void> {
+    return performLegacyJoin(page, userName, password);
   }
 }
 

@@ -29,11 +29,7 @@ test.describe("User Management Verification", () => {
 
   test("user management: create, update, and login", async ({ browser, page, foundry }) => {
     // 1. GM Login (using the default page fixture)
-    await page.goto("/join");
-    await page.locator('select[name="userid"]').selectOption({ label: "Gamemaster" });
-    await page.locator('button[name="join"]').click();
-    await page.waitForURL(/\/game/);
-    await page.waitForFunction(() => window.game?.ready);
+    await loginAs(page, "Gamemaster");
 
     const testUserName = "Test Player " + Date.now();
     const testPassword = "password123";

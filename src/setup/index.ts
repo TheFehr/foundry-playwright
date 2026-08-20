@@ -1,7 +1,37 @@
 import { FoundryPage } from "../types/index.js";
 import { SetupAdapter, GameAdapter } from "./base.js";
 import { V13SetupAdapter, V13GameAdapter } from "./v13.js";
-import { V14SetupAdapter, V14GameAdapter } from "./v14.js";
+import {
+  V14SetupAdapter,
+  V14LegacySetupAdapter,
+  V14GameAdapter,
+  V14_USERNAME_LOGIN_BUILD,
+} from "./v14.js";
+
+type DetectedVersion = { major: 13 | 14; build?: number } | null;
+
+/**
+ * Extracts the Foundry build number from a version string, e.g. "14.366" or
+ * "14.360.0" both yield 366/360. Returns undefined for strings with no
+ * parseable minor component (e.g. a bare "14").
+ */
+export function parseFoundryBuild(version: string): number | undefined {
+  const build = Number(version.split(".")[1]);
+  return Number.isFinite(build) ? build : undefined;
+}
+
+/**
+ * Picks between V14SetupAdapter and V14LegacySetupAdapter based on build
+ * number - see V14_USERNAME_LOGIN_BUILD. An unknown build defaults to
+ * V14SetupAdapter (the current/mainline behavior), since Foundry doesn't
+ * revert UI redesigns and new/undetected builds are far more likely to be
+ * recent than pre-366.
+ */
+function selectV14SetupAdapter(page: FoundryPage, build: number | undefined): SetupAdapter {
+  if (build !== undefined && build < V14_USERNAME_LOGIN_BUILD)
+    return new V14LegacySetupAdapter(page);
+  return new V14SetupAdapter(page);
+}
 
 /**
  * Detects the Foundry VTT version and returns the appropriate setup adapter.
@@ -15,7 +45,7 @@ export async function getSetupAdapter(
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
     const v = String(explicitVersion);
-    if (v.startsWith("14")) return new V14SetupAdapter(page);
+    if (v.startsWith("14")) return selectV14SetupAdapter(page, parseFoundryBuild(v));
     if (v.startsWith("13")) return new V13SetupAdapter(page);
     console.warn(
       `[getSetupAdapter] Explicit version "${v}" provided but not explicitly supported. Falling back to detection.`,
@@ -25,7 +55,7 @@ export async function getSetupAdapter(
   console.log("[getSetupAdapter] Detecting Foundry version...");
 
   // Wait for definitive detection
-  const detectedVersion = await page
+  const detectedVersion: DetectedVersion = await page
     .waitForFunction(
       () => {
         // 1. Check for Version String (Most reliable if available)
@@ -35,8 +65,15 @@ export async function getSetupAdapter(
           (window as unknown as Window).foundry?.utils?.vttVersion;
         if (v) {
           const vs = String(v);
-          if (vs.startsWith("14")) return 14;
-          if (vs.startsWith("13")) return 13;
+          if (vs.startsWith("14")) {
+            // game.release.build is the exact build number straight from
+            // Foundry itself, when available - prefer it over parsing vs.
+            const releaseBuild = (window as unknown as Window).game?.release?.build;
+            const build =
+              typeof releaseBuild === "number" ? releaseBuild : Number(vs.split(".")[1]);
+            return { major: 14 as const, build: Number.isFinite(build) ? build : undefined };
+          }
+          if (vs.startsWith("13")) return { major: 13 as const };
         }
 
         // 2. Check for V14 definitive markers (ApplicationV2 shell)
@@ -45,7 +82,7 @@ export async function getSetupAdapter(
           document.querySelector("foundry-app") !== null ||
           document.body.classList.contains("v14");
 
-        if (isV14) return 14;
+        if (isV14) return { major: 14 as const };
 
         // 3. Check for V13 definitive markers
         // V13 uses traditional body classes and does NOT have foundry-app
@@ -55,7 +92,7 @@ export async function getSetupAdapter(
             document.body.classList.contains("game")) &&
           document.querySelector("foundry-app") === null;
 
-        if (isV13) return 13;
+        if (isV13) return { major: 13 as const };
 
         // 4. Script-based fallback (V12- used foundry.js, V13+ uses foundry.mjs)
         const scripts = Array.from(document.querySelectorAll("script")).map((s) => s.src);
@@ -64,7 +101,7 @@ export async function getSetupAdapter(
           // or V14 hasn't fully loaded its shell. We wait.
           return null;
         }
-        if (scripts.some((s) => s.includes("scripts/foundry.js"))) return 13; // V12/V13 early? Actually V13 is mjs.
+        if (scripts.some((s) => s.includes("scripts/foundry.js"))) return { major: 13 as const }; // V12/V13 early? Actually V13 is mjs.
 
         return null; // Not detectable yet
       },
@@ -88,22 +125,24 @@ export async function getSetupAdapter(
 
       // Fallback logic in catch block
       if (diag.vttVersion) {
-        if (String(diag.vttVersion).startsWith("14")) return 14;
-        if (String(diag.vttVersion).startsWith("13")) return 13;
+        const vs = String(diag.vttVersion);
+        if (vs.startsWith("14")) return { major: 14 as const, build: parseFoundryBuild(vs) };
+        if (vs.startsWith("13")) return { major: 13 as const };
       }
 
-      if (diag.url.includes("/players") || diag.url.includes("/create")) return 14;
+      if (diag.url.includes("/players") || diag.url.includes("/create"))
+        return { major: 14 as const };
       if (diag.scripts.some((s) => s.includes("foundry.mjs"))) {
         // If we are here, we timed out. If it has foundry.mjs and NO foundry-app, it's likely 13.
         const hasFoundryApp = await page.evaluate(
           () => document.querySelector("foundry-app") !== null,
         );
-        return hasFoundryApp ? 14 : 13;
+        return hasFoundryApp ? { major: 14 as const } : { major: 13 as const };
       }
-      return 13; // Default to 13
+      return { major: 13 as const }; // Default to 13
     });
 
-  if (detectedVersion === 14) return new V14SetupAdapter(page);
+  if (detectedVersion?.major === 14) return selectV14SetupAdapter(page, detectedVersion.build);
   return new V13SetupAdapter(page);
 }
 
