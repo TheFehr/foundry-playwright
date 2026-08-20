@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFoundryBuild, selectV14SetupAdapter } from "./index.js";
+import { parseFoundryBuild, selectV14SetupAdapter, matchesMajorVersion } from "./index.js";
 import { V14SetupAdapter, V14LegacySetupAdapter } from "./v14.js";
 import type { FoundryPage } from "../types/index.js";
 
@@ -20,6 +20,24 @@ describe("parseFoundryBuild", () => {
 
   it("returns undefined for a non-numeric minor component", () => {
     expect(parseFoundryBuild("14.x")).toBeUndefined();
+  });
+});
+
+describe("matchesMajorVersion", () => {
+  it("matches a bare major version", () => {
+    expect(matchesMajorVersion("14", "14")).toBe(true);
+  });
+
+  it("matches a full version string", () => {
+    expect(matchesMajorVersion("14.366", "14")).toBe(true);
+  });
+
+  it("does not match a different major version with the same prefix", () => {
+    expect(matchesMajorVersion("140.1", "14")).toBe(false);
+  });
+
+  it("does not match an unrelated major version", () => {
+    expect(matchesMajorVersion("13.351.0", "14")).toBe(false);
   });
 });
 

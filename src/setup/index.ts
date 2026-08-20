@@ -21,6 +21,15 @@ export function parseFoundryBuild(version: string): number | undefined {
 }
 
 /**
+ * Checks a version string's major component exactly, e.g. "14.366" and "14"
+ * match major "14" but "140.1" does not - a plain startsWith("14") would
+ * wrongly match "140.1" too.
+ */
+export function matchesMajorVersion(version: string, major: "13" | "14"): boolean {
+  return version.split(".", 1)[0] === major;
+}
+
+/**
  * Picks between V14SetupAdapter and V14LegacySetupAdapter based on build
  * number - see V14_USERNAME_LOGIN_BUILD. Throws on an unknown build rather
  * than guessing: silently defaulting to one form previously caused login to
@@ -64,14 +73,14 @@ export async function getSetupAdapter(
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
     const v = explicitVersion;
-    if (v.startsWith("14")) {
+    if (matchesMajorVersion(v, "14")) {
       // A bare "14" (documented as valid, e.g. FOUNDRY_VERSION="14") carries
       // no build - probe the already-loaded page for it before falling
       // through to selectV14SetupAdapter's throw.
       const build = parseFoundryBuild(v) ?? (await probeV14Build(page));
       return selectV14SetupAdapter(page, build);
     }
-    if (v.startsWith("13")) return new V13SetupAdapter(page);
+    if (matchesMajorVersion(v, "13")) return new V13SetupAdapter(page);
     console.warn(
       `[getSetupAdapter] Explicit version "${v}" provided but not explicitly supported. Falling back to detection.`,
     );
@@ -182,8 +191,8 @@ export async function getGameAdapter(
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
     const v = explicitVersion;
-    if (v.startsWith("14")) return new V14GameAdapter(page);
-    if (v.startsWith("13")) return new V13GameAdapter(page);
+    if (matchesMajorVersion(v, "14")) return new V14GameAdapter(page);
+    if (matchesMajorVersion(v, "13")) return new V13GameAdapter(page);
   }
 
   const version = await page
