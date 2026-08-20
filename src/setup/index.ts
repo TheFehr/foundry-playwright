@@ -99,7 +99,7 @@ export async function getSetupAdapter(
           (window as unknown as Window).foundry?.utils?.vttVersion;
         if (v) {
           const vs = String(v);
-          if (vs.startsWith("14")) {
+          if (vs.split(".", 1)[0] === "14") {
             // game.release.build is the exact build number straight from
             // Foundry itself, when available - prefer it over parsing vs.
             const releaseBuild = (window as unknown as Window).game?.release?.build;
@@ -107,7 +107,7 @@ export async function getSetupAdapter(
               typeof releaseBuild === "number" ? releaseBuild : Number(vs.split(".")[1]);
             return { major: 14 as const, build: Number.isFinite(build) ? build : undefined };
           }
-          if (vs.startsWith("13")) return { major: 13 as const };
+          if (vs.split(".", 1)[0] === "13") return { major: 13 as const };
         }
 
         // 2. Check for V14 definitive markers (ApplicationV2 shell)
@@ -160,8 +160,9 @@ export async function getSetupAdapter(
       // Fallback logic in catch block
       if (diag.vttVersion) {
         const vs = String(diag.vttVersion);
-        if (vs.startsWith("14")) return { major: 14 as const, build: parseFoundryBuild(vs) };
-        if (vs.startsWith("13")) return { major: 13 as const };
+        if (vs.split(".", 1)[0] === "14")
+          return { major: 14 as const, build: parseFoundryBuild(vs) };
+        if (vs.split(".", 1)[0] === "13") return { major: 13 as const };
       }
 
       if (diag.url.includes("/players") || diag.url.includes("/create"))
@@ -203,8 +204,8 @@ export async function getGameAdapter(
           (window as unknown as Window).game?.release?.generation ||
           (window as unknown as Window).foundry?.utils?.vttVersion;
         if (v) {
-          if (String(v).startsWith("14")) return 14;
-          if (String(v).startsWith("13")) return 13;
+          if (String(v).split(".", 1)[0] === "14") return 14;
+          if (String(v).split(".", 1)[0] === "13") return 13;
         }
         if ((window as unknown as Window).foundry?.applications?.api?.ApplicationV2 !== undefined)
           return 14;
