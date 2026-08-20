@@ -105,7 +105,13 @@ export async function getSetupAdapter(
             const releaseBuild = (window as unknown as Window).game?.release?.build;
             const build =
               typeof releaseBuild === "number" ? releaseBuild : Number(vs.split(".")[1]);
-            return { major: 14 as const, build: Number.isFinite(build) ? build : undefined };
+            if (Number.isFinite(build)) return { major: 14 as const, build };
+            // Major confirmed but no build resolvable from this tick yet
+            // (e.g. game.release hasn't populated alongside vttVersion) -
+            // keep polling rather than selecting an adapter with an
+            // undetermined build. The timeout fallback below still covers
+            // the case where a build genuinely never arrives.
+            return null;
           }
           if (vs.split(".", 1)[0] === "13") return { major: 13 as const };
         }
@@ -116,7 +122,12 @@ export async function getSetupAdapter(
           document.querySelector("foundry-app") !== null ||
           document.body.classList.contains("v14");
 
-        if (isV14) return { major: 14 as const };
+        if (isV14) {
+          // Confirmed V14 via markers, but the version-string check above
+          // didn't resolve a build yet - keep waiting for it instead of
+          // selecting an adapter blind (see the build-check above).
+          return null;
+        }
 
         // 3. Check for V13 definitive markers
         // V13 uses traditional body classes and does NOT have foundry-app
