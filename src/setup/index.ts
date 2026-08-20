@@ -22,15 +22,34 @@ export function parseFoundryBuild(version: string): number | undefined {
 
 /**
  * Picks between V14SetupAdapter and V14LegacySetupAdapter based on build
- * number - see V14_USERNAME_LOGIN_BUILD. An unknown build defaults to
- * V14SetupAdapter (the current/mainline behavior), since Foundry doesn't
- * revert UI redesigns and new/undetected builds are far more likely to be
- * recent than pre-366.
+ * number - see V14_USERNAME_LOGIN_BUILD. Throws on an unknown build rather
+ * than guessing: silently defaulting to one form previously caused login to
+ * fail on the *other* form with no clear signal why - the exact failure mode
+ * this adapter split exists to prevent. Callers should exhaust detection
+ * (including a live-page build probe) before reaching this with `undefined`.
  */
-function selectV14SetupAdapter(page: FoundryPage, build: number | undefined): SetupAdapter {
-  if (build !== undefined && build < V14_USERNAME_LOGIN_BUILD)
-    return new V14LegacySetupAdapter(page);
+export function selectV14SetupAdapter(page: FoundryPage, build: number | undefined): SetupAdapter {
+  if (build === undefined) {
+    throw new Error(
+      "[getSetupAdapter] Detected Foundry V14 but could not determine its build number, " +
+        "so the correct join-form login adapter can't be selected. Pass an explicit " +
+        `version with a build (e.g. "14.366") via versionOverride or FOUNDRY_VERSION.`,
+    );
+  }
+  if (build < V14_USERNAME_LOGIN_BUILD) return new V14LegacySetupAdapter(page);
   return new V14SetupAdapter(page);
+}
+
+/**
+ * Best-effort read of game.release.build off the already-loaded page, for
+ * callers (a bare "14" override) that named the major version but not the
+ * build. Never throws - returns undefined if the page hasn't populated
+ * `game` yet, letting the caller's own fallback handle that.
+ */
+async function probeV14Build(page: FoundryPage): Promise<number | undefined> {
+  return page
+    .evaluate(() => (window as unknown as Window).game?.release?.build)
+    .catch(() => undefined);
 }
 
 /**
@@ -45,7 +64,13 @@ export async function getSetupAdapter(
   const explicitVersion = versionOverride || process.env.FOUNDRY_VERSION;
   if (explicitVersion) {
     const v = explicitVersion;
-    if (v.startsWith("14")) return selectV14SetupAdapter(page, parseFoundryBuild(v));
+    if (v.startsWith("14")) {
+      // A bare "14" (documented as valid, e.g. FOUNDRY_VERSION="14") carries
+      // no build - probe the already-loaded page for it before falling
+      // through to selectV14SetupAdapter's throw.
+      const build = parseFoundryBuild(v) ?? (await probeV14Build(page));
+      return selectV14SetupAdapter(page, build);
+    }
     if (v.startsWith("13")) return new V13SetupAdapter(page);
     console.warn(
       `[getSetupAdapter] Explicit version "${v}" provided but not explicitly supported. Falling back to detection.`,
