@@ -38,7 +38,12 @@ export function matchesMajorVersion(version: string, major: "13" | "14"): boolea
  * (including a live-page build probe) before reaching this with `undefined`.
  */
 export function selectV14SetupAdapter(page: FoundryPage, build: number | undefined): SetupAdapter {
-  if (build === undefined) {
+  // Every caller (parseFoundryBuild, probeV14Build, live detection) should
+  // already only hand back a finite number or undefined, but this is the one
+  // choke point all of them flow through - checking here directly, rather
+  // than trusting each source, means a stray NaN/Infinity throws the same
+  // clear error instead of silently comparing wrong.
+  if (build === undefined || !Number.isFinite(build)) {
     throw new Error(
       "[getSetupAdapter] Detected Foundry V14 but could not determine its build number, " +
         "so the correct join-form login adapter can't be selected. Pass an explicit " +

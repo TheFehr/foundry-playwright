@@ -57,4 +57,9 @@ describe("selectV14SetupAdapter", () => {
   it("throws rather than guessing when the build is unknown", () => {
     expect(() => selectV14SetupAdapter(mockPage, undefined)).toThrow(/could not determine/);
   });
+
+  it("throws rather than guessing on a non-finite build", () => {
+    expect(() => selectV14SetupAdapter(mockPage, NaN)).toThrow(/could not determine/);
+    expect(() => selectV14SetupAdapter(mockPage, Infinity)).toThrow(/could not determine/);
+  });
 });
