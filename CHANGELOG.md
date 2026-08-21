@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.1](https://github.com/TheFehr/foundry-playwright/compare/v1.1.0...v1.1.1) (2026-08-21)
+
+### Bug Fixes
+
+- **setup:** support FVTT 14.366's join-form login change ([#71](https://github.com/TheFehr/foundry-playwright/issues/71)) ([a6836da](https://github.com/TheFehr/foundry-playwright/commit/a6836da997d9ae51cde4fc67a9a7d90379a54e64))
+
 # [1.1.0](https://github.com/TheFehr/foundry-playwright/compare/v1.0.1...v1.1.0) (2026-08-19)
 
 ### Features
