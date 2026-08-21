@@ -160,7 +160,13 @@ export async function getSetupAdapter(
           url: window.location.href,
           html: document.body.innerHTML.substring(0, 500),
           foundry: !!(window as unknown as Window).foundry,
-          vttVersion: (window as unknown as Window).foundry?.utils?.vttVersion,
+          // Same priority order as the polling predicate above - vttVersion
+          // alone would miss a bare V14 signal available only via
+          // game.version/game.release.generation.
+          version:
+            (window as unknown as Window).game?.version ||
+            (window as unknown as Window).game?.release?.generation ||
+            (window as unknown as Window).foundry?.utils?.vttVersion,
           scripts: Array.from(document.querySelectorAll("script")).map((s) => s.src),
         };
       });
@@ -173,8 +179,8 @@ export async function getSetupAdapter(
       // one last direct probeV14Build() attempt before conceding an
       // undetermined build - by 30+ seconds in, it's very likely to
       // succeed, and selectV14SetupAdapter throws on anything that doesn't.
-      if (diag.vttVersion) {
-        const vs = String(diag.vttVersion);
+      if (diag.version) {
+        const vs = String(diag.version);
         if (vs.split(".", 1)[0] === "14") {
           const build = parseFoundryBuild(vs) ?? (await probeV14Build(page));
           return { major: 14 as const, build };
