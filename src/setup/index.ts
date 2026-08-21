@@ -182,7 +182,10 @@ export async function getSetupAdapter(
       if (diag.version) {
         const vs = String(diag.version);
         if (vs.split(".", 1)[0] === "14") {
-          const build = parseFoundryBuild(vs) ?? (await probeV14Build(page));
+          // game.release.build is authoritative when available - same
+          // priority as the main polling predicate above - so probe it
+          // before falling back to the (possibly stale) parsed vs.
+          const build = (await probeV14Build(page)) ?? parseFoundryBuild(vs);
           return { major: 14 as const, build };
         }
         if (vs.split(".", 1)[0] === "13") return { major: 13 as const };
