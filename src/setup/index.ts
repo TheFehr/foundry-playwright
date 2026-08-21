@@ -168,16 +168,23 @@ export async function getSetupAdapter(
         `[getSetupAdapter] Detection timed out at ${diag.url}. Diag: ${JSON.stringify(diag)}`,
       );
 
-      // Fallback logic in catch block
+      // Fallback logic in catch block. This runs once, not in a polling
+      // loop like the predicate above, so any branch concluding V14 makes
+      // one last direct probeV14Build() attempt before conceding an
+      // undetermined build - by 30+ seconds in, it's very likely to
+      // succeed, and selectV14SetupAdapter throws on anything that doesn't.
       if (diag.vttVersion) {
         const vs = String(diag.vttVersion);
-        if (vs.split(".", 1)[0] === "14")
-          return { major: 14 as const, build: parseFoundryBuild(vs) };
+        if (vs.split(".", 1)[0] === "14") {
+          const build = parseFoundryBuild(vs) ?? (await probeV14Build(page));
+          return { major: 14 as const, build };
+        }
         if (vs.split(".", 1)[0] === "13") return { major: 13 as const };
       }
 
-      if (diag.url.includes("/players") || diag.url.includes("/create"))
-        return { major: 14 as const };
+      if (diag.url.includes("/players") || diag.url.includes("/create")) {
+        return { major: 14 as const, build: await probeV14Build(page) };
+      }
       if (diag.scripts.some((s) => s.includes("foundry.mjs"))) {
         // If we are here, we timed out. Check the same V14 markers as the
         // main polling predicate above, not just foundry-app - ApplicationV2
@@ -189,7 +196,8 @@ export async function getSetupAdapter(
             document.querySelector("foundry-app") !== null ||
             document.body.classList.contains("v14"),
         );
-        return hasV14Markers ? { major: 14 as const } : { major: 13 as const };
+        if (hasV14Markers) return { major: 14 as const, build: await probeV14Build(page) };
+        return { major: 13 as const };
       }
       return { major: 13 as const }; // Default to 13
     });
