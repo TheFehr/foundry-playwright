@@ -30,12 +30,11 @@ export function matchesMajorVersion(version: string, major: "13" | "14"): boolea
 }
 
 /**
- * Picks between V14SetupAdapter and V14LegacySetupAdapter based on build
- * number - see V14_USERNAME_LOGIN_BUILD. Throws on an unknown build rather
- * than guessing: silently defaulting to one form previously caused login to
- * fail on the *other* form with no clear signal why - the exact failure mode
- * this adapter split exists to prevent. Callers should exhaust detection
- * (including a live-page build probe) before reaching this with `undefined`.
+ * Selects the Foundry V14 setup adapter for the specified build.
+ *
+ * @param build - The numeric Foundry V14 build used to choose the login form.
+ * @returns The legacy adapter for builds below the username-login threshold; otherwise, the current V14 adapter.
+ * @throws Error if the build number is unknown.
  */
 export function selectV14SetupAdapter(page: FoundryPage, build: number | undefined): SetupAdapter {
   if (build === undefined) {
@@ -62,8 +61,11 @@ async function probeV14Build(page: FoundryPage): Promise<number | undefined> {
 }
 
 /**
- * Detects the Foundry VTT version and returns the appropriate setup adapter.
- * Prioritizes explicit version input from parameters or environment variables.
+ * Detects the Foundry VTT version and selects the corresponding setup adapter.
+ *
+ * @param page - The page used for version detection and adapter initialization
+ * @param versionOverride - Optional Foundry version to use before environment or page detection
+ * @returns The setup adapter for the detected or specified Foundry version
  */
 export async function getSetupAdapter(
   page: FoundryPage,
@@ -207,7 +209,10 @@ export async function getSetupAdapter(
 }
 
 /**
- * Detects the Foundry VTT version and returns the appropriate game adapter.
+ * Selects the game adapter for the detected Foundry VTT major version.
+ *
+ * @param versionOverride - Optional Foundry version to use instead of page detection.
+ * @returns A V13 or V14 game adapter; defaults to the V13 adapter when detection fails.
  */
 export async function getGameAdapter(
   page: FoundryPage,

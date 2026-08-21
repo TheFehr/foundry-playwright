@@ -138,10 +138,11 @@ export interface SetupAdapter {
 }
 
 /**
- * Fills in and submits the join-screen login form's `<select name="userid">`
- * GM/user picker - the form used by V13 and by V14 before build 366. Shared
- * by V13SetupAdapter and V14LegacySetupAdapter rather than duplicated: the
- * markup is identical on both, this is not a V13/V14 difference.
+ * Submits the legacy join-screen login form for the selected user.
+ *
+ * @param page - The page containing the join form
+ * @param userName - The user to select from the login form
+ * @param password - The optional password to enter
  */
 export async function performLegacyJoin(
   page: FoundryPage,

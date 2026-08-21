@@ -3,8 +3,9 @@ import { disableTour, waitForReady, validateStack, shutdownWorldDirectly } from 
 import { getSetupAdapter } from "./setup/index.js";
 
 /**
- * Navigates from within a world or the join screen back to the setup screen.
- * Implements RFC 0008 transition logic.
+ * Returns the Foundry server to the setup screen from an active world or intermediate screen.
+ *
+ * @param adminPassword - Password used when administrative authentication is required
  */
 export async function returnToSetup(page: Page, adminPassword?: string, _version?: string) {
   console.log("[returnToSetup] Returning to setup screen...");
@@ -227,7 +228,11 @@ export interface FoundrySetupConfig {
 }
 
 /**
- * Performs full end-to-end setup of a Foundry VTT instance.
+ * Configures a Foundry VTT instance and launches the requested world.
+ *
+ * @param page - The page hosting the Foundry VTT instance
+ * @param config - Setup options, including the world, system, modules, credentials, and optional version
+ * @throws If the admin password is missing or setup cannot complete within the retry limit
  */
 export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
   const {
@@ -490,7 +495,10 @@ export async function foundryTeardown(page: Page, config: FoundrySetupConfig) {
 }
 
 /**
- * Logs into a Foundry VTT world as a specific user.
+ * Logs into a Foundry VTT world as a specified user and waits for the game to become ready.
+ *
+ * @param userName - The user's login name
+ * @param password - The user's optional password
  */
 export async function loginAs(page: Page, userName: string, password?: string) {
   if (!page.url().includes("/join")) await page.goto("/join");
