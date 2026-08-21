@@ -6,11 +6,7 @@ import { getSetupAdapter } from "./setup/index.js";
  * Navigates from within a world or the join screen back to the setup screen.
  * Implements RFC 0008 transition logic.
  */
-export async function returnToSetup(
-  page: Page,
-  adminPassword?: string,
-  _version?: string | number,
-) {
+export async function returnToSetup(page: Page, adminPassword?: string, _version?: string) {
   console.log("[returnToSetup] Returning to setup screen...");
 
   let maxAttempts = 3;
@@ -226,7 +222,7 @@ export interface FoundrySetupConfig {
   password?: string;
   createWorld?: boolean;
   deleteIfExists?: boolean;
-  version?: string | number;
+  version?: string;
   [key: string]: unknown;
 }
 
@@ -433,11 +429,8 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
 
   if (page.url().includes("/join")) {
     console.log(`[foundrySetup] On join screen. Logging in as "${userName}"...`);
-    await page.locator('select[name="userid"]').selectOption({ label: userName });
-    if (password) await page.locator('input[name="password"]').fill(password);
-    await page
-      .locator('button[name="join"]')
-      .evaluate((el: Element) => (el as HTMLElement).click());
+    const adapter = await getSetupAdapter(page, version);
+    await adapter.login(page, userName, password);
     await page.waitForURL(/\/game/, { timeout: 60000 });
   }
 
@@ -502,9 +495,8 @@ export async function foundryTeardown(page: Page, config: FoundrySetupConfig) {
 export async function loginAs(page: Page, userName: string, password?: string) {
   if (!page.url().includes("/join")) await page.goto("/join");
   await page.waitForLoadState("networkidle");
-  await page.locator('select[name="userid"]').selectOption({ label: userName });
-  if (password) await page.locator('input[name="password"]').fill(password);
-  await page.locator('button[name="join"]').evaluate((el: Element) => (el as HTMLElement).click());
+  const adapter = await getSetupAdapter(page);
+  await adapter.login(page, userName, password);
   await page.waitForURL(/\/game/, { timeout: 60000 });
   await waitForReady(page);
 }

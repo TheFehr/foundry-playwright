@@ -62,6 +62,7 @@ declare global {
     release?: {
       generation: number;
       version: string;
+      build: number;
     };
     system: { id: string; version: string; [key: string]: unknown };
     users: Collection<User>;

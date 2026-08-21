@@ -1,5 +1,5 @@
 import { expect, Locator } from "@playwright/test";
-import { SetupAdapter, BaseGameAdapter } from "./base.js";
+import { SetupAdapter, BaseGameAdapter, performLegacyJoin } from "./base.js";
 import { installModuleFromManifest as helperInstallModuleFromManifest } from "../helpers.js";
 
 import { FoundryPage } from "../types/index.js";
@@ -14,6 +14,10 @@ export class V13SetupAdapter implements SetupAdapter {
     if (page?.deprecationTracker) {
       // Add version-specific ignores if needed
     }
+  }
+
+  async login(page: FoundryPage, userName: string, password?: string): Promise<void> {
+    return performLegacyJoin(page, userName, password);
   }
 
   async switchTab(page: FoundryPage, tabName: string): Promise<void> {

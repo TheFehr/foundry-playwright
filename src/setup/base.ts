@@ -127,6 +127,30 @@ export interface SetupAdapter {
    * @param backupName The label of the backup to delete.
    */
   deleteWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void>;
+
+  /**
+   * Fills in and submits the join-screen login form.
+   * @param page The Foundry VTT Page object.
+   * @param userName The display name of the user to log in as.
+   * @param password The user's password, if one is set.
+   */
+  login(page: FoundryPage, userName: string, password?: string): Promise<void>;
+}
+
+/**
+ * Fills in and submits the join-screen login form's `<select name="userid">`
+ * GM/user picker - the form used by V13 and by V14 before build 366. Shared
+ * by V13SetupAdapter and V14LegacySetupAdapter rather than duplicated: the
+ * markup is identical on both, this is not a V13/V14 difference.
+ */
+export async function performLegacyJoin(
+  page: FoundryPage,
+  userName: string,
+  password?: string,
+): Promise<void> {
+  await page.locator('select[name="userid"]').selectOption({ label: userName });
+  if (password) await page.locator('input[name="password"]').fill(password);
+  await page.locator('button[name="join"]').evaluate((el: Element) => (el as HTMLElement).click());
 }
 
 /**
