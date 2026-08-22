@@ -211,107 +211,107 @@
     "system": "dnd5e",
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
-    "status": "pending",
-    "timestamp": "2026-08-15T04:49:20.798Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.366 --system dnd5e --system-minor 5.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T18:08:14.976Z",
+    "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "14.366",
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "pending",
-    "timestamp": "2026-08-15T04:49:21.232Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.366 --system dnd5e --system-minor 5.2 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-08-22T18:18:05.130Z",
+    "notes": "Automated verification failed: user management: create, update, and login (Error: Failed to get user or actor ID); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.ui: drop simulation (TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.)"
   },
   {
     "fvtt": "14.366",
     "system": "dnd5e",
     "systemMinor": "5.1",
     "systemVersion": "5.1.10",
-    "status": "pending",
-    "timestamp": "2026-08-15T04:49:21.599Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.366 --system dnd5e --system-minor 5.1 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T18:24:43.959Z",
+    "notes": "Verified locally with dnd5e v5.1.10."
   },
   {
     "fvtt": "14.366",
     "system": "pf2e",
     "systemMinor": "8.4",
     "systemVersion": "8.4.0",
-    "status": "pending",
-    "timestamp": "2026-08-15T04:49:23.044Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.366 --system pf2e --system-minor 8.4 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T18:33:18.915Z",
+    "notes": "Verified locally with pf2e v8.4.0."
   },
   {
     "fvtt": "14.366",
     "system": "pf2e",
     "systemMinor": "8.3",
     "systemVersion": "8.3.0",
-    "status": "pending",
-    "timestamp": "2026-08-15T04:49:23.457Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.366 --system pf2e --system-minor 8.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T18:41:23.110Z",
+    "notes": "Verified locally with pf2e v8.3.0."
   },
   {
     "fvtt": "14.366",
     "system": "pf2e",
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-08-15T04:49:23.911Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.366 --system pf2e --system-minor 8.2 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T18:49:40.702Z",
+    "notes": "Verified locally with pf2e v8.2.0."
   },
   {
     "fvtt": "14.367",
     "system": "dnd5e",
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
-    "status": "pending",
-    "timestamp": "2026-08-19T04:54:17.917Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system dnd5e --system-minor 5.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T18:56:44.301Z",
+    "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "14.367",
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "pending",
-    "timestamp": "2026-08-19T04:54:18.207Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system dnd5e --system-minor 5.2 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-08-22T19:06:41.034Z",
+    "notes": "Automated verification failed: user management: create, update, and login (Error: Failed to get user or actor ID); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.ui: drop simulation (TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.)"
   },
   {
     "fvtt": "14.367",
     "system": "dnd5e",
     "systemMinor": "5.1",
     "systemVersion": "5.1.10",
-    "status": "pending",
-    "timestamp": "2026-08-19T04:54:18.502Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system dnd5e --system-minor 5.1 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T19:13:16.684Z",
+    "notes": "Verified locally with dnd5e v5.1.10."
   },
   {
     "fvtt": "14.367",
     "system": "pf2e",
     "systemMinor": "8.4",
     "systemVersion": "8.4.1",
-    "status": "pending",
-    "timestamp": "2026-08-19T04:54:19.846Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system pf2e --system-minor 8.4 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T19:21:16.197Z",
+    "notes": "Verified locally with pf2e v8.4.1."
   },
   {
     "fvtt": "14.367",
     "system": "pf2e",
     "systemMinor": "8.3",
     "systemVersion": "8.3.0",
-    "status": "pending",
-    "timestamp": "2026-08-19T04:54:20.137Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system pf2e --system-minor 8.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T19:29:12.030Z",
+    "notes": "Verified locally with pf2e v8.3.0."
   },
   {
     "fvtt": "14.367",
     "system": "pf2e",
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-08-19T04:54:20.453Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system pf2e --system-minor 8.2 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-08-22T19:37:13.237Z",
+    "notes": "Verified locally with pf2e v8.2.0."
   }
 ]
