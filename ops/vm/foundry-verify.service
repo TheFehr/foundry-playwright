@@ -59,4 +59,17 @@ User=foundry-verify
 Group=foundry-verify
 WorkingDirectory=/opt/foundry-playwright
 ExecStart=/opt/foundry-playwright/ops/vm/verify-nightly.sh
-TimeoutStartSec=6h
+# Sized for the current pending-combo matrix (~12 combos, ~6-8min each once
+# images are cached) with real margin, not for an open-ended hang - a run
+# that's still going after 2h is stuck, not just slow. Was 6h: a hung run
+# (e.g. the 14.366 login-form regression) took that long to get killed,
+# during which the run's own container kept going the whole time too (see
+# ExecStopPost= below).
+TimeoutStartSec=2h
+# Rootless Podman's conmon deliberately survives its parent dying, so a
+# TimeoutStartSec kill (or any other abnormal exit) can leave this run's
+# container running - which then holds verify-nightly.sh's flock open via
+# an inherited fd, silently blocking every future run until someone notices.
+# Force-remove anything this unit's own containers left behind, every time
+# the service stops, regardless of why.
+ExecStopPost=/bin/sh -c 'podman ps -aq --filter "name=foundry-playwright-" | xargs -r podman rm -f'
