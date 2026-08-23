@@ -148,9 +148,9 @@
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "failed",
-    "timestamp": "2026-08-03T18:17:36.424Z",
-    "notes": "Automated verification failed: user management: create, update, and login; foundry.state: document management; foundry.ui: drop simulation"
+    "status": "incompatible",
+    "timestamp": "2026-08-23T07:39:16.000Z",
+    "notes": "Confirmed incompatible: dnd5e 5.2.x was never intended to support FoundryVTT V14 (maintainer confirmation: https://github.com/foundryvtt/dnd5e/issues/6704 - \"it isn't expected that 5.2.x be compatible with V14. The 5.3.x branch is already.\"). Actor creation crashes with [Actor5e] validation errors (SchemaField#_validateRecursive on currency/abilities/skills/tools/traits) on every V14 build tested (14.360.0, 14.365, 14.366, 14.367). Not a foundry-playwright regression."
   },
   {
     "fvtt": "14.365",
@@ -220,9 +220,9 @@
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "failed",
-    "timestamp": "2026-08-22T18:18:05.130Z",
-    "notes": "Automated verification failed: user management: create, update, and login (Error: Failed to get user or actor ID); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.ui: drop simulation (TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.)"
+    "status": "incompatible",
+    "timestamp": "2026-08-23T07:39:16.000Z",
+    "notes": "Confirmed incompatible: dnd5e 5.2.x was never intended to support FoundryVTT V14 (maintainer confirmation: https://github.com/foundryvtt/dnd5e/issues/6704 - \"it isn't expected that 5.2.x be compatible with V14. The 5.3.x branch is already.\"). Actor creation crashes with [Actor5e] validation errors (SchemaField#_validateRecursive on currency/abilities/skills/tools/traits) on every V14 build tested (14.360.0, 14.365, 14.366, 14.367). Not a foundry-playwright regression."
   },
   {
     "fvtt": "14.366",
@@ -274,9 +274,9 @@
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "failed",
-    "timestamp": "2026-08-22T19:06:41.034Z",
-    "notes": "Automated verification failed: user management: create, update, and login (Error: Failed to get user or actor ID); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.ui: drop simulation (TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.)"
+    "status": "incompatible",
+    "timestamp": "2026-08-23T07:39:16.000Z",
+    "notes": "Confirmed incompatible: dnd5e 5.2.x was never intended to support FoundryVTT V14 (maintainer confirmation: https://github.com/foundryvtt/dnd5e/issues/6704 - \"it isn't expected that 5.2.x be compatible with V14. The 5.3.x branch is already.\"). Actor creation crashes with [Actor5e] validation errors (SchemaField#_validateRecursive on currency/abilities/skills/tools/traits) on every V14 build tested (14.360.0, 14.365, 14.366, 14.367). Not a foundry-playwright regression."
   },
   {
     "fvtt": "14.367",
