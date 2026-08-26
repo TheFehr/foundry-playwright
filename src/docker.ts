@@ -161,6 +161,26 @@ export class DockerFoundryOrchestrator {
    */
   getRunCommand(envPath: string): string[] {
     const image = `ghcr.io/felddy/foundryvtt:${this.config.version}`;
+    const uid = process.getuid!();
+    const gid = process.getgid!();
+
+    // felddy/foundryvtt images before V13 default to root, chown /data
+    // themselves via the FOUNDRY_UID/FOUNDRY_GID env vars, and only then
+    // su-exec down to that uid for the actual Foundry process - critically,
+    // *before* that drop, entrypoint.sh's authenticate step still needs to
+    // write a cookiejar into its own (root-owned, non-bind-mounted) home
+    // directory. Forcing `docker run --user <host-uid>` for the whole
+    // container (as done below for V13+) skips straight past that root
+    // step and makes that write fail with EACCES - confirmed empirically
+    // against ghcr.io/felddy/foundryvtt:12.343.0, which never leaves its
+    // authenticate-retry loop under a forced --user. V13+ images dropped
+    // FOUNDRY_UID/FOUNDRY_GID entirely (they're in that image's own
+    // DEPRECATED_ENVS) and instead expect the caller to run as an arbitrary
+    // uid directly via --user (felddy/foundryvtt-docker discussion #1197) -
+    // so the two mechanisms are mutually exclusive, not just old/new syntax
+    // for the same thing, and must be selected per major version.
+    const usesLegacyUidGid = Number(this.config.version.split(".")[0]) < 13;
+
     return [
       "run",
       "-d",
@@ -172,16 +192,13 @@ export class DockerFoundryOrchestrator {
       `${this.config.port}:30000`,
       "--env-file",
       path.resolve(envPath),
-      // Foundry defaults to running internally as uid:gid 1000:1000, which
-      // won't generally match the host user owning the bind mount (e.g. a
-      // dedicated automation user). The image supports overriding this via
-      // Docker's own --user (see felddy/foundryvtt-docker discussion #1197),
-      // matched here to whichever user is actually running this - so
-      // everything Foundry writes to the bind mounts is owned by that same
-      // user from the start, with no permission mismatch to reconcile.
-      "--user",
-      `${process.getuid!()}:${process.getgid!()}`,
-      ...(this.config.rootless && isPodmanRuntime() ? ["--userns=keep-id"] : []),
+      ...(usesLegacyUidGid
+        ? ["-e", `FOUNDRY_UID=${uid}`, "-e", `FOUNDRY_GID=${gid}`]
+        : [
+            "--user",
+            `${uid}:${gid}`,
+            ...(this.config.rootless && isPodmanRuntime() ? ["--userns=keep-id"] : []),
+          ]),
       "-v",
       `${path.resolve(this.config.dataDir)}:/data`,
       "-v",
