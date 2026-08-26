@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1](https://github.com/TheFehr/foundry-playwright/compare/v1.2.0...v1.2.1) (2026-08-26)
+
+### Bug Fixes
+
+- **deps:** bump @playwright/test peer/dev dependency floor to 1.51.0 ([#83](https://github.com/TheFehr/foundry-playwright/issues/83)) ([0e17cdf](https://github.com/TheFehr/foundry-playwright/commit/0e17cdfa3538c632a18192267031eaa71d3b235d))
+
 # [1.2.0](https://github.com/TheFehr/foundry-playwright/compare/v1.1.4...v1.2.0) (2026-08-26)
 
 ### Features
