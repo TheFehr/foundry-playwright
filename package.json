@@ -46,7 +46,7 @@
     "commander": "^14.0.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.0",
+    "@playwright/test": "^1.51.0",
     "@release-it/conventional-changelog": "^11.0.0",
     "@types/node": "^20.10.0",
     "dotenv": "^17.4.2",
@@ -60,7 +60,7 @@
     "vitest": "^1.0.0"
   },
   "peerDependencies": {
-    "@playwright/test": "^1.40.0"
+    "@playwright/test": "^1.51.0"
   },
   "lint-staged": {
     "**/*.{ts,json,js,md,yml}": "npm run format:fix",
