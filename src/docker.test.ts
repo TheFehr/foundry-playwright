@@ -110,6 +110,36 @@ describe("DockerFoundryOrchestrator", () => {
     expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${process.getgid!()}`]));
   });
 
+  it("adds --userns=keep-id for pre-V13 images under rootless Podman", () => {
+    // Without keep-id, the legacy branch's own FOUNDRY_UID/FOUNDRY_GID chown
+    // (see getRunCommand) lands on a subuid-mapped owner on the host side
+    // under rootless Podman, not the real host uid - defeating the reason
+    // those env vars are passed at all. Same fix as the --user branch,
+    // needed for the same reason.
+    vi.mocked(execFileSync).mockReturnValue(
+      "Emulate Docker CLI using podman.\npodman version 5.7.0\n",
+    );
+    const orchestrator = new DockerFoundryOrchestrator({
+      version: "12.343.0",
+      rootless: true,
+    });
+    const command = orchestrator.getRunCommand(".env");
+    expect(command).not.toEqual(expect.arrayContaining(["--user"]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_UID=${process.getuid!()}`]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${process.getgid!()}`]));
+    expect(command).toContain("--userns=keep-id");
+  });
+
+  it("omits --userns=keep-id for pre-V13 images when rootless is set but the runtime is real Docker", () => {
+    vi.mocked(execFileSync).mockReturnValue("Docker version 27.3.1, build ce12230\n");
+    const orchestrator = new DockerFoundryOrchestrator({
+      version: "12.343.0",
+      rootless: true,
+    });
+    const command = orchestrator.getRunCommand(".env");
+    expect(command).not.toContain("--userns=keep-id");
+  });
+
   it("respects maxPortRetries in config", () => {
     const orchestrator = new DockerFoundryOrchestrator({
       version: "12.327",

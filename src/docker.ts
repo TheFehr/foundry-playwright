@@ -181,6 +181,16 @@ export class DockerFoundryOrchestrator {
     // for the same thing, and must be selected per major version.
     const usesLegacyUidGid = Number(this.config.version.split(".")[0]) < 13;
 
+    // Under rootless Podman, an unprivileged container's root (or any uid it
+    // chowns to) maps through /etc/subuid, not to the real host uid - so
+    // without --userns=keep-id, the legacy branch's own FOUNDRY_UID/GID
+    // chown (see above) lands on a subuid-mapped owner on the host side,
+    // not the actual host user, defeating the reason those env vars are
+    // passed at all. Same reasoning as the --user branch below, which
+    // already needs this for the same reason - applies regardless of which
+    // of the two uid-matching mechanisms is in play.
+    const userNsFlag = this.config.rootless && isPodmanRuntime() ? ["--userns=keep-id"] : [];
+
     return [
       "run",
       "-d",
@@ -193,12 +203,8 @@ export class DockerFoundryOrchestrator {
       "--env-file",
       path.resolve(envPath),
       ...(usesLegacyUidGid
-        ? ["-e", `FOUNDRY_UID=${uid}`, "-e", `FOUNDRY_GID=${gid}`]
-        : [
-            "--user",
-            `${uid}:${gid}`,
-            ...(this.config.rootless && isPodmanRuntime() ? ["--userns=keep-id"] : []),
-          ]),
+        ? ["-e", `FOUNDRY_UID=${uid}`, "-e", `FOUNDRY_GID=${gid}`, ...userNsFlag]
+        : ["--user", `${uid}:${gid}`, ...userNsFlag]),
       "-v",
       `${path.resolve(this.config.dataDir)}:/data`,
       "-v",
