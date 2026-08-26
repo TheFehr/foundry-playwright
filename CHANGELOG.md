@@ -1,5 +1,11 @@
 # Changelog
 
+# [1.2.0](https://github.com/TheFehr/foundry-playwright/compare/v1.1.4...v1.2.0) (2026-08-26)
+
+### Features
+
+- **setup:** add Foundry V12 support ([#80](https://github.com/TheFehr/foundry-playwright/issues/80)) ([de9b6c5](https://github.com/TheFehr/foundry-playwright/commit/de9b6c50ffaf2229a96a622bc4ea027b70e71af2))
+
 ## [1.1.4](https://github.com/TheFehr/foundry-playwright/compare/v1.1.3...v1.1.4) (2026-08-23)
 
 ## [1.1.3](https://github.com/TheFehr/foundry-playwright/compare/v1.1.2...v1.1.3) (2026-08-22)
