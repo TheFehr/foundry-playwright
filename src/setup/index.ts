@@ -1,5 +1,6 @@
 import { FoundryPage } from "../types/index.js";
 import { SetupAdapter, GameAdapter } from "./base.js";
+import { V12SetupAdapter, V12GameAdapter } from "./v12.js";
 import { V13SetupAdapter, V13GameAdapter } from "./v13.js";
 import {
   V14SetupAdapter,
@@ -8,7 +9,7 @@ import {
   V14_USERNAME_LOGIN_BUILD,
 } from "./v14.js";
 
-type DetectedVersion = { major: 13 | 14; build?: number } | null;
+type DetectedVersion = { major: 12 | 13 | 14; build?: number } | null;
 
 /**
  * Extracts the Foundry build number from a version string, e.g. "14.366" or
@@ -25,7 +26,7 @@ export function parseFoundryBuild(version: string): number | undefined {
  * match major "14" but "140.1" does not - a plain startsWith("14") would
  * wrongly match "140.1" too.
  */
-export function matchesMajorVersion(version: string, major: "13" | "14"): boolean {
+export function matchesMajorVersion(version: string, major: "12" | "13" | "14"): boolean {
   return version.split(".", 1)[0] === major;
 }
 
@@ -86,6 +87,7 @@ export async function getSetupAdapter(
       return selectV14SetupAdapter(page, build);
     }
     if (matchesMajorVersion(v, "13")) return new V13SetupAdapter(page);
+    if (matchesMajorVersion(v, "12")) return new V12SetupAdapter(page);
     console.warn(
       `[getSetupAdapter] Explicit version "${v}" provided but not explicitly supported. Falling back to detection.`,
     );
@@ -119,6 +121,7 @@ export async function getSetupAdapter(
             return null;
           }
           if (vs.split(".", 1)[0] === "13") return { major: 13 as const };
+          if (vs.split(".", 1)[0] === "12") return { major: 12 as const };
         }
 
         // 2. Check for V14 definitive markers (ApplicationV2 shell)
@@ -134,24 +137,33 @@ export async function getSetupAdapter(
           return null;
         }
 
-        // 3. Check for V13 definitive markers
-        // V13 uses traditional body classes and does NOT have foundry-app
-        const isV13 =
+        // 3. Check for V12/V13 shell markers - both generations use
+        // traditional body classes and do NOT have foundry-app (that only
+        // arrived with V14's ApplicationV2 setup shell). Disambiguate via
+        // script filename: V13+ ships foundry.mjs, V12 and earlier shipped
+        // scripts/foundry.js.
+        const hasLegacyShell =
           (document.body.classList.contains("setup") ||
             document.body.classList.contains("join") ||
             document.body.classList.contains("game")) &&
           document.querySelector("foundry-app") === null;
 
-        if (isV13) return { major: 13 as const };
+        if (hasLegacyShell) {
+          const shellScripts = Array.from(document.querySelectorAll("script")).map((s) => s.src);
+          if (shellScripts.some((s) => s.includes("scripts/foundry.js"))) {
+            return { major: 12 as const };
+          }
+          return { major: 13 as const };
+        }
 
-        // 4. Script-based fallback (V12- used foundry.js, V13+ uses foundry.mjs)
+        // 4. Script-based fallback for pages without the shell markers yet
         const scripts = Array.from(document.querySelectorAll("script")).map((s) => s.src);
         if (scripts.some((s) => s.includes("foundry.mjs"))) {
-          // If it's foundry.mjs but didn't match V14 markers yet, it might be V13
-          // or V14 hasn't fully loaded its shell. We wait.
+          // foundry.mjs but no shell markers yet: could be V13 or V14 still
+          // loading its shell. We wait.
           return null;
         }
-        if (scripts.some((s) => s.includes("scripts/foundry.js"))) return { major: 13 as const }; // V12/V13 early? Actually V13 is mjs.
+        if (scripts.some((s) => s.includes("scripts/foundry.js"))) return { major: 12 as const };
 
         return null; // Not detectable yet
       },
@@ -194,6 +206,7 @@ export async function getSetupAdapter(
           return { major: 14 as const, build };
         }
         if (vs.split(".", 1)[0] === "13") return { major: 13 as const };
+        if (vs.split(".", 1)[0] === "12") return { major: 12 as const };
       }
 
       if (diag.url.includes("/players") || diag.url.includes("/create")) {
@@ -213,10 +226,14 @@ export async function getSetupAdapter(
         if (hasV14Markers) return { major: 14 as const, build: await probeV14Build(page) };
         return { major: 13 as const };
       }
+      if (diag.scripts.some((s) => s.includes("scripts/foundry.js"))) {
+        return { major: 12 as const };
+      }
       return { major: 13 as const }; // Default to 13
     });
 
   if (detectedVersion?.major === 14) return selectV14SetupAdapter(page, detectedVersion.build);
+  if (detectedVersion?.major === 12) return new V12SetupAdapter(page);
   return new V13SetupAdapter(page);
 }
 
@@ -233,6 +250,7 @@ export async function getGameAdapter(
     const v = explicitVersion;
     if (matchesMajorVersion(v, "14")) return new V14GameAdapter(page);
     if (matchesMajorVersion(v, "13")) return new V13GameAdapter(page);
+    if (matchesMajorVersion(v, "12")) return new V12GameAdapter(page);
   }
 
   const version = await page
@@ -245,6 +263,7 @@ export async function getGameAdapter(
         if (v) {
           if (String(v).split(".", 1)[0] === "14") return 14;
           if (String(v).split(".", 1)[0] === "13") return 13;
+          if (String(v).split(".", 1)[0] === "12") return 12;
         }
         if ((window as unknown as Window).foundry?.applications?.api?.ApplicationV2 !== undefined)
           return 14;
@@ -257,9 +276,11 @@ export async function getGameAdapter(
     .catch(() => 13);
 
   if (version === 14) return new V14GameAdapter(page);
+  if (version === 12) return new V12GameAdapter(page);
   return new V13GameAdapter(page);
 }
 
 export * from "./base.js";
+export * from "./v12.js";
 export * from "./v13.js";
 export * from "./v14.js";

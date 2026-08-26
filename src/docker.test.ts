@@ -57,7 +57,7 @@ describe("DockerFoundryOrchestrator", () => {
 
   it("omits --userns=keep-id by default", () => {
     const orchestrator = new DockerFoundryOrchestrator({
-      version: "12.327",
+      version: "13.351.0",
     });
     const command = orchestrator.getRunCommand(".env");
     expect(command).toEqual(expect.arrayContaining(expectedUserFlag));
@@ -72,7 +72,7 @@ describe("DockerFoundryOrchestrator", () => {
       "Emulate Docker CLI using podman.\npodman version 5.7.0\n",
     );
     const orchestrator = new DockerFoundryOrchestrator({
-      version: "12.327",
+      version: "13.351.0",
       rootless: true,
     });
     const command = orchestrator.getRunCommand(".env");
@@ -85,11 +85,58 @@ describe("DockerFoundryOrchestrator", () => {
     // Docker doesn't understand it and would fail outright if it were added.
     vi.mocked(execFileSync).mockReturnValue("Docker version 27.3.1, build ce12230\n");
     const orchestrator = new DockerFoundryOrchestrator({
-      version: "12.327",
+      version: "13.351.0",
       rootless: true,
     });
     const command = orchestrator.getRunCommand(".env");
     expect(command).toEqual(expect.arrayContaining(expectedUserFlag));
+    expect(command).not.toContain("--userns=keep-id");
+  });
+
+  it("uses FOUNDRY_UID/FOUNDRY_GID instead of --user for pre-V13 images", () => {
+    // ghcr.io/felddy/foundryvtt images before V13 default to root and only
+    // drop to FOUNDRY_UID/FOUNDRY_GID internally (via su-exec) after their
+    // entrypoint has done some root-only setup (e.g. writing a cookiejar
+    // into its own home dir during FOUNDRY_USERNAME/PASSWORD auth) - forcing
+    // --user for the whole container breaks that setup. V13+ images dropped
+    // FOUNDRY_UID/FOUNDRY_GID entirely and expect --user instead. Confirmed
+    // empirically against ghcr.io/felddy/foundryvtt:12.343.0.
+    const orchestrator = new DockerFoundryOrchestrator({
+      version: "12.343.0",
+    });
+    const command = orchestrator.getRunCommand(".env");
+    expect(command).not.toEqual(expect.arrayContaining(["--user"]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_UID=${process.getuid!()}`]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${process.getgid!()}`]));
+  });
+
+  it("adds --userns=keep-id for pre-V13 images under rootless Podman", () => {
+    // Without keep-id, the legacy branch's own FOUNDRY_UID/FOUNDRY_GID chown
+    // (see getRunCommand) lands on a subuid-mapped owner on the host side
+    // under rootless Podman, not the real host uid - defeating the reason
+    // those env vars are passed at all. Same fix as the --user branch,
+    // needed for the same reason.
+    vi.mocked(execFileSync).mockReturnValue(
+      "Emulate Docker CLI using podman.\npodman version 5.7.0\n",
+    );
+    const orchestrator = new DockerFoundryOrchestrator({
+      version: "12.343.0",
+      rootless: true,
+    });
+    const command = orchestrator.getRunCommand(".env");
+    expect(command).not.toEqual(expect.arrayContaining(["--user"]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_UID=${process.getuid!()}`]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${process.getgid!()}`]));
+    expect(command).toContain("--userns=keep-id");
+  });
+
+  it("omits --userns=keep-id for pre-V13 images when rootless is set but the runtime is real Docker", () => {
+    vi.mocked(execFileSync).mockReturnValue("Docker version 27.3.1, build ce12230\n");
+    const orchestrator = new DockerFoundryOrchestrator({
+      version: "12.343.0",
+      rootless: true,
+    });
+    const command = orchestrator.getRunCommand(".env");
     expect(command).not.toContain("--userns=keep-id");
   });
 

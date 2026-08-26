@@ -39,6 +39,10 @@ describe("matchesMajorVersion", () => {
   it("does not match an unrelated major version", () => {
     expect(matchesMajorVersion("13.351.0", "14")).toBe(false);
   });
+
+  it("matches a V12 version string", () => {
+    expect(matchesMajorVersion("12.331", "12")).toBe(true);
+  });
 });
 
 describe("selectV14SetupAdapter", () => {
