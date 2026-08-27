@@ -60,6 +60,66 @@ test.describe("Library Verification Suite", () => {
     await verifyResult(page, key, predicate, { actorName, amount: 100, currency: "gp" });
   });
 
+  test("foundry.state: embedded document management", async ({ page, foundry }) => {
+    const actorName = "Embed Actor " + Date.now();
+    await foundry.state.createDocument("Actor", { name: actorName, type: "character" });
+    const actorId = await page.evaluate(
+      (name) => (window as unknown as Window).game.actors.getName(name)?.id,
+      actorName,
+    );
+    if (!actorId) throw new Error("Actor not found after creation");
+
+    // Singular form: an Item embedded on an Actor (e.g. inventory, or a
+    // system's condition item - the mechanic PF2e's "wounded" condition
+    // needs, which top-level createDocument can't reach).
+    const itemName = "Embedded Loot " + Date.now();
+    const createdItem = (await foundry.state.createEmbeddedDocument("Actor", actorId, "Item", {
+      name: itemName,
+      type: "loot",
+    })) as Record<string, unknown>;
+    expect(createdItem.name).toBe(itemName);
+
+    await verifyResult(
+      page,
+      "item-create",
+      (data: Record<string, unknown>, extra: Record<string, unknown>) =>
+        data.name === extra.itemName && data.parentId === extra.actorId,
+      { itemName, actorId },
+    );
+
+    // Plural form + a different embedded type: a Token embedded on a Scene
+    // - the other real gap this API closes (placing an actor onto a scene).
+    const sceneName = "Embed Scene " + Date.now();
+    await foundry.state.createDocument("Scene", { name: sceneName, width: 1000, height: 1000 });
+    const sceneId = await page.evaluate(
+      (name) => (window as unknown as Window).game.scenes.getName(name)?.id,
+      sceneName,
+    );
+    if (!sceneId) throw new Error("Scene not found after creation");
+
+    const [createdToken] = (await foundry.state.createEmbeddedDocuments("Scene", sceneId, "Token", [
+      { name: actorName, actorId, x: 100, y: 100 },
+    ])) as Record<string, unknown>[];
+    expect(createdToken.name).toBe(actorName);
+
+    await verifyResult(
+      page,
+      "token-create",
+      (data: Record<string, unknown>, extra: Record<string, unknown>) =>
+        data.parentId === extra.sceneId,
+      { sceneId },
+    );
+  });
+
+  test("foundry.state: createEmbeddedDocument throws for a missing parent", async ({ foundry }) => {
+    await expect(
+      foundry.state.createEmbeddedDocument("Actor", "nonexistent-id", "Item", {
+        name: "x",
+        type: "loot",
+      }),
+    ).rejects.toThrow(/not found/i);
+  });
+
   test("foundry.state: settings management", async ({ page, foundry }) => {
     const testVal = "val-" + Date.now();
 

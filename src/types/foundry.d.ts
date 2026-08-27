@@ -17,17 +17,21 @@ declare global {
     sheet: {
       render(force: boolean, options?: Record<string, unknown>): unknown;
     };
+    // Present on any document type that supports embedded collections
+    // (Actor -> Item/ActiveEffect, Scene -> Token/Drawing, Combat ->
+    // Combatant, JournalEntry -> JournalEntryPage, etc.) - core
+    // ClientDocumentMixin behavior, not Actor-specific.
+    createEmbeddedDocuments?(
+      embeddedName: string,
+      data: Record<string, unknown>[],
+      context?: Record<string, unknown>,
+    ): Promise<FoundryDocument[]>;
   }
 
   interface Actor extends FoundryDocument {
     type: string;
     system: Record<string, unknown>;
     items: Collection<Item>;
-    createEmbeddedDocuments(
-      embeddedName: string,
-      data: Record<string, unknown>[],
-      context?: Record<string, unknown>,
-    ): Promise<FoundryDocument[]>;
   }
 
   interface Item extends FoundryDocument {

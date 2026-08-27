@@ -178,6 +178,14 @@ export interface GameAdapter {
     collection: string,
     query: Record<string, unknown>,
   ): Promise<Record<string, unknown>[]>;
+  createEmbeddedDocuments(
+    page: FoundryPage,
+    parentType: string,
+    parentId: string,
+    embeddedName: string,
+    data: Record<string, unknown>[],
+    options: Record<string, unknown>,
+  ): Promise<unknown[]>;
 }
 
 /**
@@ -279,6 +287,49 @@ export abstract class BaseGameAdapter implements GameAdapter {
           .map((d: FoundryDocument) => d.toObject?.() || d.toJSON());
       },
       { collection, query },
+    );
+  }
+
+  /**
+   * Creates one or more embedded documents (e.g. Items on an Actor, Tokens
+   * on a Scene) on an existing parent document. Unlike createDocument, this
+   * targets Document Data Model behavior that lives on the parent instance
+   * itself (`parent.createEmbeddedDocuments(...)`), not a top-level world
+   * collection - core Foundry API, stable across V12-V14 so far, but kept
+   * behind this version-adapted seam (rather than inlined directly in
+   * FoundryState) in case a future generation changes it.
+   */
+  async createEmbeddedDocuments(
+    page: FoundryPage,
+    parentType: string,
+    parentId: string,
+    embeddedName: string,
+    data: Record<string, unknown>[],
+    options: Record<string, unknown>,
+  ): Promise<unknown[]> {
+    return page.evaluate(
+      async ({ parentType, parentId, embeddedName, data, options }) => {
+        const parent = window.game.collections.get(parentType)?.get(parentId) as
+          | (FoundryDocument & {
+              createEmbeddedDocuments?: (
+                embeddedName: string,
+                data: Record<string, unknown>[],
+                options?: Record<string, unknown>,
+              ) => Promise<FoundryDocument[]>;
+            })
+          | undefined;
+        if (!parent) throw new Error(`Parent document ${parentType}/${parentId} not found.`);
+        if (typeof parent.createEmbeddedDocuments !== "function") {
+          throw new Error(`${parentType} does not support embedded documents.`);
+        }
+        const created = await parent.createEmbeddedDocuments(embeddedName, data, options);
+        // Converted to plain objects here, inside the browser context,
+        // matching getDocuments below - the returned Document instances
+        // don't survive Playwright's evaluate-result serialization with
+        // their methods/getters intact, only their own plain data does.
+        return created.map((d) => d.toObject?.() ?? d.toJSON());
+      },
+      { parentType, parentId, embeddedName, data, options },
     );
   }
 }

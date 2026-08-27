@@ -1,5 +1,6 @@
 import { FoundryPage, UserRole, DocumentOwnershipLevel } from "./types/index.js";
 import { getSystemStateAdapter, SystemStateAdapter } from "./systems/index.js";
+import { getGameAdapter } from "./setup/index.js";
 import { DeprecationTracker } from "./deprecations.js";
 
 /**
@@ -440,6 +441,76 @@ export class FoundryState {
   async createTestActor(name: string = "Test Actor") {
     const { type, system } = this.adapter.getTestActorData(name);
     return this.createDocument("Actor", { name, type, system });
+  }
+
+  /**
+   * Creates one or more embedded documents on an existing parent document -
+   * e.g. Items on an Actor (inventory, conditions), Tokens on a Scene,
+   * Combatants on a Combat. This is distinct from {@link createDocument}:
+   * that creates top-level world documents (`documentClass.create()`),
+   * while embedded documents live on a parent instance
+   * (`parent.createEmbeddedDocuments()`) and only make sense in that
+   * context - e.g. an Item embedded on an Actor is that actor's inventory
+   * entry, not a standalone world Item.
+   *
+   * Routed through {@link getGameAdapter} (not a raw page.evaluate here)
+   * because this is core Document Data Model behavior, not
+   * system-specific - kept behind the same version-adapted seam as
+   * createDocument/updateDocument in GameAdapter, in case a future Foundry
+   * generation changes it, even though it's been stable since V12.
+   *
+   * @param parentType The parent's document type, e.g. "Actor", "Scene".
+   * @param parentId The parent document's ID.
+   * @param embeddedName The embedded document type, e.g. "Item", "Token".
+   * @param data One data object per document to create.
+   */
+  async createEmbeddedDocuments(
+    parentType: string,
+    parentId: string,
+    embeddedName: string,
+    data: Record<string, unknown>[],
+    options: Record<string, unknown> = {},
+  ) {
+    const adapter = await getGameAdapter(this.page);
+    const docs = await adapter.createEmbeddedDocuments(
+      this.page,
+      parentType,
+      parentId,
+      embeddedName,
+      data,
+      options,
+    );
+    // GameAdapter already converted these to plain objects inside its own
+    // page.evaluate (Document instances don't survive the Playwright
+    // serialization boundary with methods intact) - sanitizing that plain
+    // data is a pure transform, so it runs here in Node directly rather
+    // than round-tripping back into the browser for it.
+    const sanitize = new Function(`return ${FoundryState.SanitizerScript}`)() as (
+      obj: unknown,
+    ) => unknown;
+    return (docs as Record<string, unknown>[]).map((d) => sanitize(d));
+  }
+
+  /**
+   * Convenience singular form of {@link createEmbeddedDocuments} - creates
+   * exactly one embedded document and returns it directly instead of a
+   * one-element array.
+   */
+  async createEmbeddedDocument(
+    parentType: string,
+    parentId: string,
+    embeddedName: string,
+    data: Record<string, unknown>,
+    options: Record<string, unknown> = {},
+  ) {
+    const [doc] = await this.createEmbeddedDocuments(
+      parentType,
+      parentId,
+      embeddedName,
+      [data],
+      options,
+    );
+    return doc ?? null;
   }
 
   /**

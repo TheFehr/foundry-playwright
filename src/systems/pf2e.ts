@@ -1,5 +1,6 @@
 import { FoundryPage } from "../types/index.js";
 import { BaseSystemStateAdapter } from "./base.js";
+import { getGameAdapter } from "../setup/index.js";
 
 /**
  * State adapter for the Pathfinder 2nd Edition system.
@@ -20,38 +21,48 @@ export class PF2eStateAdapter extends BaseSystemStateAdapter {
     amount: number,
     currency: string,
   ): Promise<unknown> {
-    return page.evaluate(
-      async ({ actorName, amount, currency }) => {
-        const actor = (window as unknown as Window).game.actors.getName(actorName);
-        if (!actor) throw new Error(`Actor not found: ${actorName}`);
+    const actorId = await page.evaluate((actorName) => {
+      const actor = (window as unknown as Window).game.actors.getName(actorName);
+      if (!actor) throw new Error(`Actor not found: ${actorName}`);
+      return actor.id;
+    }, actorName);
 
-        // Create the treasure item
-        const [newItem] = await actor.createEmbeddedDocuments("Item", [
-          {
-            name: `${currency.toUpperCase()} Coins`,
-            type: "treasure",
-            system: {
-              denomination: currency,
-              quantity: amount,
-            },
+    // Create the treasure item via the version-adapted GameAdapter seam
+    // rather than a bespoke actor.createEmbeddedDocuments call - this is
+    // core Document Data Model behavior (embedding an Item on an Actor),
+    // not PF2e-specific, so it goes through the same seam any other
+    // embedded-document creation does (see FoundryState.createEmbeddedDocuments).
+    const adapter = await getGameAdapter(page);
+    const [newItem] = (await adapter.createEmbeddedDocuments(
+      page,
+      "Actor",
+      actorId,
+      "Item",
+      [
+        {
+          name: `${currency.toUpperCase()} Coins`,
+          type: "treasure",
+          system: {
+            denomination: currency,
+            quantity: amount,
           },
-        ]);
+        },
+      ],
+      {},
+    )) as { id: string }[];
 
-        // Definitively log to the verification registry
+    // Definitively log to the verification registry
+    await page.evaluate(
+      ({ actorName, amount, currency, itemId }) => {
         // @ts-ignore
         if (window.FP_VERIFY) {
-          window.FP_VERIFY.log("pf2e-currency-added", {
-            actorName,
-            amount,
-            currency,
-            itemId: newItem.id,
-          });
+          window.FP_VERIFY.log("pf2e-currency-added", { actorName, amount, currency, itemId });
         }
-
-        return newItem;
       },
-      { actorName, amount, currency },
+      { actorName, amount, currency, itemId: newItem?.id },
     );
+
+    return newItem;
   }
 
   override getTestActorData(_name: string) {

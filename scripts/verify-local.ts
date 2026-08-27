@@ -411,7 +411,11 @@ async function verifyVersion(
       (a) => a.startsWith("--ui") || a.startsWith("--headed") || a.startsWith("--debug"),
     );
 
-    const testFiles = ["e2e/verify.spec.ts", "e2e/user-management.spec.ts"];
+    const testFiles = [
+      "e2e/verify.spec.ts",
+      "e2e/user-management.spec.ts",
+      "e2e/mixed-module-install.spec.ts",
+    ];
     // Unique per run (not just per version), and removed up front - a
     // previous run at this same path that crashed before reaching its own
     // cleanup could otherwise leave a stale report behind for this run to
