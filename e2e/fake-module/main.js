@@ -80,10 +80,10 @@
 
           setupInterceptors() {
             console.log('FP_VERIFY: Setting up interceptors...');
-            
-            const self = this;
-            
-            // Global hook proxy
+
+            // Global hook proxy (logging only - actual create/update
+            // capture happens via Hooks.on below, since core Foundry fires
+            // these through Hooks.callAll, not Hooks.call)
             if (typeof Hooks !== 'undefined') {
                 const originalCall = Hooks.call;
                 Hooks.call = function(hook, ...args) {
@@ -91,24 +91,8 @@
                         if (hook.toLowerCase().includes('create') || hook.toLowerCase().includes('update')) {
                             console.log(`FP_VERIFY: Intercepted ${hook}`, args);
                         }
-
-                        // Special handling for document creation
-                        if (hook === 'createItem' || hook === 'createActor') {
-                            const doc = args[0];
-                            const lower = hook.replace('create', '').toLowerCase();
-                            self.log(`${lower}-create`, { id: doc.id, name: doc.name, data: doc });
-                        }
-
-                        if (hook === 'createEmbeddedDocuments') {
-                            const [parent, type, data] = args;
-                            if (type === 'Item') {
-                                data.forEach(d => {
-                                    self.log('item-create', { id: d.id || d._id, name: d.name, data: d, parentId: parent.id });
-                                });
-                            }
-                        }
                     } catch (e) { console.error('FP_VERIFY: Interceptor error', e); }
-                    
+
                     return originalCall.apply(this, [hook, ...args]);
                 };
             }
@@ -123,13 +107,17 @@
                 } catch (e) {}
             }, { capture: true });
 
-            const docs = ['Actor', 'Item', 'Scene', 'User', 'JournalEntry', 'RollTable'];
+            const docs = ['Actor', 'Item', 'Scene', 'User', 'JournalEntry', 'RollTable', 'Token'];
             docs.forEach(d => {
               const lower = d.toLowerCase();
-              
+
               Hooks.on(`create${d}`, (doc, ...args) => {
-                  console.log(`FP_VERIFY: create${d} hook triggered`, { id: doc.id, name: doc.name });
-                  this.log(`${lower}-create`, { id: doc.id, name: doc.name, data: doc });
+                  // doc.parent is set by core Foundry for embedded documents
+                  // (e.g. an Item created on an Actor, a Token on a Scene) -
+                  // undefined for top-level world documents.
+                  const parentId = doc.parent?.id;
+                  console.log(`FP_VERIFY: create${d} hook triggered`, { id: doc.id, name: doc.name, parentId });
+                  this.log(`${lower}-create`, { id: doc.id, name: doc.name, data: doc, parentId });
               }, { once: false, priority: 100 });
               
               Hooks.on(`update${d}`, (doc, delta, ...args) => {
@@ -137,17 +125,6 @@
                   this.log(`${lower}-update`, { id: doc.id, name: doc.name, delta });
               }, { once: false, priority: 100 });
             });
-
-            // Embedded document hooks (very common in systems like PF2e)
-            Hooks.on('createEmbeddedDocuments', (parent, type, data, ...args) => {
-                console.log(`FP_VERIFY: createEmbeddedDocuments hook triggered`, { parent: parent.id, type, count: data.length });
-                if (type === 'Item') {
-                    data.forEach(d => {
-                        const itemData = d.toObject ? d.toObject() : (d._source || d);
-                        this.log(`item-create`, { id: d.id || d._id, name: d.name, data: itemData, parentId: parent.id });
-                    });
-                }
-            }, { once: false, priority: 100 });
 
             // V14+ namespaced hooks (if any)
             Hooks.on('createDocument', (doc) => {

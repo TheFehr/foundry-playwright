@@ -215,8 +215,20 @@ export interface FoundrySetupConfig {
   systemId?: string;
   systemLabel?: string;
   systemManifest?: string;
+  /**
+   * Module ID(s) to ensure end up installed (via the package browser's
+   * remote search, skipped if already present) and active. Independent of
+   * how a module was actually installed - list an id here even if it was
+   * installed via `moduleManifest` below, to have it activated.
+   */
   moduleId?: string | string[];
-  moduleManifest?: string;
+  /**
+   * Manifest URL(s) to install module(s) directly from, for modules not
+   * available (or not desired) via the package browser's remote search.
+   * Runs before `moduleId`'s installs. Only installs - list the module's
+   * own id in `moduleId` too if it also needs to be activated.
+   */
+  moduleManifest?: string | string[];
   adminPassword?: string;
   userName?: string;
   password?: string;
@@ -381,10 +393,22 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
         }
       }
 
-      // 4. Module Installation
+      // 4. Module Installation - manifest-based installs run first, then
+      // registry-search installs. Not mutually exclusive: a module only
+      // available via direct manifest URL (moduleManifest) and modules
+      // available in the package browser (moduleId) can both be needed in
+      // the same world - e.g. a consumer's own unlisted module plus a
+      // published dependency like lib-wrapper. installModules' own
+      // "already installed" check means listing the same id in both
+      // (moduleManifest for install, moduleId for activation below) just
+      // skips the redundant second install rather than erroring.
       if (moduleManifest) {
-        await adapter.installModuleFromManifest(page, moduleManifest);
-      } else if (moduleId) {
+        const moduleManifests = Array.isArray(moduleManifest) ? moduleManifest : [moduleManifest];
+        for (const manifestUrl of moduleManifests) {
+          await adapter.installModuleFromManifest(page, manifestUrl);
+        }
+      }
+      if (moduleId) {
         const moduleIds = Array.isArray(moduleId) ? moduleId : [moduleId];
         await adapter.installModules(page, moduleIds);
       }
