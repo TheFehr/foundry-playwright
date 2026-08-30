@@ -80,6 +80,8 @@ npm run verify:local -- --docker --version 14.360.0 --system dnd5e
 npx foundry-playwright test --docker --module-dir ../my-module/dist
 ```
 
+> **Breaking change:** `foundry-playwright test --docker` no longer reads a `.env` file from your project directory on its own. Export `FOUNDRY_USERNAME`, `FOUNDRY_PASSWORD`, and `FOUNDRY_ADMIN_KEY` as real environment variables before running the CLI (or load your own dotenv first). This also removes the `envFile` option from `DockerOrchestratorConfig` for anyone using `DockerFoundryOrchestrator` programmatically — pass `username`/`password`/`adminKey` directly instead.
+
 ## Configuration
 
 | Variable                                       | Purpose                                                              |

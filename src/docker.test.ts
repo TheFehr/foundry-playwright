@@ -169,6 +169,70 @@ describe("DockerFoundryOrchestrator", () => {
     expect(config.maxPortRetries).toBe(10);
   });
 
+  describe("start() env file lifecycle", () => {
+    let tmpBase: string;
+
+    beforeEach(() => {
+      tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "docker-start-test-"));
+      vi.unstubAllEnvs();
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+      vi.unstubAllEnvs();
+    });
+
+    it("throws before touching Docker when username/password are missing", async () => {
+      vi.stubEnv("FOUNDRY_USERNAME", "");
+      vi.stubEnv("FOUNDRY_PASSWORD", "");
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        port: 48213,
+        maxPortRetries: 0,
+        dataDir: path.join(tmpBase, "data"),
+        cacheDir: path.join(tmpBase, "cache"),
+      });
+
+      await expect(orchestrator.start()).rejects.toThrow(
+        /FOUNDRY_USERNAME and FOUNDRY_PASSWORD are required/,
+      );
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    it("writes credentials to a fresh temp env file for `docker run` and removes it afterward, even when the run fails", async () => {
+      let capturedEnvPath: string | null = null;
+      let capturedEnvContent: string | null = null;
+      vi.mocked(execFileSync).mockImplementation(((cmd: string, args: string[]) => {
+        if (args[0] === "images") return "";
+        if (args[0] === "pull" || args[0] === "stop" || args[0] === "rm") return "";
+        if (args[0] === "run") {
+          capturedEnvPath = args[args.indexOf("--env-file") + 1];
+          capturedEnvContent = fs.readFileSync(capturedEnvPath, "utf8");
+          throw new Error("simulated docker run failure");
+        }
+        return "";
+      }) as unknown as typeof execFileSync);
+
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        port: 48213,
+        maxPortRetries: 0,
+        username: "test-user",
+        password: "test-pass",
+        adminKey: "test-key",
+        dataDir: path.join(tmpBase, "data"),
+        cacheDir: path.join(tmpBase, "cache"),
+      });
+
+      await expect(orchestrator.start()).rejects.toThrow("simulated docker run failure");
+      expect(capturedEnvContent).toBe(
+        "FOUNDRY_USERNAME=test-user\nFOUNDRY_PASSWORD=test-pass\nFOUNDRY_ADMIN_KEY=test-key\n",
+      );
+      expect(capturedEnvPath).not.toBeNull();
+      expect(fs.existsSync(path.dirname(capturedEnvPath as unknown as string))).toBe(false);
+    });
+  });
+
   describe("ensureWritableDir (real filesystem, not mocked)", () => {
     let tmpBase: string;
 
