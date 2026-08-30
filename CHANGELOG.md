@@ -1,5 +1,11 @@
 # Changelog
 
+# [1.3.0](https://github.com/TheFehr/foundry-playwright/compare/v1.2.1...v1.3.0) (2026-08-30)
+
+### Features
+
+- **state:** add createEmbeddedDocument(s), mixed manifest+registry module install ([#85](https://github.com/TheFehr/foundry-playwright/issues/85)) ([47a29d0](https://github.com/TheFehr/foundry-playwright/commit/47a29d070d74a157952c5a77851d9375af1dff59))
+
 ## [1.2.1](https://github.com/TheFehr/foundry-playwright/compare/v1.2.0...v1.2.1) (2026-08-26)
 
 ### Bug Fixes
