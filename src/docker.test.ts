@@ -205,9 +205,10 @@ describe("DockerFoundryOrchestrator", () => {
       const accessSpy = vi.spyOn(fs, "accessSync").mockImplementation(eacces as never);
       const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
       try {
-        expect(() => callEnsureWritableDir(orchestrator, dir)).toThrow(
-          /isn't writable\/accessible/,
-        );
+        // Message differs by platform (POSIX chown-fixing path vs. the
+        // Windows path, which has no ownership model to fix) - match the
+        // substring both share rather than picking one exact phrasing.
+        expect(() => callEnsureWritableDir(orchestrator, dir)).toThrow(/isn't writable/);
       } finally {
         readdirSpy.mockRestore();
         accessSpy.mockRestore();
@@ -368,6 +369,20 @@ describe("DockerFoundryOrchestrator", () => {
       it("does not throw for an existing, writable directory (no chown attempted)", () => {
         const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
         expect(() => callEnsureWritableDir(orchestrator, tmpBase)).not.toThrow();
+      });
+
+      it("throws a clear error for a directory that isn't writable (no chown to fall back to)", () => {
+        const accessSpy = vi.spyOn(fs, "accessSync").mockImplementation(() => {
+          throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+        });
+        const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
+        try {
+          expect(() => callEnsureWritableDir(orchestrator, tmpBase)).toThrow(
+            /isn't writable by the current user/,
+          );
+        } finally {
+          accessSpy.mockRestore();
+        }
       });
     });
 
