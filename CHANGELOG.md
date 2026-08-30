@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.1](https://github.com/TheFehr/foundry-playwright/compare/v1.3.0...v1.3.1) (2026-08-30)
+
+### Bug Fixes
+
+- Windows compatibility for process.getuid/getgid ([#88](https://github.com/TheFehr/foundry-playwright/issues/88)) ([635d029](https://github.com/TheFehr/foundry-playwright/commit/635d0298f1a35aec079925d06546b37e1660a74c))
+
 # [1.3.0](https://github.com/TheFehr/foundry-playwright/compare/v1.2.1...v1.3.0) (2026-08-30)
 
 ### Features
