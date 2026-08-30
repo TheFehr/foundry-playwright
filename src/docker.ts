@@ -28,6 +28,19 @@ export interface DockerOrchestratorConfig {
 }
 
 /**
+ * Host uid/gid for Docker's --user / FOUNDRY_UID+FOUNDRY_GID bind-mount
+ * ownership matching. Returns null on Windows (process.getuid/getgid are
+ * POSIX-only, undefined there) - Docker Desktop for Windows has no
+ * host-side POSIX ownership to preserve on a bind mount in the first
+ * place, so there's nothing to match and the container should just run
+ * as its own default user.
+ */
+export function getHostUidGid(): { uid: number; gid: number } | null {
+  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") return null;
+  return { uid: process.getuid(), gid: process.getgid() };
+}
+
+/**
  * Whether the `docker` binary is actually a Podman install (e.g. via the
  * `podman-docker` package). `--userns=keep-id` is Podman-specific syntax -
  * real Docker (including rootless Docker) doesn't understand it, so the
@@ -161,8 +174,7 @@ export class DockerFoundryOrchestrator {
    */
   getRunCommand(envPath: string): string[] {
     const image = `ghcr.io/felddy/foundryvtt:${this.config.version}`;
-    const uid = process.getuid!();
-    const gid = process.getgid!();
+    const ids = getHostUidGid();
 
     // felddy/foundryvtt images before V13 default to root, chown /data
     // themselves via the FOUNDRY_UID/FOUNDRY_GID env vars, and only then
@@ -202,9 +214,11 @@ export class DockerFoundryOrchestrator {
       `${this.config.port}:30000`,
       "--env-file",
       path.resolve(envPath),
-      ...(usesLegacyUidGid
-        ? ["-e", `FOUNDRY_UID=${uid}`, "-e", `FOUNDRY_GID=${gid}`, ...userNsFlag]
-        : ["--user", `${uid}:${gid}`, ...userNsFlag]),
+      ...(ids
+        ? usesLegacyUidGid
+          ? ["-e", `FOUNDRY_UID=${ids.uid}`, "-e", `FOUNDRY_GID=${ids.gid}`, ...userNsFlag]
+          : ["--user", `${ids.uid}:${ids.gid}`, ...userNsFlag]
+        : []),
       "-v",
       `${path.resolve(this.config.dataDir)}:/data`,
       "-v",
@@ -227,8 +241,18 @@ export class DockerFoundryOrchestrator {
       fs.mkdirSync(dir, { recursive: true });
       return;
     }
-    const uid = process.getuid!();
-    const gid = process.getgid!();
+    const ids = getHostUidGid();
+    if (!ids) {
+      // Windows has no POSIX ownership model to fix - just verify the
+      // directory is writable, nothing to chown.
+      try {
+        fs.accessSync(dir, fs.constants.W_OK);
+      } catch {
+        throw new Error(`[DockerOrchestrator] ${dir} isn't writable by the current user.`);
+      }
+      return;
+    }
+    const { uid, gid } = ids;
     const unfixable = new Set<string>();
 
     const fixOwnership = (entryPath: string) => {
@@ -313,9 +337,8 @@ export class DockerFoundryOrchestrator {
     console.log(
       `[DockerOrchestrator] Copying ${localPath} to ${this.config.containerName}:${containerPath}`,
     );
-    const uid = process.getuid!();
-    const gid = process.getgid!();
-    const expectedOwner = `${uid}:${gid}`;
+    const ids = getHostUidGid();
+    const expectedOwner = ids ? `${ids.uid}:${ids.gid}` : null;
 
     // Creates the destination directory inside the already-running container
     // via `docker exec` - this requires the configured container to already
@@ -350,6 +373,12 @@ export class DockerFoundryOrchestrator {
     // verified recursively (every entry, not just the top-level path),
     // since a partial-ownership regression on nested content wouldn't be
     // caught by only checking containerPath itself.
+    //
+    // On Windows, getRunCommand() never forces --user (there's no host
+    // POSIX identity to match), so there's no expected owner to verify
+    // against here either - skip the check entirely.
+    if (!expectedOwner) return;
+
     const mismatches = fs.statSync(localPath).isDirectory()
       ? execFileSync(
           "docker",

@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { execFileSync } from "child_process";
-import { DockerFoundryOrchestrator } from "./docker.js";
+import { DockerFoundryOrchestrator, getHostUidGid } from "./docker.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
 
 vi.mock("child_process", () => ({ execFileSync: vi.fn<typeof execFileSync>() }));
 
-const expectedUserFlag = [`--user`, `${process.getuid!()}:${process.getgid!()}`];
+// null on Windows (process.getuid/getgid are POSIX-only) - tests that
+// assert POSIX-specific uid/gid flags are skipped there in favor of the
+// dedicated "Windows (no process.getuid/getgid)" block below, which
+// simulates the same condition on any platform.
+const hostIds = getHostUidGid();
+const expectedUserFlag = hostIds ? [`--user`, `${hostIds.uid}:${hostIds.gid}`] : [];
 
 function callEnsureWritableDir(orchestrator: DockerFoundryOrchestrator, dir: string): void {
   (orchestrator as unknown as { ensureWritableDir: (d: string) => void }).ensureWritableDir(dir);
@@ -55,7 +60,7 @@ describe("DockerFoundryOrchestrator", () => {
     expect(command).toContain("ghcr.io/felddy/foundryvtt:11.315");
   });
 
-  it("omits --userns=keep-id by default", () => {
+  it.skipIf(!hostIds)("omits --userns=keep-id by default", () => {
     const orchestrator = new DockerFoundryOrchestrator({
       version: "13.351.0",
     });
@@ -67,33 +72,39 @@ describe("DockerFoundryOrchestrator", () => {
     expect(execFileSync).not.toHaveBeenCalled();
   });
 
-  it("adds --userns=keep-id when rootless is set and the runtime is Podman", () => {
-    vi.mocked(execFileSync).mockReturnValue(
-      "Emulate Docker CLI using podman.\npodman version 5.7.0\n",
-    );
-    const orchestrator = new DockerFoundryOrchestrator({
-      version: "13.351.0",
-      rootless: true,
-    });
-    const command = orchestrator.getRunCommand(".env");
-    expect(command).toEqual(expect.arrayContaining(expectedUserFlag));
-    expect(command).toContain("--userns=keep-id");
-  });
+  it.skipIf(!hostIds)(
+    "adds --userns=keep-id when rootless is set and the runtime is Podman",
+    () => {
+      vi.mocked(execFileSync).mockReturnValue(
+        "Emulate Docker CLI using podman.\npodman version 5.7.0\n",
+      );
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        rootless: true,
+      });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).toEqual(expect.arrayContaining(expectedUserFlag));
+      expect(command).toContain("--userns=keep-id");
+    },
+  );
 
-  it("omits --userns=keep-id when rootless is set but the runtime is real Docker", () => {
-    // --userns=keep-id is Podman-specific syntax; real (including rootless)
-    // Docker doesn't understand it and would fail outright if it were added.
-    vi.mocked(execFileSync).mockReturnValue("Docker version 27.3.1, build ce12230\n");
-    const orchestrator = new DockerFoundryOrchestrator({
-      version: "13.351.0",
-      rootless: true,
-    });
-    const command = orchestrator.getRunCommand(".env");
-    expect(command).toEqual(expect.arrayContaining(expectedUserFlag));
-    expect(command).not.toContain("--userns=keep-id");
-  });
+  it.skipIf(!hostIds)(
+    "omits --userns=keep-id when rootless is set but the runtime is real Docker",
+    () => {
+      // --userns=keep-id is Podman-specific syntax; real (including rootless)
+      // Docker doesn't understand it and would fail outright if it were added.
+      vi.mocked(execFileSync).mockReturnValue("Docker version 27.3.1, build ce12230\n");
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        rootless: true,
+      });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).toEqual(expect.arrayContaining(expectedUserFlag));
+      expect(command).not.toContain("--userns=keep-id");
+    },
+  );
 
-  it("uses FOUNDRY_UID/FOUNDRY_GID instead of --user for pre-V13 images", () => {
+  it.skipIf(!hostIds)("uses FOUNDRY_UID/FOUNDRY_GID instead of --user for pre-V13 images", () => {
     // ghcr.io/felddy/foundryvtt images before V13 default to root and only
     // drop to FOUNDRY_UID/FOUNDRY_GID internally (via su-exec) after their
     // entrypoint has done some root-only setup (e.g. writing a cookiejar
@@ -106,11 +117,11 @@ describe("DockerFoundryOrchestrator", () => {
     });
     const command = orchestrator.getRunCommand(".env");
     expect(command).not.toEqual(expect.arrayContaining(["--user"]));
-    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_UID=${process.getuid!()}`]));
-    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${process.getgid!()}`]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_UID=${hostIds!.uid}`]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${hostIds!.gid}`]));
   });
 
-  it("adds --userns=keep-id for pre-V13 images under rootless Podman", () => {
+  it.skipIf(!hostIds)("adds --userns=keep-id for pre-V13 images under rootless Podman", () => {
     // Without keep-id, the legacy branch's own FOUNDRY_UID/FOUNDRY_GID chown
     // (see getRunCommand) lands on a subuid-mapped owner on the host side
     // under rootless Podman, not the real host uid - defeating the reason
@@ -125,8 +136,8 @@ describe("DockerFoundryOrchestrator", () => {
     });
     const command = orchestrator.getRunCommand(".env");
     expect(command).not.toEqual(expect.arrayContaining(["--user"]));
-    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_UID=${process.getuid!()}`]));
-    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${process.getgid!()}`]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_UID=${hostIds!.uid}`]));
+    expect(command).toEqual(expect.arrayContaining(["-e", `FOUNDRY_GID=${hostIds!.gid}`]));
     expect(command).toContain("--userns=keep-id");
   });
 
@@ -194,9 +205,10 @@ describe("DockerFoundryOrchestrator", () => {
       const accessSpy = vi.spyOn(fs, "accessSync").mockImplementation(eacces as never);
       const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
       try {
-        expect(() => callEnsureWritableDir(orchestrator, dir)).toThrow(
-          /isn't writable\/accessible/,
-        );
+        // Message differs by platform (POSIX chown-fixing path vs. the
+        // Windows path, which has no ownership model to fix) - match the
+        // substring both share rather than picking one exact phrasing.
+        expect(() => callEnsureWritableDir(orchestrator, dir)).toThrow(/isn't writable/);
       } finally {
         readdirSpy.mockRestore();
         accessSpy.mockRestore();
@@ -235,8 +247,8 @@ describe("DockerFoundryOrchestrator", () => {
     });
   });
 
-  describe("copyToContainer", () => {
-    const expectedOwner = `${process.getuid!()}:${process.getgid!()}`;
+  describe.skipIf(!hostIds)("copyToContainer", () => {
+    const expectedOwner = hostIds ? `${hostIds.uid}:${hostIds.gid}` : "";
     let tmpBase: string;
     let localFile: string;
     let localDir: string;
@@ -293,6 +305,106 @@ describe("DockerFoundryOrchestrator", () => {
       expect(() => orchestrator.copyToContainer(localDir, "/container/path")).toThrow(
         /didn't attribute ownership as expected/,
       );
+    });
+  });
+
+  // Simulates the real Windows condition (process.getuid/getgid don't
+  // exist) by deleting them for the duration of this block, rather than
+  // relying on actually running on Windows - so this coverage runs on
+  // every platform's CI, not just the windows-latest job.
+  describe("Windows (no process.getuid/getgid)", () => {
+    let originalGetuid: typeof process.getuid;
+    let originalGetgid: typeof process.getgid;
+
+    beforeEach(() => {
+      originalGetuid = process.getuid;
+      originalGetgid = process.getgid;
+      // @ts-expect-error simulating a platform where these don't exist
+      delete process.getuid;
+      // @ts-expect-error simulating a platform where these don't exist
+      delete process.getgid;
+    });
+
+    afterEach(() => {
+      process.getuid = originalGetuid;
+      process.getgid = originalGetgid;
+    });
+
+    it("omits --user and FOUNDRY_UID/FOUNDRY_GID for a V13+ image", () => {
+      const orchestrator = new DockerFoundryOrchestrator({ version: "13.351.0" });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).not.toContain("--user");
+      expect(command).not.toContain("FOUNDRY_UID");
+      expect(command).not.toContain("FOUNDRY_GID");
+      expect(command).not.toContain("--userns=keep-id");
+    });
+
+    it("omits FOUNDRY_UID/FOUNDRY_GID and --user for a pre-V13 image", () => {
+      const orchestrator = new DockerFoundryOrchestrator({ version: "12.343.0" });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).not.toContain("--user");
+      expect(command.some((arg) => arg.startsWith("FOUNDRY_UID="))).toBe(false);
+      expect(command.some((arg) => arg.startsWith("FOUNDRY_GID="))).toBe(false);
+    });
+
+    describe("ensureWritableDir", () => {
+      let tmpBase: string;
+
+      beforeEach(() => {
+        tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "fp-docker-test-win-"));
+      });
+
+      afterEach(() => {
+        fs.rmSync(tmpBase, { recursive: true, force: true });
+      });
+
+      it("creates the directory if it doesn't exist", () => {
+        const dir = path.join(tmpBase, "new-subdir");
+        const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
+        expect(fs.existsSync(dir)).toBe(false);
+        callEnsureWritableDir(orchestrator, dir);
+        expect(fs.existsSync(dir)).toBe(true);
+      });
+
+      it("does not throw for an existing, writable directory (no chown attempted)", () => {
+        const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
+        expect(() => callEnsureWritableDir(orchestrator, tmpBase)).not.toThrow();
+      });
+
+      it("throws a clear error for a directory that isn't writable (no chown to fall back to)", () => {
+        const accessSpy = vi.spyOn(fs, "accessSync").mockImplementation(() => {
+          throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+        });
+        const orchestrator = new DockerFoundryOrchestrator({ version: "1.0.0" });
+        try {
+          expect(() => callEnsureWritableDir(orchestrator, tmpBase)).toThrow(
+            /isn't writable by the current user/,
+          );
+        } finally {
+          accessSpy.mockRestore();
+        }
+      });
+    });
+
+    it("copyToContainer skips ownership verification entirely", () => {
+      const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "fp-docker-test-win-"));
+      const localFile = path.join(tmpBase, "file.txt");
+      fs.writeFileSync(localFile, "hi");
+      try {
+        vi.mocked(execFileSync)
+          .mockReturnValueOnce("") // mkdir -p
+          .mockReturnValueOnce(""); // cp -a
+        const orchestrator = new DockerFoundryOrchestrator({
+          version: "1.0.0",
+          containerName: "x",
+        });
+        expect(() => orchestrator.copyToContainer(localFile, "/container/path")).not.toThrow();
+        // Only mkdir + cp - no stat/find call, since there's no host owner
+        // to verify against.
+        expect(execFileSync).toHaveBeenCalledTimes(2);
+      } finally {
+        fs.rmSync(tmpBase, { recursive: true, force: true });
+      }
     });
   });
 });
