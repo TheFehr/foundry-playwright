@@ -2,7 +2,7 @@ import { execSync, execFileSync } from "child_process";
 import "dotenv/config";
 import path from "path";
 import fs from "fs";
-import { DockerFoundryOrchestrator, isPodmanRuntime } from "../src/docker.js";
+import { DockerFoundryOrchestrator, getHostUidGid, isPodmanRuntime } from "../src/docker.js";
 import { Command } from "commander";
 import { minorOf } from "./version-utils.js";
 
@@ -276,6 +276,7 @@ function runPlaywrightInContainer(
   const envFlags = Object.entries(containerEnv)
     .filter(([, v]) => v !== undefined)
     .flatMap(([k]) => ["-e", k]);
+  const ids = getHostUidGid();
 
   execFileSync(
     "docker",
@@ -284,12 +285,13 @@ function runPlaywrightInContainer(
       "--rm",
       "--network",
       "host",
-      "--user",
-      `${process.getuid!()}:${process.getgid!()}`,
+      // No host POSIX identity to match on Windows (process.getuid/getgid
+      // are undefined there) - run as the container's own default user.
+      ...(ids ? ["--user", `${ids.uid}:${ids.gid}`] : []),
       // See DockerOrchestratorConfig.rootless / isPodmanRuntime in
       // src/docker.ts - --userns=keep-id is Podman-specific syntax, so only
       // add it when the docker binary is actually Podman under the hood.
-      ...(rootless && isPodmanRuntime() ? ["--userns=keep-id"] : []),
+      ...(ids && rootless && isPodmanRuntime() ? ["--userns=keep-id"] : []),
       "-e",
       "HOME=/tmp",
       ...envFlags,
