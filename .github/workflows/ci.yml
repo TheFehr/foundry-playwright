@@ -32,3 +32,27 @@ jobs:
 
       - name: Unit Tests
         run: npm test
+
+  windows-build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.1"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: Build
+        run: npm run build
+
+      # No Docker/Foundry-login steps here deliberately: this job only
+      # verifies the library builds and its pure-JS unit tests pass on
+      # native Windows (no WSL). It never touches FOUNDRY_USERNAME/
+      # FOUNDRY_PASSWORD or any other secret.
+      - name: Unit Tests
+        run: npm test
