@@ -231,6 +231,64 @@ describe("DockerFoundryOrchestrator", () => {
       expect(capturedEnvPath).not.toBeNull();
       expect(fs.existsSync(path.dirname(capturedEnvPath as unknown as string))).toBe(false);
     });
+
+    it.each([
+      ["username", { username: "test-user\nFOUNDRY_ADMIN_KEY=injected" }],
+      ["password", { password: "test-pass\r\nFOUNDRY_ADMIN_KEY=injected" }],
+      ["adminKey", { adminKey: "test-key\ninjected=true" }],
+    ])("throws before touching Docker when %s contains a line break", async (_label, override) => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        port: 48213,
+        maxPortRetries: 0,
+        username: "test-user",
+        password: "test-pass",
+        adminKey: "test-key",
+        dataDir: path.join(tmpBase, "data"),
+        cacheDir: path.join(tmpBase, "cache"),
+        ...override,
+      });
+
+      await expect(orchestrator.start()).rejects.toThrow(/must not contain line breaks/);
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    it("removes the temp env dir even if writing the env file itself fails", async () => {
+      vi.mocked(execFileSync).mockImplementation(((cmd: string, args: string[]) => {
+        if (args[0] === "images") return "";
+        if (args[0] === "pull" || args[0] === "stop" || args[0] === "rm") return "";
+        return "";
+      }) as unknown as typeof execFileSync);
+      const mkdtempSpy = vi.spyOn(fs, "mkdtempSync");
+      const writeFileSpy = vi.spyOn(fs, "writeFileSync").mockImplementationOnce(() => {
+        throw new Error("simulated disk full");
+      });
+
+      try {
+        const orchestrator = new DockerFoundryOrchestrator({
+          version: "13.351.0",
+          port: 48213,
+          maxPortRetries: 0,
+          username: "test-user",
+          password: "test-pass",
+          adminKey: "test-key",
+          dataDir: path.join(tmpBase, "data"),
+          cacheDir: path.join(tmpBase, "cache"),
+        });
+
+        await expect(orchestrator.start()).rejects.toThrow("simulated disk full");
+        expect(execFileSync).not.toHaveBeenCalledWith(
+          "docker",
+          expect.arrayContaining(["run"]),
+          expect.anything(),
+        );
+        const envDir = mkdtempSpy.mock.results[0].value as string;
+        expect(fs.existsSync(envDir)).toBe(false);
+      } finally {
+        writeFileSpy.mockRestore();
+        mkdtempSpy.mockRestore();
+      }
+    });
   });
 
   describe("ensureWritableDir (real filesystem, not mocked)", () => {

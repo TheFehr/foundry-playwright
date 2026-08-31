@@ -82,12 +82,24 @@ export class DockerFoundryOrchestrator {
   async start(): Promise<string> {
     console.log(`[DockerOrchestrator] Starting Foundry VTT v${this.config.version}...`);
 
-    // 0. Verify credentials are available before tearing anything down.
+    // 0. Verify credentials are available before tearing anything down. A
+    // literal newline in any of these would inject extra KEY=VALUE lines into
+    // the env file below, letting a crafted credential value smuggle
+    // arbitrary env vars into the container.
     if (!this.config.username || !this.config.password) {
       throw new Error(
         "[DockerOrchestrator] FOUNDRY_USERNAME and FOUNDRY_PASSWORD are required " +
           "(pass them via config or set them as environment variables) to start a container.",
       );
+    }
+    for (const [name, value] of [
+      ["FOUNDRY_USERNAME", this.config.username],
+      ["FOUNDRY_PASSWORD", this.config.password],
+      ["FOUNDRY_ADMIN_KEY", this.config.adminKey],
+    ]) {
+      if (/[\r\n]/.test(value)) {
+        throw new Error(`[DockerOrchestrator] ${name} must not contain line breaks.`);
+      }
     }
 
     // 1. Stop/Remove existing container if it exists
@@ -153,13 +165,13 @@ export class DockerFoundryOrchestrator {
       `[DockerOrchestrator] Executing: docker run -d --name ${this.config.containerName} ... (using --env-file for security)`,
     );
     const envDir = fs.mkdtempSync(path.join(os.tmpdir(), "foundry-playwright-env-"));
-    const envPath = path.join(envDir, "env");
-    const envContent =
-      `FOUNDRY_USERNAME=${this.config.username}\n` +
-      `FOUNDRY_PASSWORD=${this.config.password}\n` +
-      `FOUNDRY_ADMIN_KEY=${this.config.adminKey}\n`;
-    fs.writeFileSync(envPath, envContent, { mode: 0o600 });
     try {
+      const envPath = path.join(envDir, "env");
+      const envContent =
+        `FOUNDRY_USERNAME=${this.config.username}\n` +
+        `FOUNDRY_PASSWORD=${this.config.password}\n` +
+        `FOUNDRY_ADMIN_KEY=${this.config.adminKey}\n`;
+      fs.writeFileSync(envPath, envContent, { mode: 0o600 });
       execFileSync("docker", this.getRunCommand(envPath), { stdio: "inherit" });
     } finally {
       fs.rmSync(envDir, { recursive: true, force: true });
