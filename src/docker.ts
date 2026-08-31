@@ -65,7 +65,7 @@ export class DockerFoundryOrchestrator {
       version: config.version,
       port: config.port || 30000,
       maxPortRetries: config.maxPortRetries ?? 10,
-      adminKey: config.adminKey || "password",
+      adminKey: config.adminKey || process.env.FOUNDRY_ADMIN_KEY || "password",
       username: config.username || process.env.FOUNDRY_USERNAME || "",
       password: config.password || process.env.FOUNDRY_PASSWORD || "",
       dataDir: config.dataDir || path.join(process.cwd(), "foundry_data"),

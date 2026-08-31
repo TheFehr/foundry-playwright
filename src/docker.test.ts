@@ -169,6 +169,36 @@ describe("DockerFoundryOrchestrator", () => {
     expect(config.maxPortRetries).toBe(10);
   });
 
+  describe("adminKey config resolution", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("falls back to FOUNDRY_ADMIN_KEY from the environment when adminKey is omitted", () => {
+      vi.stubEnv("FOUNDRY_ADMIN_KEY", "env-admin-key");
+      const orchestrator = new DockerFoundryOrchestrator({ version: "12.327" });
+      const config = (orchestrator as unknown as { config: { adminKey: string } }).config;
+      expect(config.adminKey).toBe("env-admin-key");
+    });
+
+    it("defaults to 'password' when neither adminKey nor FOUNDRY_ADMIN_KEY are set", () => {
+      vi.stubEnv("FOUNDRY_ADMIN_KEY", "");
+      const orchestrator = new DockerFoundryOrchestrator({ version: "12.327" });
+      const config = (orchestrator as unknown as { config: { adminKey: string } }).config;
+      expect(config.adminKey).toBe("password");
+    });
+
+    it("prefers an explicit adminKey over FOUNDRY_ADMIN_KEY from the environment", () => {
+      vi.stubEnv("FOUNDRY_ADMIN_KEY", "env-admin-key");
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "12.327",
+        adminKey: "explicit-key",
+      });
+      const config = (orchestrator as unknown as { config: { adminKey: string } }).config;
+      expect(config.adminKey).toBe("explicit-key");
+    });
+  });
+
   describe("start() env file lifecycle", () => {
     let tmpBase: string;
 
