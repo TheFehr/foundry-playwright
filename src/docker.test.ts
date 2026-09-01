@@ -169,6 +169,158 @@ describe("DockerFoundryOrchestrator", () => {
     expect(config.maxPortRetries).toBe(10);
   });
 
+  describe("adminKey config resolution", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("falls back to FOUNDRY_ADMIN_KEY from the environment when adminKey is omitted", () => {
+      vi.stubEnv("FOUNDRY_ADMIN_KEY", "env-admin-key");
+      const orchestrator = new DockerFoundryOrchestrator({ version: "12.327" });
+      const config = (orchestrator as unknown as { config: { adminKey: string } }).config;
+      expect(config.adminKey).toBe("env-admin-key");
+    });
+
+    it("defaults to 'password' when neither adminKey nor FOUNDRY_ADMIN_KEY are set", () => {
+      vi.stubEnv("FOUNDRY_ADMIN_KEY", "");
+      const orchestrator = new DockerFoundryOrchestrator({ version: "12.327" });
+      const config = (orchestrator as unknown as { config: { adminKey: string } }).config;
+      expect(config.adminKey).toBe("password");
+    });
+
+    it("prefers an explicit adminKey over FOUNDRY_ADMIN_KEY from the environment", () => {
+      vi.stubEnv("FOUNDRY_ADMIN_KEY", "env-admin-key");
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "12.327",
+        adminKey: "explicit-key",
+      });
+      const config = (orchestrator as unknown as { config: { adminKey: string } }).config;
+      expect(config.adminKey).toBe("explicit-key");
+    });
+  });
+
+  describe("start() env file lifecycle", () => {
+    let tmpBase: string;
+
+    beforeEach(() => {
+      tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "docker-start-test-"));
+      vi.unstubAllEnvs();
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+      vi.unstubAllEnvs();
+    });
+
+    it("throws before touching Docker when username/password are missing", async () => {
+      vi.stubEnv("FOUNDRY_USERNAME", "");
+      vi.stubEnv("FOUNDRY_PASSWORD", "");
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        port: 48213,
+        maxPortRetries: 0,
+        dataDir: path.join(tmpBase, "data"),
+        cacheDir: path.join(tmpBase, "cache"),
+      });
+
+      await expect(orchestrator.start()).rejects.toThrow(
+        /FOUNDRY_USERNAME and FOUNDRY_PASSWORD are required/,
+      );
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    it("writes credentials to a fresh temp env file for `docker run` and removes it afterward, even when the run fails", async () => {
+      let capturedEnvPath: string | null = null;
+      let capturedEnvContent: string | null = null;
+      vi.mocked(execFileSync).mockImplementation(((cmd: string, args: string[]) => {
+        if (args[0] === "images") return "";
+        if (args[0] === "pull" || args[0] === "stop" || args[0] === "rm") return "";
+        if (args[0] === "run") {
+          capturedEnvPath = args[args.indexOf("--env-file") + 1];
+          capturedEnvContent = fs.readFileSync(capturedEnvPath, "utf8");
+          throw new Error("simulated docker run failure");
+        }
+        return "";
+      }) as unknown as typeof execFileSync);
+
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        port: 48213,
+        maxPortRetries: 0,
+        username: "test-user",
+        password: "test-pass",
+        adminKey: "test-key",
+        dataDir: path.join(tmpBase, "data"),
+        cacheDir: path.join(tmpBase, "cache"),
+      });
+
+      await expect(orchestrator.start()).rejects.toThrow("simulated docker run failure");
+      expect(capturedEnvContent).toBe(
+        "FOUNDRY_USERNAME=test-user\nFOUNDRY_PASSWORD=test-pass\nFOUNDRY_ADMIN_KEY=test-key\n",
+      );
+      expect(capturedEnvPath).not.toBeNull();
+      expect(fs.existsSync(path.dirname(capturedEnvPath as unknown as string))).toBe(false);
+    });
+
+    it.each([
+      ["username", { username: "test-user\nFOUNDRY_ADMIN_KEY=injected" }],
+      ["password", { password: "test-pass\r\nFOUNDRY_ADMIN_KEY=injected" }],
+      ["adminKey", { adminKey: "test-key\ninjected=true" }],
+    ])("throws before touching Docker when %s contains a line break", async (_label, override) => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        port: 48213,
+        maxPortRetries: 0,
+        username: "test-user",
+        password: "test-pass",
+        adminKey: "test-key",
+        dataDir: path.join(tmpBase, "data"),
+        cacheDir: path.join(tmpBase, "cache"),
+        ...override,
+      });
+
+      await expect(orchestrator.start()).rejects.toThrow(/must not contain line breaks/);
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    it("removes the temp env dir even if writing the env file itself fails", async () => {
+      vi.mocked(execFileSync).mockImplementation(((cmd: string, args: string[]) => {
+        if (args[0] === "images") return "";
+        if (args[0] === "pull" || args[0] === "stop" || args[0] === "rm") return "";
+        return "";
+      }) as unknown as typeof execFileSync);
+      const mkdtempSpy = vi.spyOn(fs, "mkdtempSync");
+      const writeFileSpy = vi.spyOn(fs, "writeFileSync").mockImplementationOnce(() => {
+        throw new Error("simulated disk full");
+      });
+
+      try {
+        const orchestrator = new DockerFoundryOrchestrator({
+          version: "13.351.0",
+          port: 48213,
+          maxPortRetries: 0,
+          username: "test-user",
+          password: "test-pass",
+          adminKey: "test-key",
+          dataDir: path.join(tmpBase, "data"),
+          cacheDir: path.join(tmpBase, "cache"),
+        });
+
+        await expect(orchestrator.start()).rejects.toThrow("simulated disk full");
+        expect(execFileSync).not.toHaveBeenCalledWith(
+          "docker",
+          expect.arrayContaining(["run"]),
+          expect.anything(),
+        );
+        const envDir = mkdtempSpy.mock.results[0].value as string;
+        expect(fs.existsSync(envDir)).toBe(false);
+      } finally {
+        writeFileSpy.mockRestore();
+        mkdtempSpy.mockRestore();
+      }
+    });
+  });
+
   describe("ensureWritableDir (real filesystem, not mocked)", () => {
     let tmpBase: string;
 

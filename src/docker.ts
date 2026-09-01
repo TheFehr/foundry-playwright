@@ -14,7 +14,6 @@ export interface DockerOrchestratorConfig {
   dataDir?: string;
   cacheDir?: string;
   containerName?: string;
-  envFile?: string;
   /**
    * Set this when the `docker` binary is actually a rootless Podman install
    * (e.g. via the `podman-docker` package). Rootless container runtimes only
@@ -66,14 +65,13 @@ export class DockerFoundryOrchestrator {
       version: config.version,
       port: config.port || 30000,
       maxPortRetries: config.maxPortRetries ?? 10,
-      adminKey: config.adminKey || "password",
+      adminKey: config.adminKey || process.env.FOUNDRY_ADMIN_KEY || "password",
       username: config.username || process.env.FOUNDRY_USERNAME || "",
       password: config.password || process.env.FOUNDRY_PASSWORD || "",
       dataDir: config.dataDir || path.join(process.cwd(), "foundry_data"),
       cacheDir: config.cacheDir || path.join(os.homedir(), ".cache", "foundry-playwright"),
       containerName:
         config.containerName || `foundry-playwright-${config.version.replace(/\./g, "-")}`,
-      envFile: config.envFile || ".env",
       rootless: config.rootless ?? false,
     };
   }
@@ -84,22 +82,23 @@ export class DockerFoundryOrchestrator {
   async start(): Promise<string> {
     console.log(`[DockerOrchestrator] Starting Foundry VTT v${this.config.version}...`);
 
-    // 0. Verify environment file first - don't tear down if invalid
-    const envPath = path.resolve(this.config.envFile);
-    if (!fs.existsSync(envPath)) {
+    // 0. Verify credentials are available before tearing anything down. A
+    // literal newline in any of these would inject extra KEY=VALUE lines into
+    // the env file below, letting a crafted credential value smuggle
+    // arbitrary env vars into the container.
+    if (!this.config.username || !this.config.password) {
       throw new Error(
-        `[DockerOrchestrator] Environment file not found at ${envPath}. A valid .env file is required to avoid leaking credentials in logs.`,
+        "[DockerOrchestrator] FOUNDRY_USERNAME and FOUNDRY_PASSWORD are required " +
+          "(pass them via config or set them as environment variables) to start a container.",
       );
     }
-
-    const envContent = fs.readFileSync(envPath, "utf8");
-    const requiredVars = ["FOUNDRY_USERNAME", "FOUNDRY_PASSWORD", "FOUNDRY_ADMIN_KEY"];
-    for (const v of requiredVars) {
-      const regex = new RegExp(`^[ \\t]*${v}=`, "m");
-      if (!regex.test(envContent)) {
-        throw new Error(
-          `[DockerOrchestrator] Environment file at ${envPath} is missing required variable: ${v}`,
-        );
+    for (const [name, value] of [
+      ["FOUNDRY_USERNAME", this.config.username],
+      ["FOUNDRY_PASSWORD", this.config.password],
+      ["FOUNDRY_ADMIN_KEY", this.config.adminKey],
+    ]) {
+      if (/[\r\n]/.test(value)) {
+        throw new Error(`[DockerOrchestrator] ${name} must not contain line breaks.`);
       }
     }
 
@@ -153,11 +152,30 @@ export class DockerFoundryOrchestrator {
       }
     }
 
-    // 5. Run container
+    // 5. Run container. Credentials are written to a fresh, restrictive-permission
+    // file in the OS temp dir (never the project working directory) only for the
+    // duration of this single `docker run -d` call - Docker reads --env-file once,
+    // at container-creation time, and `-d` means this call returns as soon as the
+    // container is created and started (not once it exits), so the file's real
+    // on-disk lifetime is bounded to that single command, not the rest of the test
+    // run. `-e KEY=VALUE` was considered instead of a file entirely, but
+    // execFileSync prints its full argument list in the error it throws on
+    // failure, which would leak credentials into CI logs.
     console.log(
       `[DockerOrchestrator] Executing: docker run -d --name ${this.config.containerName} ... (using --env-file for security)`,
     );
-    execFileSync("docker", this.getRunCommand(envPath), { stdio: "inherit" });
+    const envDir = fs.mkdtempSync(path.join(os.tmpdir(), "foundry-playwright-env-"));
+    try {
+      const envPath = path.join(envDir, "env");
+      const envContent =
+        `FOUNDRY_USERNAME=${this.config.username}\n` +
+        `FOUNDRY_PASSWORD=${this.config.password}\n` +
+        `FOUNDRY_ADMIN_KEY=${this.config.adminKey}\n`;
+      fs.writeFileSync(envPath, envContent, { mode: 0o600 });
+      execFileSync("docker", this.getRunCommand(envPath), { stdio: "inherit" });
+    } finally {
+      fs.rmSync(envDir, { recursive: true, force: true });
+    }
 
     // 6. Wait for healthy
     await this.waitForReady();
