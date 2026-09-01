@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.2](https://github.com/TheFehr/foundry-playwright/compare/v1.3.1...v1.3.2) (2026-09-01)
+
+### Bug Fixes
+
+- **docker:** stop requiring a persistent .env file for container credentials ([#90](https://github.com/TheFehr/foundry-playwright/issues/90)) ([0ea671d](https://github.com/TheFehr/foundry-playwright/commit/0ea671df5ba535391a19d2e690a86be1922b9b96))
+
 ## [1.3.1](https://github.com/TheFehr/foundry-playwright/compare/v1.3.0...v1.3.1) (2026-08-30)
 
 ### Bug Fixes
