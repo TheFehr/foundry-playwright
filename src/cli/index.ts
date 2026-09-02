@@ -156,7 +156,11 @@ program
       }
     } catch (error: unknown) {
       console.error(`Error: ${(error as Error).message}`);
-      process.exit(1);
+      // Not process.exit() - that terminates immediately and skips this
+      // finally block's container/tmpDataDir cleanup below. Setting
+      // exitCode lets the process exit with the right code once cleanup
+      // (and the event loop) actually finishes.
+      process.exitCode = 1;
     } finally {
       let cleanupFailed = false;
       if (orchestrator) {
