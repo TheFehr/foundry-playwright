@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.3](https://github.com/TheFehr/foundry-playwright/compare/v1.3.2...v1.3.3) (2026-09-02)
+
+### Bug Fixes
+
+- **cli:** don't skip Docker/tmpDataDir cleanup on test failure ([#92](https://github.com/TheFehr/foundry-playwright/issues/92)) ([97deb21](https://github.com/TheFehr/foundry-playwright/commit/97deb2124f5ee8d7d0f509a9fa0142801704a7a9))
+
 ## [1.3.2](https://github.com/TheFehr/foundry-playwright/compare/v1.3.1...v1.3.2) (2026-09-01)
 
 ### Bug Fixes
