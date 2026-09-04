@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.4](https://github.com/TheFehr/foundry-playwright/compare/v1.3.3...v1.3.4) (2026-09-04)
+
+### Bug Fixes
+
+- **docker:** use 127.0.0.1 instead of localhost for readiness check and returned URL ([#97](https://github.com/TheFehr/foundry-playwright/issues/97)) ([f5eca3c](https://github.com/TheFehr/foundry-playwright/commit/f5eca3c252ec25eefae73e645a79110e4e7d075d))
+
 ## [1.3.3](https://github.com/TheFehr/foundry-playwright/compare/v1.3.2...v1.3.3) (2026-09-02)
 
 ### Bug Fixes
