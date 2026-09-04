@@ -180,7 +180,12 @@ export class DockerFoundryOrchestrator {
     // 6. Wait for healthy
     await this.waitForReady();
 
-    return `http://localhost:${this.config.port}`;
+    // 127.0.0.1, not localhost: rootless Podman's pasta port-forwarder binds
+    // IPv4 only, and Node 17+ (and browsers, for the returned URL's actual
+    // consumers) resolve "localhost" via the OS's raw getaddrinfo() order,
+    // which returns ::1 first on some hosts - that silently never connects
+    // to what pasta is actually listening on.
+    return `http://127.0.0.1:${this.config.port}`;
   }
 
   /**
@@ -434,7 +439,8 @@ export class DockerFoundryOrchestrator {
   }
 
   private async waitForReady(): Promise<void> {
-    const url = `http://localhost:${this.config.port}`;
+    // 127.0.0.1, not localhost - see the return statement in start() for why.
+    const url = `http://127.0.0.1:${this.config.port}`;
     console.log(`[DockerOrchestrator] Waiting for Foundry to be ready at ${url}...`);
 
     let ready = false;
