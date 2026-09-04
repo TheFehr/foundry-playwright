@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.3.5](https://github.com/TheFehr/foundry-playwright/compare/v1.3.4...v1.3.5) (2026-09-04)
+
 ## [1.3.4](https://github.com/TheFehr/foundry-playwright/compare/v1.3.3...v1.3.4) (2026-09-04)
 
 ### Bug Fixes
