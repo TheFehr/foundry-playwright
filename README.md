@@ -84,14 +84,15 @@ npx foundry-playwright test --docker --module-dir ../my-module/dist
 
 ## Configuration
 
-| Variable                                       | Purpose                                                              |
-| :--------------------------------------------- | :------------------------------------------------------------------- |
-| `FOUNDRY_URL`                                  | Base URL of the Foundry instance (default: `http://localhost:30000`) |
-| `FOUNDRY_VERSION`                              | Force V13 or V14 adapter instead of auto-detecting                   |
-| `FOUNDRY_SYSTEM_ID`                            | Active game system (default: `dnd5e`)                                |
-| `FOUNDRY_UI_ADAPTER`                           | UI adapter: `default`, `dnd5e`, or `tidy5e`                          |
-| `FOUNDRY_ADMIN_PASSWORD` / `FOUNDRY_ADMIN_KEY` | Admin password for setup operations                                  |
-| `FOUNDRY_USERNAME` / `FOUNDRY_PASSWORD`        | Foundry account credentials for Docker image download                |
+| Variable                                       | Purpose                                                                                                                                               |
+| :--------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FOUNDRY_URL`                                  | Base URL of the Foundry instance (default: `http://localhost:30000`)                                                                                  |
+| `FOUNDRY_VERSION`                              | Force V13 or V14 adapter instead of auto-detecting                                                                                                    |
+| `FOUNDRY_SYSTEM_ID`                            | Active game system (default: `dnd5e`)                                                                                                                 |
+| `FOUNDRY_UI_ADAPTER`                           | UI adapter: `default`, `dnd5e`, or `tidy5e`                                                                                                           |
+| `FOUNDRY_ADMIN_PASSWORD` / `FOUNDRY_ADMIN_KEY` | Admin password for setup operations                                                                                                                   |
+| `FOUNDRY_USERNAME` / `FOUNDRY_PASSWORD`        | Foundry account credentials for Docker image download                                                                                                 |
+| `FOUNDRY_PLAYWRIGHT_ROOTLESS`                  | Set to `1` when `--docker` runs against rootless Podman, so bind-mounted directories keep correct ownership (see `DockerOrchestratorConfig.rootless`) |
 
 > `UIAdapter` (and `registerUIAdapter`) is scoped to actor-sheet-shaped UIs — an application selector plus tabs/collapsible sections. If the module under test has its own UI that isn't an actor sheet variant (a HUD, a control bar, a custom fullscreen layout), define plain selector constants in your own test suite instead of forcing that UI through the adapter interface.
 

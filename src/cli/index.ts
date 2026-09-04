@@ -75,6 +75,7 @@ program
           version,
           adminKey: process.env.FOUNDRY_ADMIN_KEY || "password",
           dataDir: tmpDataDir,
+          rootless: process.env.FOUNDRY_PLAYWRIGHT_ROOTLESS === "1",
         });
 
         // Auto-inject local modules if they exist in e2e/ (common pattern in this repo)
