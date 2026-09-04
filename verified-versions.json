@@ -337,26 +337,26 @@
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.0",
-    "status": "pending",
-    "timestamp": "2026-09-03T08:58:14.015Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.365 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-09-04T18:19:54.477Z",
+    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m); foundry.state: embedded document management (TypeError: Cannot read properties of null (reading 'name'))"
   },
   {
     "fvtt": "14.366",
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.0",
-    "status": "pending",
-    "timestamp": "2026-09-03T08:58:14.015Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.366 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-09-04T18:31:50.583Z",
+    "notes": "Automated verification failed: foundry.state: embedded document management (TypeError: Cannot read properties of null (reading 'name'))"
   },
   {
     "fvtt": "14.367",
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.0",
-    "status": "pending",
-    "timestamp": "2026-09-03T08:58:14.015Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-09-04T18:43:49.241Z",
+    "notes": "Automated verification failed: foundry.state: embedded document management (TypeError: Cannot read properties of null (reading 'name'))"
   }
 ]
