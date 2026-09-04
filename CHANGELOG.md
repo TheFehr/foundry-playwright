@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.6](https://github.com/TheFehr/foundry-playwright/compare/v1.3.5...v1.3.6) (2026-09-04)
+
+### Bug Fixes
+
+- **cli:** read FOUNDRY_PLAYWRIGHT_ROOTLESS in the --docker action ([#100](https://github.com/TheFehr/foundry-playwright/issues/100)) ([04fc3df](https://github.com/TheFehr/foundry-playwright/commit/04fc3df1ec027a04f93bf59846badfa859bbf65f))
+
 ## [1.3.5](https://github.com/TheFehr/foundry-playwright/compare/v1.3.4...v1.3.5) (2026-09-04)
 
 ## [1.3.4](https://github.com/TheFehr/foundry-playwright/compare/v1.3.3...v1.3.4) (2026-09-04)
