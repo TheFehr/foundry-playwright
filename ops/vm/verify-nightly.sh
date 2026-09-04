@@ -5,8 +5,11 @@ set -euo pipefail
 #
 # Consumes "pending" rows written by the cloud Monitor Releases workflow,
 # runs the Docker-based verification suite against each, and pushes the
-# result back. Requires FOUNDRY_USERNAME/PASSWORD/ADMIN_KEY in .env and a
-# `gh auth login`'d token with repo scope, both local to this VM only.
+# result back. Requires FOUNDRY_USERNAME/PASSWORD/ADMIN_KEY already in this
+# process's environment (see foundry-verify.service's EnvironmentFile=, not
+# a .env in this checkout - that would sit inside the directory later
+# bind-mounted into the Playwright container) and a `gh auth login`'d token
+# with repo scope, both local to this VM only.
 
 REPO_DIR="${FP_REPO_DIR:-/opt/foundry-playwright}"
 # Repo-owned rather than /tmp: a world-writable, predictable path there is
@@ -62,7 +65,7 @@ git checkout -B "$BRANCH" main
 # real exit status instead of masking it, so it still surfaces at the end
 # (e.g. to systemd/monitoring) rather than always reporting success.
 verify_status=0
-npm run verify:local -- --all-pending --docker --update-registry --record-failures --git-commit ||
+npm run verify -- --all-pending --docker --update-registry --record-failures --git-commit ||
   verify_status=$?
 
 # verify-local.ts only commits when something actually changed - if nothing

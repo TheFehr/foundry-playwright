@@ -1,5 +1,4 @@
 import { execSync, execFileSync } from "child_process";
-import "dotenv/config";
 import path from "path";
 import fs from "fs";
 import { DockerFoundryOrchestrator, getHostUidGid, isPodmanRuntime } from "../src/docker.js";
@@ -278,6 +277,19 @@ function runPlaywrightInContainer(
     .flatMap(([k]) => ["-e", k]);
   const ids = getHostUidGid();
 
+  // The real FOUNDRY_USERNAME/PASSWORD/ADMIN_KEY live in a `.env` at the repo
+  // root (see nightly VM setup) and are already forwarded explicitly via
+  // envFlags above — the container never needs to read the file itself.
+  // Bind-mounting the whole checkout below would otherwise still hand any
+  // code running in the container (Playwright's own reporters, a transitive
+  // dependency already in node_modules) direct read access to it, reachable
+  // over `--network host`. Overlay each matching file with /dev/null so it
+  // reads as empty inside the container regardless.
+  const envFileHideFlags = fs
+    .readdirSync(process.cwd())
+    .filter((f) => f === ".env" || f.startsWith(".env."))
+    .flatMap((f) => ["-v", `/dev/null:/work/${f}:ro`]);
+
   execFileSync(
     "docker",
     [
@@ -285,6 +297,8 @@ function runPlaywrightInContainer(
       "--rm",
       "--network",
       "host",
+      // Chromium can crash under a container's default 64MB /dev/shm.
+      "--shm-size=1gb",
       // No host POSIX identity to match on Windows (process.getuid/getgid
       // are undefined there) - run as the container's own default user.
       ...(ids ? ["--user", `${ids.uid}:${ids.gid}`] : []),
@@ -297,6 +311,7 @@ function runPlaywrightInContainer(
       ...envFlags,
       "-v",
       `${process.cwd()}:/work`,
+      ...envFileHideFlags,
       "-w",
       "/work",
       image,
