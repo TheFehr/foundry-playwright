@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.7](https://github.com/TheFehr/foundry-playwright/compare/v1.3.6...v1.3.7) (2026-09-05)
+
+### Bug Fixes
+
+- **ops:** sandbox the Playwright container mount, drop dotenv from verify-local ([#102](https://github.com/TheFehr/foundry-playwright/issues/102)) ([2e8c8ea](https://github.com/TheFehr/foundry-playwright/commit/2e8c8ea5b58f7643768f7472b38b364ef800a604))
+
 ## [1.3.6](https://github.com/TheFehr/foundry-playwright/compare/v1.3.5...v1.3.6) (2026-09-04)
 
 ### Bug Fixes
