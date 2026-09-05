@@ -71,12 +71,16 @@ test.describe("Library Verification Suite", () => {
 
     // Singular form: an Item embedded on an Actor (e.g. inventory, or a
     // system's condition item - the mechanic PF2e's "wounded" condition
-    // needs, which top-level createDocument can't reach).
+    // needs, which top-level createDocument can't reach). Routed through
+    // createTestItem (system-adapter-provided minimal data) rather than a
+    // payload hardcoded here - not every system accepts the same minimal
+    // Item shape (pf2e 8.5.0 tightened validation enough to reject the
+    // universal `{type: "loot"}` this used to hardcode).
     const itemName = "Embedded Loot " + Date.now();
-    const createdItem = (await foundry.state.createEmbeddedDocument("Actor", actorId, "Item", {
-      name: itemName,
-      type: "loot",
-    })) as Record<string, unknown>;
+    const createdItem = (await foundry.state.createTestItem(actorId, itemName)) as Record<
+      string,
+      unknown
+    >;
     expect(createdItem.name).toBe(itemName);
 
     await verifyResult(
