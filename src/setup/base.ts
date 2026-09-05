@@ -1,6 +1,38 @@
 import { FoundryPage } from "../types/index.js";
 
 /**
+ * Aggressively removes properties known to trigger deprecation warnings on
+ * access, before returning document data out of a page.evaluate. Shared
+ * between BaseGameAdapter (in-browser, via page.evaluate) and FoundryState
+ * (both in-browser and, for createEmbeddedDocuments, applied Node-side to
+ * already-serialized data) - defined here rather than in state.ts to avoid
+ * a state.ts -> setup/index.ts -> setup/base.ts -> state.ts import cycle.
+ */
+export const DOCUMENT_SANITIZER_SCRIPT = `(obj) => {
+    if (!obj || typeof obj !== 'object') return obj;
+    const deprecatedDnD5e = ['darkvision', 'blindsight', 'tremorsense', 'truesight', 'special'];
+    const cleanSenses = (o) => {
+        if (!o || typeof o !== 'object') return o;
+        const result = Array.isArray(o) ? [] : {};
+        for (let key in o) {
+            if (key === 'senses') {
+                const senses = o[key];
+                const cleanS = Array.isArray(senses) ? [] : {};
+                for (let skey in senses) {
+                    if (deprecatedDnD5e.includes(skey)) continue;
+                    cleanS[skey] = senses[skey];
+                }
+                result[key] = cleanS;
+            } else {
+                result[key] = cleanSenses(o[key]);
+            }
+        }
+        return result;
+    };
+    return cleanSenses(obj);
+}`;
+
+/**
  * Interface for version-specific Foundry VTT setup logic.
  */
 export interface SetupAdapter {
@@ -160,24 +192,24 @@ export interface GameAdapter {
   /** The major Foundry VTT version this adapter is for. */
   version: number;
 
+  /** Creates a top-level world document, returning its sanitized plain data. */
   createDocument(
     page: FoundryPage,
     documentName: string,
     data: Record<string, unknown>,
     options: Record<string, unknown>,
   ): Promise<unknown>;
-  updateDocument(page: FoundryPage, uuid: string, delta: Record<string, unknown>): Promise<unknown>;
-  deleteDocuments(
+  /** Updates a document looked up by documentName + id (e.g. "Actor" + its id). */
+  updateDocument(
     page: FoundryPage,
     documentName: string,
-    ids: string[],
-    options: Record<string, unknown>,
-  ): Promise<void>;
-  getDocuments(
-    page: FoundryPage,
-    collection: string,
-    query: Record<string, unknown>,
-  ): Promise<Record<string, unknown>[]>;
+    id: string,
+    delta: Record<string, unknown>,
+  ): Promise<unknown>;
+  /** Deletes a single document looked up by documentName + id. */
+  deleteDocument(page: FoundryPage, documentName: string, id: string): Promise<void>;
+  /** Gets a single document by documentName + id, returning sanitized plain data or null. */
+  getDocument(page: FoundryPage, documentName: string, id: string): Promise<unknown>;
   createEmbeddedDocuments(
     page: FoundryPage,
     parentType: string,
@@ -203,90 +235,58 @@ export abstract class BaseGameAdapter implements GameAdapter {
     options: Record<string, unknown>,
   ): Promise<unknown> {
     return page.evaluate(
-      async ({ documentName, data, options }) => {
-        const collectionName = (documentName.toLowerCase() + "s") as keyof Game;
-        const collection = window.game[collectionName];
-        const cls =
-          (collection as Collection<FoundryDocument> | undefined)?.documentClass ||
-          (
-            window as unknown as Record<
-              string,
-              { create: (data: unknown, options: unknown) => Promise<unknown> }
-            >
-          )[documentName];
+      async ({ documentName, data, options, sanitizer }) => {
+        const cls = window.CONFIG[documentName].documentClass;
         if (!cls) throw new Error(`Document class ${documentName} not found.`);
-        return await cls.create(data, options);
+        const doc = await cls.create(data, options);
+        if (!doc) return null;
+        // Use raw _source to avoid getters/deprecations
+        const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
+        const sanitize = new Function(`return ${sanitizer}`)();
+        return sanitize(obj);
       },
-      { documentName, data, options },
+      { documentName, data, options, sanitizer: DOCUMENT_SANITIZER_SCRIPT },
     );
   }
 
   async updateDocument(
     page: FoundryPage,
-    uuid: string,
+    documentName: string,
+    id: string,
     delta: Record<string, unknown>,
   ): Promise<unknown> {
     return page.evaluate(
-      async ({ uuid, delta }) => {
-        const doc = window.fromUuidSync ? window.fromUuidSync(uuid) : null;
-        if (doc) return await doc.update(delta);
-
-        for (const collection of Object.values(window.game.collections || {})) {
-          const c = collection as unknown as {
-            getName: (name: string) => FoundryDocument | undefined;
-          };
-          if (typeof c.getName !== "function") continue;
-          const match = c.getName(uuid);
-          if (match) return await match.update(delta);
-        }
-        throw new Error(`Document ${uuid} not found.`);
+      ({ documentName, id, delta }) => {
+        const doc = window.game.collections.get(documentName).get(id);
+        if (!doc) throw new Error(`Document ${documentName}/${id} not found`);
+        return doc.update(delta);
       },
-      { uuid, delta },
+      { documentName, id, delta },
     );
   }
 
-  async deleteDocuments(
-    page: FoundryPage,
-    documentName: string,
-    ids: string[],
-    options: Record<string, unknown>,
-  ): Promise<void> {
+  async deleteDocument(page: FoundryPage, documentName: string, id: string): Promise<void> {
     await page.evaluate(
-      async ({ documentName, ids, options }) => {
-        const cls = (
-          window as unknown as Record<
-            string,
-            { deleteDocuments: (ids: string[], options: unknown) => Promise<void> }
-          >
-        )[documentName];
-        if (!cls) throw new Error(`Document class ${documentName} not found.`);
-        await cls.deleteDocuments(ids, options);
+      ({ documentName, id }) => {
+        const doc = window.game.collections.get(documentName).get(id);
+        if (!doc) throw new Error(`Document ${documentName}/${id} not found`);
+        return doc.delete();
       },
-      { documentName, ids, options },
+      { documentName, id },
     );
   }
 
-  async getDocuments(
-    page: FoundryPage,
-    collection: string,
-    query: Record<string, unknown>,
-  ): Promise<Record<string, unknown>[]> {
+  async getDocument(page: FoundryPage, documentName: string, id: string): Promise<unknown> {
     return page.evaluate(
-      ({ collection, query }) => {
-        const coll = (window.game as unknown as Record<string, Collection<FoundryDocument>>)[
-          collection
-        ];
-        if (!coll) return [];
-        // Simple query matching
-        return coll
-          .filter((d: FoundryDocument) => {
-            return Object.entries(query).every(
-              ([k, v]) => (d as unknown as Record<string, unknown>)[k] === v,
-            );
-          })
-          .map((d: FoundryDocument) => d.toObject?.() || d.toJSON());
+      ({ documentName, id, sanitizer }) => {
+        const doc = window.game.collections.get(documentName).get(id);
+        if (!doc) return null;
+        // Use raw _source to avoid getters/deprecations
+        const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
+        const sanitize = new Function(`return ${sanitizer}`)();
+        return sanitize(obj);
       },
-      { collection, query },
+      { documentName, id, sanitizer: DOCUMENT_SANITIZER_SCRIPT },
     );
   }
 
