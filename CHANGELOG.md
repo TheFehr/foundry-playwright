@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.8](https://github.com/TheFehr/foundry-playwright/compare/v1.3.7...v1.3.8) (2026-09-06)
+
+### Bug Fixes
+
+- route FoundryState CRUD through GameAdapter, add per-system minimal item data ([#104](https://github.com/TheFehr/foundry-playwright/issues/104)) ([163cc76](https://github.com/TheFehr/foundry-playwright/commit/163cc76bb30d72cfe2c05e163bdb08a2c0590774))
+
 ## [1.3.7](https://github.com/TheFehr/foundry-playwright/compare/v1.3.6...v1.3.7) (2026-09-05)
 
 ### Bug Fixes
