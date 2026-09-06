@@ -54,6 +54,7 @@ export default defineConfig({
 - **Port Mapping:** Flexible port management to avoid conflicts with other running services.
 - **Custom Images:** Support for using private or custom Docker images if the developer has specific environment needs.
 - **Pre-Boot Scripts:** Support for running setup scripts (data injection) immediately after the container is healthy but before tests start.
+- **`docker run` Customization:** An optional `buildRunArgs` hook receives the full default argument array and returns what actually runs - append, remove, or replace anything (e.g. joining a caller-managed Docker network), without waiting on a dedicated config option for every use case.
 
 ### 4. Developer Workflow
 

@@ -24,6 +24,28 @@ export interface DockerOrchestratorConfig {
    * Default false: no behavior change for a plain rootful Docker install.
    */
   rootless?: boolean;
+  /**
+   * Optional hook to customize the `docker run` invocation (see
+   * {@link https://github.com/TheFehr/foundry-playwright/issues/110}).
+   * Receives the full argument array {@link DockerFoundryOrchestrator.getRunCommand}
+   * would otherwise pass to `execFileSync("docker", ...)` - every flag this
+   * orchestrator sets by default (`--user`, `-p`, `--restart`,
+   * `--userns=keep-id`, etc.) plus the image tag as the last element - and
+   * must return the array to actually use. Append, remove, or replace
+   * anything, including the defaults; nothing here is protected, so a
+   * conflicting override (e.g. a different `--user`) can reintroduce bugs
+   * this class's defaults exist to avoid. The image tag must stay the last
+   * element of whatever you return - Docker treats anything after it as a
+   * command for the container's entrypoint, not a `docker run` flag.
+   *
+   * Example - joining a caller-managed network so a sibling container can
+   * reach Foundry directly by `containerName`, instead of `--network=host`
+   * or the published host port:
+   * ```ts
+   * buildRunArgs: (args) => [...args.slice(0, -1), "--network", "my-net", args.at(-1)!]
+   * ```
+   */
+  buildRunArgs?: (defaultArgs: string[]) => string[];
 }
 
 /**
@@ -58,7 +80,12 @@ export function isPodmanRuntime(): boolean {
  * Uses direct docker commands instead of docker-compose for better control and zero-config for users.
  */
 export class DockerFoundryOrchestrator {
-  private config: Required<DockerOrchestratorConfig>;
+  // buildRunArgs has no sensible default value (unlike every other field
+  // here) - "no hook" must stay `undefined`, not get coerced into a real
+  // function, so it's carved out of the Required<> below rather than typed
+  // the same way as the rest of the config.
+  private config: Required<Omit<DockerOrchestratorConfig, "buildRunArgs">> &
+    Pick<DockerOrchestratorConfig, "buildRunArgs">;
 
   constructor(config: DockerOrchestratorConfig) {
     this.config = {
@@ -73,6 +100,7 @@ export class DockerFoundryOrchestrator {
       containerName:
         config.containerName || `foundry-playwright-${config.version.replace(/\./g, "-")}`,
       rootless: config.rootless ?? false,
+      buildRunArgs: config.buildRunArgs,
     };
   }
 
@@ -226,7 +254,7 @@ export class DockerFoundryOrchestrator {
     // of the two uid-matching mechanisms is in play.
     const userNsFlag = this.config.rootless && isPodmanRuntime() ? ["--userns=keep-id"] : [];
 
-    return [
+    const defaultArgs = [
       "run",
       "-d",
       "--name",
@@ -248,6 +276,8 @@ export class DockerFoundryOrchestrator {
       `${path.resolve(this.config.cacheDir)}:/data/container_cache`,
       image,
     ];
+
+    return this.config.buildRunArgs ? this.config.buildRunArgs(defaultArgs) : defaultArgs;
   }
 
   /**

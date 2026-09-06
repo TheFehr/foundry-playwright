@@ -151,6 +151,54 @@ describe("DockerFoundryOrchestrator", () => {
     expect(command).not.toContain("--userns=keep-id");
   });
 
+  describe("buildRunArgs", () => {
+    it("leaves the command unchanged when no hook is provided", () => {
+      const orchestrator = new DockerFoundryOrchestrator({ version: "13.351.0" });
+      const withHook = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => args,
+      });
+      expect(withHook.getRunCommand(".env")).toEqual(orchestrator.getRunCommand(".env"));
+    });
+
+    it("receives the default args with the image tag as the last element", () => {
+      let received: string[] = [];
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          received = args;
+          return args;
+        },
+      });
+      orchestrator.getRunCommand(".env");
+      expect(received.at(-1)).toBe("ghcr.io/felddy/foundryvtt:13.351.0");
+      expect(received[0]).toBe("run");
+    });
+
+    it("can append a flag (e.g. joining a caller-managed network per #110)", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--network", "my-net", args.at(-1)!],
+      });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).toEqual(expect.arrayContaining(["--network", "my-net"]));
+      expect(command.at(-1)).toBe("ghcr.io/felddy/foundryvtt:13.351.0");
+    });
+
+    it("can remove/replace a default flag", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const restartIdx = args.indexOf("--restart");
+          return [...args.slice(0, restartIdx), ...args.slice(restartIdx + 2)];
+        },
+      });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).not.toContain("--restart");
+      expect(command).not.toContain("always");
+    });
+  });
+
   it("respects maxPortRetries in config", () => {
     const orchestrator = new DockerFoundryOrchestrator({
       version: "12.327",
