@@ -23,6 +23,17 @@ export interface SystemStateAdapter {
   getTestActorData(name: string): { type: string; system: Record<string, unknown> };
 
   /**
+   * Provides a system-specific, minimal-but-valid data structure for a test
+   * Item embedded on an actor (e.g. inventory/loot). Not every system
+   * accepts the same minimal shape - a system's own item validation can
+   * reject a payload another system tolerates (motivated by pf2e 8.5.0's
+   * "Make _validateType throw errors instead of returning them" change,
+   * which broke the previously-universal `{type: "loot"}` payload the
+   * verify suite used to hardcode for every system).
+   */
+  getTestItemData(name: string): { type: string; system: Record<string, unknown> };
+
+  /**
    * Sets an actor's HP.
    */
   setActorHP(page: FoundryPage, actorName: string, value: number, max?: number): Promise<unknown>;
@@ -73,6 +84,10 @@ export abstract class BaseSystemStateAdapter implements SystemStateAdapter {
         attributes: { hp: { value: 10, max: 10 } },
       },
     };
+  }
+
+  getTestItemData(_name: string): { type: string; system: Record<string, unknown> } {
+    return { type: "loot", system: {} };
   }
 
   async setActorHP(

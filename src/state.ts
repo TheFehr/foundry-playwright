@@ -1,6 +1,6 @@
 import { FoundryPage, UserRole, DocumentOwnershipLevel } from "./types/index.js";
 import { getSystemStateAdapter, SystemStateAdapter } from "./systems/index.js";
-import { getGameAdapter } from "./setup/index.js";
+import { getGameAdapter, DOCUMENT_SANITIZER_SCRIPT } from "./setup/index.js";
 import { DeprecationTracker } from "./deprecations.js";
 
 /**
@@ -26,53 +26,19 @@ export class FoundryState {
   }
 
   /**
-   * Aggressively removes properties known to trigger deprecation warnings on access.
-   * This is used before returning data from page.evaluate.
-   */
-  private static get SanitizerScript() {
-    return `(obj) => {
-        if (!obj || typeof obj !== 'object') return obj;
-        const deprecatedDnD5e = ['darkvision', 'blindsight', 'tremorsense', 'truesight', 'special'];
-        const cleanSenses = (o) => {
-            if (!o || typeof o !== 'object') return o;
-            const result = Array.isArray(o) ? [] : {};
-            for (let key in o) {
-                if (key === 'senses') {
-                    const senses = o[key];
-                    const cleanS = Array.isArray(senses) ? [] : {};
-                    for (let skey in senses) {
-                        if (deprecatedDnD5e.includes(skey)) continue;
-                        cleanS[skey] = senses[skey];
-                    }
-                    result[key] = cleanS;
-                } else {
-                    result[key] = cleanSenses(o[key]);
-                }
-            }
-            return result;
-        };
-        return cleanSenses(obj);
-    }`;
-  }
-
-  /**
    * Creates a new Foundry VTT document.
+   *
+   * Routed through {@link getGameAdapter} rather than a raw page.evaluate -
+   * core Document Data Model behavior, kept behind the same version-adapted
+   * seam as createEmbeddedDocuments, in case a future Foundry generation
+   * changes it (see #86).
+   *
    * @param documentName The type of document (e.g., "Actor", "Item").
    * @param data The document data.
    */
   async createDocument(documentName: string, data: Record<string, unknown>) {
-    return this.page.evaluate(
-      async ({ documentName, data, sanitizer }) => {
-        const cls = window.CONFIG[documentName].documentClass;
-        const doc = await cls.create(data);
-        if (!doc) return null;
-        // Use raw _source to avoid getters/deprecations
-        const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
-        const sanitize = new Function(`return ${sanitizer}`)();
-        return sanitize(obj);
-      },
-      { documentName, data, sanitizer: FoundryState.SanitizerScript },
-    );
+    const adapter = await getGameAdapter(this.page);
+    return adapter.createDocument(this.page, documentName, data, {});
   }
 
   /**
@@ -82,14 +48,8 @@ export class FoundryState {
    * @param delta The data to update.
    */
   async updateDocument(documentName: string, id: string, delta: Record<string, unknown>) {
-    return this.page.evaluate(
-      ({ documentName, id, delta }) => {
-        const doc = window.game.collections.get(documentName).get(id);
-        if (!doc) throw new Error(`Document ${documentName}/${id} not found`);
-        return doc.update(delta);
-      },
-      { documentName, id, delta },
-    );
+    const adapter = await getGameAdapter(this.page);
+    return adapter.updateDocument(this.page, documentName, id, delta);
   }
 
   /**
@@ -98,14 +58,8 @@ export class FoundryState {
    * @param id The ID of the document to delete.
    */
   async deleteDocument(documentName: string, id: string) {
-    return this.page.evaluate(
-      ({ documentName, id }) => {
-        const doc = window.game.collections.get(documentName).get(id);
-        if (!doc) throw new Error(`Document ${documentName}/${id} not found`);
-        return doc.delete();
-      },
-      { documentName, id },
-    );
+    const adapter = await getGameAdapter(this.page);
+    return adapter.deleteDocument(this.page, documentName, id);
   }
 
   /**
@@ -114,17 +68,8 @@ export class FoundryState {
    * @param id The ID of the document.
    */
   async getDocument(documentName: string, id: string) {
-    return this.page.evaluate(
-      ({ documentName, id, sanitizer }) => {
-        const doc = window.game.collections.get(documentName).get(id);
-        if (!doc) return null;
-        // Use raw _source to avoid getters/deprecations
-        const obj = doc._source ? JSON.parse(JSON.stringify(doc._source)) : doc.toObject();
-        const sanitize = new Function(`return ${sanitizer}`)();
-        return sanitize(obj);
-      },
-      { documentName, id, sanitizer: FoundryState.SanitizerScript },
-    );
+    const adapter = await getGameAdapter(this.page);
+    return adapter.getDocument(this.page, documentName, id);
   }
 
   /**
@@ -150,7 +95,7 @@ export class FoundryState {
         const sanitize = new Function(`return ${sanitizer}`)();
         return sanitize(obj);
       },
-      { documentName, name, sanitizer: FoundryState.SanitizerScript },
+      { documentName, name, sanitizer: DOCUMENT_SANITIZER_SCRIPT },
     );
   }
 
@@ -444,6 +389,19 @@ export class FoundryState {
   }
 
   /**
+   * Creates a test Item embedded on an existing actor, using the current
+   * system adapter's minimal-but-valid item shape ({@link
+   * SystemStateAdapter.getTestItemData}) rather than a payload hardcoded
+   * for one system - different systems can reject the same minimal Item
+   * data (e.g. pf2e 8.5.0 tightened `_validateType`), so this needs the
+   * same per-system seam createTestActor already has.
+   */
+  async createTestItem(parentId: string, name: string = "Test Item") {
+    const { type, system } = this.adapter.getTestItemData(name);
+    return this.createEmbeddedDocument("Actor", parentId, "Item", { name, type, system });
+  }
+
+  /**
    * Creates one or more embedded documents on an existing parent document -
    * e.g. Items on an Actor (inventory, conditions), Tokens on a Scene,
    * Combatants on a Combat. This is distinct from {@link createDocument}:
@@ -485,7 +443,7 @@ export class FoundryState {
     // serialization boundary with methods intact) - sanitizing that plain
     // data is a pure transform, so it runs here in Node directly rather
     // than round-tripping back into the browser for it.
-    const sanitize = new Function(`return ${FoundryState.SanitizerScript}`)() as (
+    const sanitize = new Function(`return ${DOCUMENT_SANITIZER_SCRIPT}`)() as (
       obj: unknown,
     ) => unknown;
     return (docs as Record<string, unknown>[]).map((d) => sanitize(d));

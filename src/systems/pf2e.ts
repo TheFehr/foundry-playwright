@@ -76,6 +76,19 @@ export class PF2eStateAdapter extends BaseSystemStateAdapter {
     };
   }
 
+  // pf2e 8.5.0 made item-type validation throw instead of silently no-op,
+  // surfacing that "loot" (the base default in BaseSystemStateAdapter) has
+  // never actually been a valid inventory item type for a "character"
+  // actor in pf2e - only for the system's dedicated Loot-actor sheet.
+  // "equipment" is pf2e's own generic miscellaneous-gear physical item
+  // type, valid on any creature actor. Confirmed live against pf2e 8.5.0 /
+  // FVTT 14.367: "loot" fails with "Loot items cannot be added to this
+  // actor."; grantCurrency above already proves "treasure" works the same
+  // way for the same reason.
+  override getTestItemData(_name: string) {
+    return { type: "equipment", system: {} };
+  }
+
   override getCurrencyVerifyParams(
     actorName: string,
     amount: number,
