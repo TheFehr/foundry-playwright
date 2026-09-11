@@ -358,5 +358,50 @@
     "status": "stable",
     "timestamp": "2026-09-06T18:46:17.683Z",
     "notes": "Verified locally with pf2e v8.5.0."
+  },
+  {
+    "fvtt": "13.351.0",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.0",
+    "status": "incompatible",
+    "timestamp": "2026-09-11T08:57:11.479Z",
+    "notes": "System declares compatibility minimum: 14.367; incompatible with FVTT 13.351.0."
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.0",
+    "status": "incompatible",
+    "timestamp": "2026-09-11T08:57:11.479Z",
+    "notes": "System declares compatibility minimum: 14.367; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.365",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.0",
+    "status": "incompatible",
+    "timestamp": "2026-09-11T08:57:11.479Z",
+    "notes": "System declares compatibility minimum: 14.367; incompatible with FVTT 14.365."
+  },
+  {
+    "fvtt": "14.366",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.0",
+    "status": "incompatible",
+    "timestamp": "2026-09-11T08:57:11.479Z",
+    "notes": "System declares compatibility minimum: 14.367; incompatible with FVTT 14.366."
+  },
+  {
+    "fvtt": "14.367",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.0",
+    "status": "pending",
+    "timestamp": "2026-09-11T08:57:11.479Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.367 --system dnd5e --system-minor 6.0 --update-registry --git-commit`"
   }
 ]
