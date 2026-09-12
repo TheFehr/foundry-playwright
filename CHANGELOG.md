@@ -1,5 +1,11 @@
 # Changelog
 
+# [1.4.0](https://github.com/TheFehr/foundry-playwright/compare/v1.3.12...v1.4.0) (2026-09-12)
+
+### Features
+
+- **docker:** add buildRunArgs hook for customizing docker run invocation ([#111](https://github.com/TheFehr/foundry-playwright/issues/111)) ([6d6164c](https://github.com/TheFehr/foundry-playwright/commit/6d6164c99044d135a6069c0fa2af8db3634fc49d))
+
 ## [1.3.12](https://github.com/TheFehr/foundry-playwright/compare/v1.3.11...v1.3.12) (2026-09-11)
 
 ## [1.3.11](https://github.com/TheFehr/foundry-playwright/compare/v1.3.10...v1.3.11) (2026-09-11)
