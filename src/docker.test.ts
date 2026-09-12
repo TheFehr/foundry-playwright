@@ -151,6 +151,220 @@ describe("DockerFoundryOrchestrator", () => {
     expect(command).not.toContain("--userns=keep-id");
   });
 
+  describe("buildRunArgs", () => {
+    it("leaves the command unchanged when no hook is provided", () => {
+      const orchestrator = new DockerFoundryOrchestrator({ version: "13.351.0" });
+      const withHook = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => args,
+      });
+      expect(withHook.getRunCommand(".env")).toEqual(orchestrator.getRunCommand(".env"));
+    });
+
+    it("receives the default args with the image tag as the last element", () => {
+      let received: string[] = [];
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          received = args;
+          return args;
+        },
+      });
+      orchestrator.getRunCommand(".env");
+      expect(received.at(-1)).toBe("ghcr.io/felddy/foundryvtt:13.351.0");
+      expect(received[0]).toBe("run");
+    });
+
+    it("can append a flag (e.g. joining a caller-managed network per #110)", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--network", "my-net", args.at(-1)!],
+      });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).toEqual(expect.arrayContaining(["--network", "my-net"]));
+      expect(command.at(-1)).toBe("ghcr.io/felddy/foundryvtt:13.351.0");
+    });
+
+    it("can remove/replace a default flag", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const restartIdx = args.indexOf("--restart");
+          return [...args.slice(0, restartIdx), ...args.slice(restartIdx + 2)];
+        },
+      });
+      const command = orchestrator.getRunCommand(".env");
+      expect(command).not.toContain("--restart");
+      expect(command).not.toContain("always");
+    });
+  });
+
+  describe("onRunArgsChanged", () => {
+    function getUrl(orchestrator: DockerFoundryOrchestrator): string {
+      return (orchestrator as unknown as { getUrl: () => string }).getUrl();
+    }
+
+    it("throws if buildRunArgs changes --name without onRunArgsChanged", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("--name");
+          const copy = [...args];
+          copy[idx + 1] = "renamed";
+          return copy;
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("throws if buildRunArgs changes -p without onRunArgsChanged", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          const copy = [...args];
+          copy[idx + 1] = "9999:30000";
+          return copy;
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("throws if onRunArgsChanged is provided but doesn't return the needed field", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("--name");
+          const copy = [...args];
+          copy[idx + 1] = "renamed";
+          return copy;
+        },
+        onRunArgsChanged: () => ({}),
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("uses onRunArgsChanged's containerName for stopAndRemove() when --name was changed", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("--name");
+          const copy = [...args];
+          copy[idx + 1] = "renamed-container";
+          return copy;
+        },
+        onRunArgsChanged: () => ({ containerName: "renamed-container" }),
+      });
+      orchestrator.getRunCommand(".env");
+      vi.mocked(execFileSync).mockReturnValue("");
+      orchestrator.stopAndRemove();
+      expect(execFileSync).toHaveBeenCalledWith(
+        "docker",
+        ["stop", "renamed-container"],
+        expect.anything(),
+      );
+    });
+
+    it("uses onRunArgsChanged's readyUrl for getUrl() when -p was changed", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+        onRunArgsChanged: () => ({ readyUrl: "http://custom-host:1234" }),
+      });
+      orchestrator.getRunCommand(".env");
+      expect(getUrl(orchestrator)).toBe("http://custom-host:1234");
+    });
+
+    it("doesn't call onRunArgsChanged at all when --name/-p are unaffected", () => {
+      const onRunArgsChanged = vi.fn<() => { containerName: string }>(() => ({
+        containerName: "unused",
+      }));
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--network", "my-net", args.at(-1)!],
+        onRunArgsChanged,
+      });
+      orchestrator.getRunCommand(".env");
+      expect(onRunArgsChanged).not.toHaveBeenCalled();
+      expect(getUrl(orchestrator)).toBe("http://127.0.0.1:30000");
+    });
+
+    it("throws for an appended (duplicate) --name, not just a replaced one", () => {
+      // Docker and Podman both resolve a repeated flag to its *last* value
+      // (confirmed directly against real Docker - it does not reject the
+      // duplicate) - a buildRunArgs bug that appends instead of replacing
+      // must still be caught, since the default --name is still "present"
+      // in the array, just no longer the effective one.
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--name", "appended", args.at(-1)!],
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("uses the last --name's effective value once onRunArgsChanged confirms it", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--name", "appended", args.at(-1)!],
+        onRunArgsChanged: () => ({ containerName: "appended" }),
+      });
+      orchestrator.getRunCommand(".env");
+      vi.mocked(execFileSync).mockReturnValue("");
+      orchestrator.stopAndRemove();
+      expect(execFileSync).toHaveBeenCalledWith("docker", ["stop", "appended"], expect.anything());
+    });
+
+    it("throws when -p is removed and no subclass overrides readiness, even with no onRunArgsChanged", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("does NOT throw when -p is removed and a subclass overrides both waitForReady() and getUrl()", () => {
+      class NetworkOnlyOrchestrator extends DockerFoundryOrchestrator {
+        protected override async waitForReady(): Promise<void> {
+          // no-op: this subclass manages readiness itself
+        }
+        protected override getUrl(): string {
+          return "internal://custom";
+        }
+      }
+      const orchestrator = new NetworkOnlyOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).not.toThrow();
+      expect(getUrl(orchestrator)).toBe("internal://custom");
+    });
+
+    it("still throws when -p is removed and only ONE of waitForReady()/getUrl() is overridden", () => {
+      class HalfOverriddenOrchestrator extends DockerFoundryOrchestrator {
+        protected override getUrl(): string {
+          return "internal://custom";
+        }
+      }
+      const orchestrator = new HalfOverriddenOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+  });
+
   it("respects maxPortRetries in config", () => {
     const orchestrator = new DockerFoundryOrchestrator({
       version: "12.327",

@@ -24,6 +24,62 @@ export interface DockerOrchestratorConfig {
    * Default false: no behavior change for a plain rootful Docker install.
    */
   rootless?: boolean;
+  /**
+   * Optional hook to customize the `docker run` invocation (see
+   * {@link https://github.com/TheFehr/foundry-playwright/issues/110}).
+   * Receives the full argument array {@link DockerFoundryOrchestrator.getRunCommand}
+   * would otherwise pass to `execFileSync("docker", ...)` - every flag this
+   * orchestrator sets by default (`--user`, `-p`, `--restart`,
+   * `--userns=keep-id`, etc.) plus the image tag as the last element - and
+   * must return the array to actually use. Append, remove, or replace
+   * anything, including the defaults; nothing here is protected, so a
+   * conflicting override (e.g. a different `--user`) can reintroduce bugs
+   * this class's defaults exist to avoid. The image tag must stay the last
+   * element of whatever you return - Docker treats anything after it as a
+   * command for the container's entrypoint, not a `docker run` flag.
+   *
+   * Example - joining a caller-managed network so a sibling container can
+   * reach Foundry directly by `containerName`, instead of `--network=host`
+   * or the published host port:
+   * ```ts
+   * buildRunArgs: (args) => [...args.slice(0, -1), "--network", "my-net", args.at(-1)!]
+   * ```
+   *
+   * If your override changes the `--name` or `-p` this orchestrator would
+   * otherwise set, you must also provide {@link onRunArgsChanged} - see
+   * that option for why. Changing anything else (adding `--network`,
+   * `--restart`, etc.) needs no companion.
+   */
+  buildRunArgs?: (defaultArgs: string[]) => string[];
+  /**
+   * Required companion to {@link buildRunArgs} whenever your override
+   * changes the container's effective `--name` or `-p` mapping.
+   * `stopAndRemove()`, `copyToContainer()`, `waitForReady()`, and the URL
+   * `start()` returns all need to target the *actual* running container,
+   * not just the pre-override default - this orchestrator can't safely
+   * parse the changed value back out of a `buildRunArgs` result (Docker
+   * accepts both `--name foo` and `--name=foo`; naively parsing one form
+   * silently misses the other and reintroduces the exact bug this option
+   * exists to prevent), so it asks you to state the effective values
+   * directly instead of guessing.
+   *
+   * `start()` throws immediately if `buildRunArgs` changed `--name` or `-p`
+   * and this doesn't return the corresponding field - a loud failure at
+   * the moment of misuse, instead of a silently orphaned container
+   * (wrong name → `stopAndRemove()` can't find it, so a caller that then
+   * deletes its data directory does so out from under a container still
+   * using it) or a readiness check that spins until it times out against
+   * the wrong port.
+   *
+   * If you don't want to supply `readyUrl` here at all (e.g. you dropped
+   * `-p` for a pure container-to-container setup with no published port),
+   * subclass {@link DockerFoundryOrchestrator} and override BOTH
+   * `protected` `waitForReady()` and `getUrl()` - overriding only one
+   * still throws, since the other would otherwise silently use a stale or
+   * meaningless value. That combination is intentionally outside what
+   * this config surface supports.
+   */
+  onRunArgsChanged?: () => { containerName?: string; readyUrl?: string };
 }
 
 /**
@@ -58,7 +114,21 @@ export function isPodmanRuntime(): boolean {
  * Uses direct docker commands instead of docker-compose for better control and zero-config for users.
  */
 export class DockerFoundryOrchestrator {
-  private config: Required<DockerOrchestratorConfig>;
+  // buildRunArgs/onRunArgsChanged have no sensible default value (unlike
+  // every other field here) - "no hook" must stay `undefined`, not get
+  // coerced into a real function, so they're carved out of the Required<>
+  // below rather than typed the same way as the rest of the config.
+  protected config: Required<Omit<DockerOrchestratorConfig, "buildRunArgs" | "onRunArgsChanged">> &
+    Pick<DockerOrchestratorConfig, "buildRunArgs" | "onRunArgsChanged">;
+
+  // Defaulted at construction so stopAndRemove()/copyToContainer() have a
+  // sane target even if called before getRunCommand() ever resolves these
+  // for real (e.g. start() throwing during credential validation, before
+  // its own pre-run cleanup). getRunCommand() overwrites both every time
+  // it runs - idempotently, since buildRunArgs/onRunArgsChanged must be
+  // pure functions of the current config.
+  private effectiveContainerName: string;
+  private effectiveReadyUrl: string;
 
   constructor(config: DockerOrchestratorConfig) {
     this.config = {
@@ -73,7 +143,11 @@ export class DockerFoundryOrchestrator {
       containerName:
         config.containerName || `foundry-playwright-${config.version.replace(/\./g, "-")}`,
       rootless: config.rootless ?? false,
+      buildRunArgs: config.buildRunArgs,
+      onRunArgsChanged: config.onRunArgsChanged,
     };
+    this.effectiveContainerName = this.config.containerName;
+    this.effectiveReadyUrl = `http://127.0.0.1:${this.config.port}`;
   }
 
   /**
@@ -104,6 +178,11 @@ export class DockerFoundryOrchestrator {
 
     // 1. Stop/Remove existing container if it exists
     // We do this BEFORE finding an available port to avoid port drift if the existing container is using the target port.
+    // Resolve the effective container identity first (a real envPath isn't
+    // needed for that - see getRunCommand()) so this cleanup targets a
+    // buildRunArgs-renamed container correctly from the very first call,
+    // not just from the real docker-run invocation onward.
+    this.getRunCommand("<pending>");
     this.stopAndRemove();
 
     // 2. Find available port if needed
@@ -162,7 +241,7 @@ export class DockerFoundryOrchestrator {
     // execFileSync prints its full argument list in the error it throws on
     // failure, which would leak credentials into CI logs.
     console.log(
-      `[DockerOrchestrator] Executing: docker run -d --name ${this.config.containerName} ... (using --env-file for security)`,
+      `[DockerOrchestrator] Executing: docker run -d --name ${this.effectiveContainerName} ... (using --env-file for security)`,
     );
     const envDir = fs.mkdtempSync(path.join(os.tmpdir(), "foundry-playwright-env-"));
     try {
@@ -180,12 +259,27 @@ export class DockerFoundryOrchestrator {
     // 6. Wait for healthy
     await this.waitForReady();
 
+    return this.getUrl();
+  }
+
+  /**
+   * The URL callers should use to reach the container - the readiness
+   * check above polls this same value. Pulled into its own overridable
+   * method (rather than inlined in `start()`) so a subclass with a
+   * fundamentally different reachability story (see
+   * {@link DockerOrchestratorConfig.onRunArgsChanged}'s docs - e.g. no
+   * published host port at all) only needs to override this and
+   * {@link waitForReady}, not reimplement `start()`.
+   */
+  protected getUrl(): string {
     // 127.0.0.1, not localhost: rootless Podman's pasta port-forwarder binds
     // IPv4 only, and Node 17+ (and browsers, for the returned URL's actual
     // consumers) resolve "localhost" via the OS's raw getaddrinfo() order,
     // which returns ::1 first on some hosts - that silently never connects
-    // to what pasta is actually listening on.
-    return `http://127.0.0.1:${this.config.port}`;
+    // to what pasta is actually listening on. this.effectiveReadyUrl
+    // already accounts for a buildRunArgs override via onRunArgsChanged -
+    // see getRunCommand().
+    return this.effectiveReadyUrl;
   }
 
   /**
@@ -193,6 +287,16 @@ export class DockerFoundryOrchestrator {
    * itself) as an array, for execFileSync - never shell-joined, so none of
    * these values (container name, resolved paths, version-derived image tag)
    * can be interpreted as shell metacharacters.
+   *
+   * As a side effect, resolves and caches the effective container name /
+   * ready-check URL that `stopAndRemove()`, `copyToContainer()`,
+   * `waitForReady()`, and `getUrl()` use - see
+   * {@link DockerOrchestratorConfig.onRunArgsChanged}. `envPath` only needs
+   * to be a real path for the actual `docker run` invocation; calling this
+   * purely to (re-)resolve that identity (e.g. before pre-run cleanup, when
+   * no real env file exists yet) is safe with any placeholder string,
+   * since `buildRunArgs`/`onRunArgsChanged` must be pure functions of the
+   * current config, not of the env file's path.
    * @internal
    */
   getRunCommand(envPath: string): string[] {
@@ -226,7 +330,7 @@ export class DockerFoundryOrchestrator {
     // of the two uid-matching mechanisms is in play.
     const userNsFlag = this.config.rootless && isPodmanRuntime() ? ["--userns=keep-id"] : [];
 
-    return [
+    const defaultArgs = [
       "run",
       "-d",
       "--name",
@@ -248,6 +352,92 @@ export class DockerFoundryOrchestrator {
       `${path.resolve(this.config.cacheDir)}:/data/container_cache`,
       image,
     ];
+
+    const finalArgs = this.config.buildRunArgs
+      ? this.config.buildRunArgs(defaultArgs)
+      : defaultArgs;
+    this.resolveEffectiveIdentity(finalArgs);
+    return finalArgs;
+  }
+
+  /**
+   * Populates `effectiveContainerName`/`effectiveReadyUrl` from the args
+   * `buildRunArgs` actually produced, falling back to `onRunArgsChanged`
+   * when the default `--name`/`-p` this orchestrator set are no longer
+   * the *effective* ones - and throwing if that fallback isn't provided.
+   * See {@link DockerOrchestratorConfig.onRunArgsChanged} for the full
+   * rationale (in short: parsing a changed value back out of the args
+   * array isn't reliable - e.g. `--name=foo` vs `--name foo` - so this
+   * asks for the effective value directly instead of guessing at it).
+   *
+   * Checks the *last* occurrence of `--name`/`-p`, not just whether the
+   * default pair is present anywhere: Docker and Podman both resolve a
+   * repeated flag to its last value (confirmed directly against real
+   * Docker - it does not reject the duplicate), so a `buildRunArgs` bug
+   * that appends a second `--name` instead of replacing the first would
+   * otherwise leave this orchestrator still trusting the original default
+   * while Docker/Podman actually run under the new one.
+   */
+  private resolveEffectiveIdentity(finalArgs: string[]): void {
+    const lastFlagValue = (flag: string): string | undefined => {
+      for (let i = finalArgs.length - 2; i >= 0; i--) {
+        if (finalArgs[i] === flag) return finalArgs[i + 1];
+      }
+      return undefined;
+    };
+
+    const nameUnchanged = lastFlagValue("--name") === this.config.containerName;
+    const portUnchanged = lastFlagValue("-p") === `${this.config.port}:30000`;
+
+    if (nameUnchanged && portUnchanged) {
+      this.effectiveContainerName = this.config.containerName;
+      this.effectiveReadyUrl = `http://127.0.0.1:${this.config.port}`;
+      return;
+    }
+
+    const overrides = this.config.onRunArgsChanged?.();
+
+    if (nameUnchanged) {
+      this.effectiveContainerName = this.config.containerName;
+    } else if (overrides?.containerName) {
+      this.effectiveContainerName = overrides.containerName;
+    } else {
+      throw new Error(
+        "[DockerOrchestrator] buildRunArgs changed the effective --name, but " +
+          "onRunArgsChanged wasn't provided (or didn't return containerName) - " +
+          "stopAndRemove()/copyToContainer() would target the wrong container. Provide " +
+          "onRunArgsChanged to keep cleanup in sync.",
+      );
+    }
+
+    if (portUnchanged) {
+      this.effectiveReadyUrl = `http://127.0.0.1:${this.config.port}`;
+      return;
+    }
+    if (overrides?.readyUrl) {
+      this.effectiveReadyUrl = overrides.readyUrl;
+      return;
+    }
+    // No readyUrl available - only acceptable if a subclass has actually
+    // taken over readiness itself (both methods, not just one - getUrl()
+    // alone would leave the base waitForReady() polling a URL nobody
+    // computed, and waitForReady() alone would leave start()'s return
+    // value wrong). Checked here, not skipped outright, so the common
+    // mistake (changed -p, forgot onRunArgsChanged, didn't subclass
+    // anything) still throws instead of silently waiting on
+    // http://127.0.0.1:<stale port>.
+    const hasCustomReadiness =
+      this.getUrl !== DockerFoundryOrchestrator.prototype.getUrl &&
+      this.waitForReady !== DockerFoundryOrchestrator.prototype.waitForReady;
+    if (hasCustomReadiness) return;
+    throw new Error(
+      "[DockerOrchestrator] buildRunArgs changed the effective -p, but onRunArgsChanged " +
+        "wasn't provided (or didn't return readyUrl) - waitForReady()/the URL start() " +
+        "returns would target the wrong endpoint. Provide onRunArgsChanged, or if there's " +
+        "no host-reachable endpoint at all (e.g. -p was dropped entirely), subclass " +
+        "DockerFoundryOrchestrator and override BOTH waitForReady() and getUrl() instead - " +
+        "that combination is intentionally outside what this config surface supports.",
+    );
   }
 
   /**
@@ -326,10 +516,10 @@ export class DockerFoundryOrchestrator {
    * Stops and removes the container.
    */
   stopAndRemove() {
-    console.log(`[DockerOrchestrator] Cleaning up container ${this.config.containerName}...`);
+    console.log(`[DockerOrchestrator] Cleaning up container ${this.effectiveContainerName}...`);
     for (const args of [
-      ["stop", this.config.containerName],
-      ["rm", this.config.containerName],
+      ["stop", this.effectiveContainerName],
+      ["rm", this.effectiveContainerName],
     ]) {
       try {
         execFileSync("docker", args, { stdio: ["ignore", "ignore", "pipe"] });
@@ -346,7 +536,7 @@ export class DockerFoundryOrchestrator {
         const stderr = (e as { stderr?: Buffer | string }).stderr?.toString() ?? "";
         if (!/no such container/i.test(stderr)) {
           throw new Error(
-            `[DockerOrchestrator] Failed to ${args[0]} container ${this.config.containerName}: ${stderr || (e as Error).message}`,
+            `[DockerOrchestrator] Failed to ${args[0]} container ${this.effectiveContainerName}: ${stderr || (e as Error).message}`,
           );
         }
       }
@@ -358,7 +548,7 @@ export class DockerFoundryOrchestrator {
    */
   copyToContainer(localPath: string, containerPath: string) {
     console.log(
-      `[DockerOrchestrator] Copying ${localPath} to ${this.config.containerName}:${containerPath}`,
+      `[DockerOrchestrator] Copying ${localPath} to ${this.effectiveContainerName}:${containerPath}`,
     );
     const ids = getHostUidGid();
     const expectedOwner = ids ? `${ids.uid}:${ids.gid}` : null;
@@ -372,12 +562,12 @@ export class DockerFoundryOrchestrator {
     // entirely (no `sh -c`, no metacharacters).
     execFileSync(
       "docker",
-      ["exec", this.config.containerName, "mkdir", "-p", path.dirname(containerPath)],
+      ["exec", this.effectiveContainerName, "mkdir", "-p", path.dirname(containerPath)],
       { stdio: "inherit" },
     );
     execFileSync(
       "docker",
-      ["cp", "-a", localPath, `${this.config.containerName}:${containerPath}`],
+      ["cp", "-a", localPath, `${this.effectiveContainerName}:${containerPath}`],
       {
         stdio: "inherit",
       },
@@ -407,7 +597,7 @@ export class DockerFoundryOrchestrator {
           "docker",
           [
             "exec",
-            this.config.containerName,
+            this.effectiveContainerName,
             "find",
             containerPath,
             "-exec",
@@ -425,7 +615,7 @@ export class DockerFoundryOrchestrator {
       : (() => {
           const actualOwner = execFileSync(
             "docker",
-            ["exec", this.config.containerName, "stat", "-c", "%u:%g", containerPath],
+            ["exec", this.effectiveContainerName, "stat", "-c", "%u:%g", containerPath],
             { encoding: "utf8" },
           ).trim();
           return actualOwner === expectedOwner ? [] : [`${actualOwner} ${containerPath}`];
@@ -438,9 +628,15 @@ export class DockerFoundryOrchestrator {
     }
   }
 
-  private async waitForReady(): Promise<void> {
-    // 127.0.0.1, not localhost - see the return statement in start() for why.
-    const url = `http://127.0.0.1:${this.config.port}`;
+  /**
+   * Polls {@link getUrl} until Foundry responds or the timeout elapses.
+   * `protected`, not `private`, alongside `getUrl()` - see
+   * {@link DockerOrchestratorConfig.onRunArgsChanged}'s docs for the one
+   * scenario (no published host port at all) meant to be handled by
+   * subclassing and overriding both, rather than through config.
+   */
+  protected async waitForReady(): Promise<void> {
+    const url = this.getUrl();
     console.log(`[DockerOrchestrator] Waiting for Foundry to be ready at ${url}...`);
 
     let ready = false;
