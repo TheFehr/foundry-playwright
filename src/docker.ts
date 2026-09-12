@@ -71,13 +71,13 @@ export interface DockerOrchestratorConfig {
    * using it) or a readiness check that spins until it times out against
    * the wrong port.
    *
-   * `readyUrl` must be a real, host-reachable URL - there's no supported
-   * way to opt out of the HTTP readiness check entirely (e.g. because you
-   * dropped `-p` for a pure container-to-container setup with no
-   * published port at all). For that, subclass
-   * {@link DockerFoundryOrchestrator} and override the `protected`
-   * `waitForReady()`/`getUrl()` instead; that combination is intentionally
-   * outside what this config surface supports.
+   * If you don't want to supply `readyUrl` here at all (e.g. you dropped
+   * `-p` for a pure container-to-container setup with no published port),
+   * subclass {@link DockerFoundryOrchestrator} and override BOTH
+   * `protected` `waitForReady()` and `getUrl()` - overriding only one
+   * still throws, since the other would otherwise silently use a stale or
+   * meaningless value. That combination is intentionally outside what
+   * this config surface supports.
    */
   onRunArgsChanged?: () => { containerName?: string; readyUrl?: string };
 }
@@ -364,18 +364,30 @@ export class DockerFoundryOrchestrator {
    * Populates `effectiveContainerName`/`effectiveReadyUrl` from the args
    * `buildRunArgs` actually produced, falling back to `onRunArgsChanged`
    * when the default `--name`/`-p` this orchestrator set are no longer
-   * present verbatim - and throwing if that fallback isn't provided. See
-   * {@link DockerOrchestratorConfig.onRunArgsChanged} for the full
+   * the *effective* ones - and throwing if that fallback isn't provided.
+   * See {@link DockerOrchestratorConfig.onRunArgsChanged} for the full
    * rationale (in short: parsing a changed value back out of the args
    * array isn't reliable - e.g. `--name=foo` vs `--name foo` - so this
    * asks for the effective value directly instead of guessing at it).
+   *
+   * Checks the *last* occurrence of `--name`/`-p`, not just whether the
+   * default pair is present anywhere: Docker and Podman both resolve a
+   * repeated flag to its last value (confirmed directly against real
+   * Docker - it does not reject the duplicate), so a `buildRunArgs` bug
+   * that appends a second `--name` instead of replacing the first would
+   * otherwise leave this orchestrator still trusting the original default
+   * while Docker/Podman actually run under the new one.
    */
   private resolveEffectiveIdentity(finalArgs: string[]): void {
-    const hasFlag = (flag: string, value: string) =>
-      finalArgs.some((arg, i) => arg === flag && finalArgs[i + 1] === value);
+    const lastFlagValue = (flag: string): string | undefined => {
+      for (let i = finalArgs.length - 2; i >= 0; i--) {
+        if (finalArgs[i] === flag) return finalArgs[i + 1];
+      }
+      return undefined;
+    };
 
-    const nameUnchanged = hasFlag("--name", this.config.containerName);
-    const portUnchanged = hasFlag("-p", `${this.config.port}:30000`);
+    const nameUnchanged = lastFlagValue("--name") === this.config.containerName;
+    const portUnchanged = lastFlagValue("-p") === `${this.config.port}:30000`;
 
     if (nameUnchanged && portUnchanged) {
       this.effectiveContainerName = this.config.containerName;
@@ -391,26 +403,41 @@ export class DockerFoundryOrchestrator {
       this.effectiveContainerName = overrides.containerName;
     } else {
       throw new Error(
-        "[DockerOrchestrator] buildRunArgs changed --name, but onRunArgsChanged wasn't " +
-          "provided (or didn't return containerName) - stopAndRemove()/copyToContainer() " +
-          "would target the wrong container. Provide onRunArgsChanged to keep cleanup in sync.",
+        "[DockerOrchestrator] buildRunArgs changed the effective --name, but " +
+          "onRunArgsChanged wasn't provided (or didn't return containerName) - " +
+          "stopAndRemove()/copyToContainer() would target the wrong container. Provide " +
+          "onRunArgsChanged to keep cleanup in sync.",
       );
     }
 
     if (portUnchanged) {
       this.effectiveReadyUrl = `http://127.0.0.1:${this.config.port}`;
-    } else if (overrides?.readyUrl) {
-      this.effectiveReadyUrl = overrides.readyUrl;
-    } else {
-      throw new Error(
-        "[DockerOrchestrator] buildRunArgs changed -p, but onRunArgsChanged wasn't provided " +
-          "(or didn't return readyUrl) - waitForReady()/the URL start() returns would target " +
-          "the wrong endpoint. Provide onRunArgsChanged, or if there's no host-reachable " +
-          "endpoint at all (e.g. -p was dropped entirely), subclass DockerFoundryOrchestrator " +
-          "and override waitForReady()/getUrl() instead - that combination is intentionally " +
-          "outside what this config surface supports.",
-      );
+      return;
     }
+    if (overrides?.readyUrl) {
+      this.effectiveReadyUrl = overrides.readyUrl;
+      return;
+    }
+    // No readyUrl available - only acceptable if a subclass has actually
+    // taken over readiness itself (both methods, not just one - getUrl()
+    // alone would leave the base waitForReady() polling a URL nobody
+    // computed, and waitForReady() alone would leave start()'s return
+    // value wrong). Checked here, not skipped outright, so the common
+    // mistake (changed -p, forgot onRunArgsChanged, didn't subclass
+    // anything) still throws instead of silently waiting on
+    // http://127.0.0.1:<stale port>.
+    const hasCustomReadiness =
+      this.getUrl !== DockerFoundryOrchestrator.prototype.getUrl &&
+      this.waitForReady !== DockerFoundryOrchestrator.prototype.waitForReady;
+    if (hasCustomReadiness) return;
+    throw new Error(
+      "[DockerOrchestrator] buildRunArgs changed the effective -p, but onRunArgsChanged " +
+        "wasn't provided (or didn't return readyUrl) - waitForReady()/the URL start() " +
+        "returns would target the wrong endpoint. Provide onRunArgsChanged, or if there's " +
+        "no host-reachable endpoint at all (e.g. -p was dropped entirely), subclass " +
+        "DockerFoundryOrchestrator and override BOTH waitForReady() and getUrl() instead - " +
+        "that combination is intentionally outside what this config surface supports.",
+    );
   }
 
   /**

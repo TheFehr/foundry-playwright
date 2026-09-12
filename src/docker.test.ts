@@ -291,6 +291,78 @@ describe("DockerFoundryOrchestrator", () => {
       expect(onRunArgsChanged).not.toHaveBeenCalled();
       expect(getUrl(orchestrator)).toBe("http://127.0.0.1:30000");
     });
+
+    it("throws for an appended (duplicate) --name, not just a replaced one", () => {
+      // Docker and Podman both resolve a repeated flag to its *last* value
+      // (confirmed directly against real Docker - it does not reject the
+      // duplicate) - a buildRunArgs bug that appends instead of replacing
+      // must still be caught, since the default --name is still "present"
+      // in the array, just no longer the effective one.
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--name", "appended", args.at(-1)!],
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("uses the last --name's effective value once onRunArgsChanged confirms it", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--name", "appended", args.at(-1)!],
+        onRunArgsChanged: () => ({ containerName: "appended" }),
+      });
+      orchestrator.getRunCommand(".env");
+      vi.mocked(execFileSync).mockReturnValue("");
+      orchestrator.stopAndRemove();
+      expect(execFileSync).toHaveBeenCalledWith("docker", ["stop", "appended"], expect.anything());
+    });
+
+    it("throws when -p is removed and no subclass overrides readiness, even with no onRunArgsChanged", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("does NOT throw when -p is removed and a subclass overrides both waitForReady() and getUrl()", () => {
+      class NetworkOnlyOrchestrator extends DockerFoundryOrchestrator {
+        protected override async waitForReady(): Promise<void> {
+          // no-op: this subclass manages readiness itself
+        }
+        protected override getUrl(): string {
+          return "internal://custom";
+        }
+      }
+      const orchestrator = new NetworkOnlyOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).not.toThrow();
+      expect(getUrl(orchestrator)).toBe("internal://custom");
+    });
+
+    it("still throws when -p is removed and only ONE of waitForReady()/getUrl() is overridden", () => {
+      class HalfOverriddenOrchestrator extends DockerFoundryOrchestrator {
+        protected override getUrl(): string {
+          return "internal://custom";
+        }
+      }
+      const orchestrator = new HalfOverriddenOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
   });
 
   it("respects maxPortRetries in config", () => {
