@@ -199,6 +199,100 @@ describe("DockerFoundryOrchestrator", () => {
     });
   });
 
+  describe("onRunArgsChanged", () => {
+    function getUrl(orchestrator: DockerFoundryOrchestrator): string {
+      return (orchestrator as unknown as { getUrl: () => string }).getUrl();
+    }
+
+    it("throws if buildRunArgs changes --name without onRunArgsChanged", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("--name");
+          const copy = [...args];
+          copy[idx + 1] = "renamed";
+          return copy;
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("throws if buildRunArgs changes -p without onRunArgsChanged", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          const copy = [...args];
+          copy[idx + 1] = "9999:30000";
+          return copy;
+        },
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("throws if onRunArgsChanged is provided but doesn't return the needed field", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("--name");
+          const copy = [...args];
+          copy[idx + 1] = "renamed";
+          return copy;
+        },
+        onRunArgsChanged: () => ({}),
+      });
+      expect(() => orchestrator.getRunCommand(".env")).toThrow(/onRunArgsChanged/);
+    });
+
+    it("uses onRunArgsChanged's containerName for stopAndRemove() when --name was changed", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("--name");
+          const copy = [...args];
+          copy[idx + 1] = "renamed-container";
+          return copy;
+        },
+        onRunArgsChanged: () => ({ containerName: "renamed-container" }),
+      });
+      orchestrator.getRunCommand(".env");
+      vi.mocked(execFileSync).mockReturnValue("");
+      orchestrator.stopAndRemove();
+      expect(execFileSync).toHaveBeenCalledWith(
+        "docker",
+        ["stop", "renamed-container"],
+        expect.anything(),
+      );
+    });
+
+    it("uses onRunArgsChanged's readyUrl for getUrl() when -p was changed", () => {
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => {
+          const idx = args.indexOf("-p");
+          return args.slice(0, idx).concat(args.slice(idx + 2));
+        },
+        onRunArgsChanged: () => ({ readyUrl: "http://custom-host:1234" }),
+      });
+      orchestrator.getRunCommand(".env");
+      expect(getUrl(orchestrator)).toBe("http://custom-host:1234");
+    });
+
+    it("doesn't call onRunArgsChanged at all when --name/-p are unaffected", () => {
+      const onRunArgsChanged = vi.fn<() => { containerName: string }>(() => ({
+        containerName: "unused",
+      }));
+      const orchestrator = new DockerFoundryOrchestrator({
+        version: "13.351.0",
+        buildRunArgs: (args) => [...args.slice(0, -1), "--network", "my-net", args.at(-1)!],
+        onRunArgsChanged,
+      });
+      orchestrator.getRunCommand(".env");
+      expect(onRunArgsChanged).not.toHaveBeenCalled();
+      expect(getUrl(orchestrator)).toBe("http://127.0.0.1:30000");
+    });
+  });
+
   it("respects maxPortRetries in config", () => {
     const orchestrator = new DockerFoundryOrchestrator({
       version: "12.327",

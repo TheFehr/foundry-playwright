@@ -54,7 +54,7 @@ export default defineConfig({
 - **Port Mapping:** Flexible port management to avoid conflicts with other running services.
 - **Custom Images:** Support for using private or custom Docker images if the developer has specific environment needs.
 - **Pre-Boot Scripts:** Support for running setup scripts (data injection) immediately after the container is healthy but before tests start.
-- **`docker run` Customization:** An optional `buildRunArgs` hook receives the full default argument array and returns what actually runs - append, remove, or replace anything (e.g. joining a caller-managed Docker network), without waiting on a dedicated config option for every use case.
+- **`docker run` Customization:** An optional `buildRunArgs` hook receives the full default argument array and returns what actually runs - append, remove, or replace anything (e.g. joining a caller-managed Docker network), without waiting on a dedicated config option for every use case. If the override changes the effective `--name` or `-p`, the companion `onRunArgsChanged` config option must report the new values (so cleanup and readiness checks stay in sync) - `start()` throws immediately if it's missing rather than failing silently later. For a container reachable with no published host port at all, subclass `DockerFoundryOrchestrator` and override the `protected waitForReady()`/`getUrl()` instead - that's intentionally outside what the config hooks support.
 
 ### 4. Developer Workflow
 
