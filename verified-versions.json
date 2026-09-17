@@ -403,5 +403,59 @@
     "status": "stable",
     "timestamp": "2026-09-11T18:18:21.967Z",
     "notes": "Verified locally with dnd5e v6.0.0."
+  },
+  {
+    "fvtt": "14.368",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.2",
+    "status": "pending",
+    "timestamp": "2026-09-17T09:29:18.153Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system dnd5e --system-minor 6.0 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.368",
+    "system": "dnd5e",
+    "systemMinor": "5.3",
+    "systemVersion": "5.3.3",
+    "status": "pending",
+    "timestamp": "2026-09-17T09:29:18.539Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system dnd5e --system-minor 5.3 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.368",
+    "system": "dnd5e",
+    "systemMinor": "5.2",
+    "systemVersion": "5.2.5",
+    "status": "pending",
+    "timestamp": "2026-09-17T09:29:18.855Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system dnd5e --system-minor 5.2 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.368",
+    "system": "pf2e",
+    "systemMinor": "8.5",
+    "systemVersion": "8.5.1",
+    "status": "pending",
+    "timestamp": "2026-09-17T09:29:21.456Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.368",
+    "system": "pf2e",
+    "systemMinor": "8.4",
+    "systemVersion": "8.4.1",
+    "status": "pending",
+    "timestamp": "2026-09-17T09:29:21.805Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system pf2e --system-minor 8.4 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.368",
+    "system": "pf2e",
+    "systemMinor": "8.3",
+    "systemVersion": "8.3.0",
+    "status": "pending",
+    "timestamp": "2026-09-17T09:29:22.170Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system pf2e --system-minor 8.3 --update-registry --git-commit`"
   }
 ]
