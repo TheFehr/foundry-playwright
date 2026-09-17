@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.4.1](https://github.com/TheFehr/foundry-playwright/compare/v1.4.0...v1.4.1) (2026-09-17)
+
 # [1.4.0](https://github.com/TheFehr/foundry-playwright/compare/v1.3.12...v1.4.0) (2026-09-12)
 
 ### Features
