@@ -409,53 +409,53 @@
     "system": "dnd5e",
     "systemMinor": "6.0",
     "systemVersion": "6.0.2",
-    "status": "pending",
-    "timestamp": "2026-09-17T09:29:18.153Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system dnd5e --system-minor 6.0 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-09-20T18:09:03.607Z",
+    "notes": "Automated verification failed: export: version metadata (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\")"
   },
   {
     "fvtt": "14.368",
     "system": "dnd5e",
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
-    "status": "pending",
-    "timestamp": "2026-09-17T09:29:18.539Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system dnd5e --system-minor 5.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-09-20T18:19:43.426Z",
+    "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "14.368",
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "pending",
-    "timestamp": "2026-09-17T09:29:18.855Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system dnd5e --system-minor 5.2 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-09-20T18:27:20.009Z",
+    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: Deprecation Warnings detected during test:); user management: create, update, and login (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\"); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.state: embedded document management (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\")"
   },
   {
     "fvtt": "14.368",
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.1",
-    "status": "pending",
-    "timestamp": "2026-09-17T09:29:21.456Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-09-20T18:36:40.522Z",
+    "notes": "Automated verification failed: user management: create, update, and login (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\"); foundry.state: createEmbeddedDocument throws for a missing parent (Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed); foundry.state: settings management (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\")"
   },
   {
     "fvtt": "14.368",
     "system": "pf2e",
     "systemMinor": "8.4",
     "systemVersion": "8.4.1",
-    "status": "pending",
-    "timestamp": "2026-09-17T09:29:21.805Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system pf2e --system-minor 8.4 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-09-20T18:41:03.027Z",
+    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\"); user management: create, update, and login (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\"); export: version metadata (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\")"
   },
   {
     "fvtt": "14.368",
     "system": "pf2e",
     "systemMinor": "8.3",
     "systemVersion": "8.3.0",
-    "status": "pending",
-    "timestamp": "2026-09-17T09:29:22.170Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.368 --system pf2e --system-minor 8.3 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-09-20T18:54:09.147Z",
+    "notes": "Verified locally with pf2e v8.3.0."
   }
 ]
