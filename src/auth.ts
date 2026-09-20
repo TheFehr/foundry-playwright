@@ -489,7 +489,20 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
     }, moduleIds);
 
     await page.waitForLoadState("networkidle");
-    await waitForReady(page);
+
+    // The reload can land on /players (a lighter, pre-join stub) instead of
+    // /game if there was no established client session to resume mid-reload.
+    // window.game.ready reads true there too, but none of the just-activated
+    // modules' init hooks have actually run in that state — log back in to
+    // get a real /game session before returning.
+    if (!page.url().includes("/game")) {
+      console.log(
+        `[foundrySetup] Reload after module activation landed on "${page.url()}", not /game — logging back in as "${userName}"...`,
+      );
+      await loginAs(page, userName, password);
+    } else {
+      await waitForReady(page);
+    }
   }
 }
 
