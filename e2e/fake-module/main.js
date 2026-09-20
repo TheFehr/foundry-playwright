@@ -286,9 +286,14 @@
 
         const interval = setInterval(() => {
             const initialized = init();
-            if (window.FP_VERIFY) window.FP_VERIFY.registerSettings();
+            // registerSettings() returns false while game.settings isn't ready yet
+            // (e.g. right after a page reload, before Foundry's own bootstrap has
+            // populated it) - keep polling on that signal too, not just
+            // FakeAppV2/FakeTidySheet, or a still-unregistered setting can get
+            // stranded forever once this interval clears itself.
+            const settingsRegistered = window.FP_VERIFY ? window.FP_VERIFY.registerSettings() : false;
             tryRegisterCategories();
-            if (initialized && window.FakeAppV2 && window.FakeTidySheet) clearInterval(interval);
+            if (initialized && settingsRegistered && window.FakeAppV2 && window.FakeTidySheet) clearInterval(interval);
         }, 100);
 
         if (typeof Hooks !== 'undefined') {

@@ -8,6 +8,19 @@ test.describe("Library Verification Suite", () => {
     worldId,
     adminPassword,
     moduleId: "fake-module",
+    // Regression check for #119: setupWorld must see a real /game session
+    // with the just-activated module's init hook already run - not the
+    // /players false-positive-ready stub that foundrySetup's post-module-
+    // activation reload could previously land on.
+    setupWorld: async ({ page }) => {
+      expect(page.url()).toContain("/game");
+      await expect(async () => {
+        const testStringSetting = await page.evaluate(() =>
+          (window as unknown as Window).game.settings.get("fake-module", "test-string"),
+        );
+        expect(testStringSetting).toBe("");
+      }).toPass({ timeout: 5000 });
+    },
   });
 
   // Extend timeout for the first run (world creation + backup).
