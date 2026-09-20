@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.2](https://github.com/TheFehr/foundry-playwright/compare/v1.4.1...v1.4.2) (2026-09-20)
+
+### Bug Fixes
+
+- **auth:** log back in if module-activation reload lands on /players ([#120](https://github.com/TheFehr/foundry-playwright/issues/120)) ([190a91d](https://github.com/TheFehr/foundry-playwright/commit/190a91df5940b8f7f4f3ef0fa409235f1047a1c9))
+
 ## [1.4.1](https://github.com/TheFehr/foundry-playwright/compare/v1.4.0...v1.4.1) (2026-09-17)
 
 # [1.4.0](https://github.com/TheFehr/foundry-playwright/compare/v1.3.12...v1.4.0) (2026-09-12)
