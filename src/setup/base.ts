@@ -167,6 +167,16 @@ export interface SetupAdapter {
    * @param password The user's password, if one is set.
    */
   login(page: FoundryPage, userName: string, password?: string): Promise<void>;
+
+  /**
+   * Leaves the /players (player configuration) interstitial screen using the
+   * intended in-app action for this version, if the page is currently there.
+   * No-op if the page isn't on /players. Prefer this over force-navigating
+   * away with `page.goto` - that races the interstitial's own in-flight
+   * client-side redirect on some Foundry builds.
+   * @param page The Foundry VTT Page object.
+   */
+  leavePlayersScreen(page: FoundryPage): Promise<void>;
 }
 
 /**

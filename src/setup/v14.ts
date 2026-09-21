@@ -530,16 +530,33 @@ export class V14SetupAdapter implements SetupAdapter {
         { timeout: 60000 },
       );
 
-      if (page.url().includes("/players")) {
-        console.log(
-          "[V14SetupAdapter] Redirection to /players detected. Clicking Save Configuration...",
-        );
-        const playersSubmitBtn = page
-          .locator('button[type="submit"].bright, button:has-text("Save Configuration")')
-          .first();
-        await playersSubmitBtn.evaluate((el: Element) => (el as HTMLElement).click());
-        await page.waitForLoadState("networkidle");
-      }
+      await this.leavePlayersScreen(page);
+    }
+  }
+
+  async leavePlayersScreen(page: FoundryPage): Promise<void> {
+    if (!page.url().includes("/players")) return;
+    console.log("[V14SetupAdapter] On /players screen. Submitting player configuration...");
+    // Button text has changed between builds ("Save Configuration" -> "Save
+    // and Continue" as of 14.368) - the submit/.bright combination is the
+    // stable anchor; text is kept only as a fallback. A real .click()
+    // (actionability-checked, trusted) rather than .evaluate(el => el.click())
+    // matters here on 14.368 specifically.
+    const playersSubmitBtn = page
+      .locator(
+        'button[type="submit"].bright, button:has-text("Save and Continue"), button:has-text("Save Configuration")',
+      )
+      .first();
+
+    // The button can be visible and actionable slightly before this
+    // ApplicationV2 form's own submit listener is actually bound - a click
+    // that lands in that window is silently swallowed (page stays on
+    // /players). Retry rather than assume one click is enough.
+    for (let attempt = 1; attempt <= 5 && page.url().includes("/players"); attempt++) {
+      await playersSubmitBtn.click().catch(() => null);
+      await page.waitForLoadState("networkidle").catch(() => null);
+      if (!page.url().includes("/players")) break;
+      await page.waitForTimeout(1000);
     }
   }
 

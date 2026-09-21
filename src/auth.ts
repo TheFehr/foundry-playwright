@@ -490,19 +490,28 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
 
     await page.waitForLoadState("networkidle");
 
-    // The reload can land on /players (a lighter, pre-join stub) instead of
-    // /game if there was no established client session to resume mid-reload.
-    // window.game.ready reads true there too, but none of the just-activated
-    // modules' init hooks have actually run in that state — log back in to
-    // get a real /game session before returning.
+    // The reload can land on /players (a lighter, pre-join interstitial)
+    // instead of /game if there was no established client session to resume
+    // mid-reload. window.game.ready reads true there too, but none of the
+    // just-activated modules' init hooks have actually run in that state.
+    // Leave it the intended way (the in-app action, via the adapter) rather
+    // than force-navigating past it - a plain page.goto("/join") here races
+    // the interstitial's own in-flight redirect on some Foundry builds
+    // (observed on 14.368).
     if (!page.url().includes("/game")) {
       console.log(
-        `[foundrySetup] Reload after module activation landed on "${page.url()}", not /game — logging back in as "${userName}"...`,
+        `[foundrySetup] Reload after module activation landed on "${page.url()}", not /game — leaving the interstitial screen...`,
       );
-      await loginAs(page, userName, password);
-    } else {
-      await waitForReady(page);
+      const adapter = await getSetupAdapter(page, version);
+      await adapter.leavePlayersScreen(page);
+      if (page.url().includes("/join")) {
+        console.log(`[foundrySetup] On join screen. Logging in as "${userName}"...`);
+        await adapter.login(page, userName, password);
+        await page.waitForURL(/\/game/, { timeout: 60000 });
+      }
     }
+
+    await waitForReady(page);
   }
 }
 

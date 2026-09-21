@@ -28,6 +28,15 @@ export class V12SetupAdapter implements SetupAdapter {
     return performLegacyJoin(page, userName, password);
   }
 
+  // V12/V13 world creation doesn't land on a /players config interstitial
+  // the way V14's does - fall back to a plain navigation if it's ever hit.
+  async leavePlayersScreen(page: FoundryPage): Promise<void> {
+    if (!page.url().includes("/players")) return;
+    console.log("[V12SetupAdapter] On /players screen. Navigating to /join...");
+    await page.goto("/join").catch(() => null);
+    await page.waitForLoadState("networkidle");
+  }
+
   /**
    * The id of a setup-screen tab's content section, e.g. "systems" on V12
    * itself (bare, no prefix) - confirmed live against
