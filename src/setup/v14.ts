@@ -558,6 +558,12 @@ export class V14SetupAdapter implements SetupAdapter {
       if (!page.url().includes("/players")) break;
       await page.waitForTimeout(1000);
     }
+
+    if (page.url().includes("/players")) {
+      throw new Error(
+        "[V14SetupAdapter] Still on /players after 5 attempts to submit player configuration.",
+      );
+    }
   }
 
   async launchWorld(page: FoundryPage, worldId: string): Promise<void> {

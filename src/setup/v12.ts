@@ -35,6 +35,9 @@ export class V12SetupAdapter implements SetupAdapter {
     console.log("[V12SetupAdapter] On /players screen. Navigating to /join...");
     await page.goto("/join").catch(() => null);
     await page.waitForLoadState("networkidle");
+    if (page.url().includes("/players")) {
+      throw new Error("[V12SetupAdapter] Still on /players after navigating to /join.");
+    }
   }
 
   /**
