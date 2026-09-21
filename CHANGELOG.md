@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.4](https://github.com/TheFehr/foundry-playwright/compare/v1.4.3...v1.4.4) (2026-09-21)
+
+### Bug Fixes
+
+- **setup:** leave the /players interstitial via its intended in-app action ([#124](https://github.com/TheFehr/foundry-playwright/issues/124)) ([a49a4dd](https://github.com/TheFehr/foundry-playwright/commit/a49a4dddfa8aacfbabaa719b433854aada720dae))
+
 ## [1.4.3](https://github.com/TheFehr/foundry-playwright/compare/v1.4.2...v1.4.3) (2026-09-20)
 
 ## [1.4.2](https://github.com/TheFehr/foundry-playwright/compare/v1.4.1...v1.4.2) (2026-09-20)
