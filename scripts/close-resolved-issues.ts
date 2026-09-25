@@ -1,7 +1,7 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { getGithubToken, repoSlug, githubRequest, listAllIssues } from "./github.js";
 
 /**
  * Reconciles verification-required GitHub issues against verified-versions.json.
@@ -9,7 +9,10 @@ import { execSync } from "child_process";
  * Run after a verification pass: any entry that has left "pending" gets its
  * matching issue commented on and closed (or, for "failed", relabeled
  * needs-investigation so a human looks at the real regression instead of it
- * being silently retried forever).
+ * being silently retried forever). This also reconciles issues that
+ * report-regressions.ts opened directly with the verification-required
+ * label (see that script) - they flow through the exact same lifecycle from
+ * here on.
  */
 
 interface RegistryEntry {
@@ -18,59 +21,6 @@ interface RegistryEntry {
   systemVersion: string;
   status: "stable" | "pending" | "incompatible" | "failed";
   notes: string;
-}
-
-interface GhIssue {
-  number: number;
-  title: string;
-}
-
-function getGithubToken(): string {
-  try {
-    const token = execSync("gh auth token", {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    if (token) return token;
-  } catch {
-    console.warn("[close-resolved-issues] gh not available or not logged in.");
-  }
-  const envToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-  if (envToken) return envToken;
-  throw new Error(
-    "No GitHub token available (`gh auth token` failed and GITHUB_TOKEN/GH_TOKEN are unset).",
-  );
-}
-
-function repoSlug(): string {
-  const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
-  const url: string = pkg.repository?.url ?? "";
-  const m = url.match(/github\.com[/:]([^/]+)\/([^/.]+?)(\.git)?$/);
-  if (!m)
-    throw new Error(`Could not determine owner/repo from package.json repository.url: "${url}"`);
-  return `${m[1]}/${m[2]}`;
-}
-
-async function githubRequest<T>(
-  token: string,
-  method: string,
-  urlPath: string,
-  body?: unknown,
-): Promise<T> {
-  const res = await fetch(`https://api.github.com${urlPath}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github.v3+json",
-      "User-Agent": "foundry-playwright/close-resolved-issues",
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    throw new Error(`GitHub API ${method} ${urlPath} failed: ${res.status} ${await res.text()}`);
-  }
-  return (await res.json()) as T;
 }
 
 async function run() {
@@ -86,22 +36,27 @@ async function run() {
   const token = getGithubToken();
   const repo = repoSlug();
 
-  // Paginate - a single page could silently miss issues once there are more
-  // than 100 open verification-required issues at once.
-  const openIssues: GhIssue[] = [];
-  for (let page = 1; ; page++) {
-    const batch = await githubRequest<GhIssue[]>(
-      token,
-      "GET",
-      `/repos/${repo}/issues?labels=verification-required&state=open&per_page=100&page=${page}`,
-    );
-    openIssues.push(...batch);
-    if (batch.length < 100) break;
-  }
+  // A "failed" entry's issue has verification-required stripped once it's
+  // escalated (see the DELETE below), so recovering to stable/incompatible
+  // needs to find it under needs-investigation too, or a recovered issue
+  // never gets closed. Failed entries stay scoped to verification-required
+  // only, so an already-escalated failure isn't re-commented every run.
+  const requiredIssues = await listAllIssues(
+    token,
+    repo,
+    "labels=verification-required&state=open",
+  );
+  const investigatingIssues = await listAllIssues(
+    token,
+    repo,
+    "labels=needs-investigation&state=open",
+  );
+  const recoveryIssues = [...requiredIssues, ...investigatingIssues];
 
   for (const entry of resolved) {
     const title = `Verification Required: FVTT ${entry.fvtt} + ${entry.system} v${entry.systemVersion}`;
     try {
+      const openIssues = entry.status === "failed" ? requiredIssues : recoveryIssues;
       const issue = openIssues.find((i) => i.title === title);
       if (!issue) continue;
 
