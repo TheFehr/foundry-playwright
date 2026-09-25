@@ -36,11 +36,27 @@ async function run() {
   const token = getGithubToken();
   const repo = repoSlug();
 
-  const openIssues = await listAllIssues(token, repo, "labels=verification-required&state=open");
+  // A "failed" entry's issue has verification-required stripped once it's
+  // escalated (see the DELETE below), so recovering to stable/incompatible
+  // needs to find it under needs-investigation too, or a recovered issue
+  // never gets closed. Failed entries stay scoped to verification-required
+  // only, so an already-escalated failure isn't re-commented every run.
+  const requiredIssues = await listAllIssues(
+    token,
+    repo,
+    "labels=verification-required&state=open",
+  );
+  const investigatingIssues = await listAllIssues(
+    token,
+    repo,
+    "labels=needs-investigation&state=open",
+  );
+  const recoveryIssues = [...requiredIssues, ...investigatingIssues];
 
   for (const entry of resolved) {
     const title = `Verification Required: FVTT ${entry.fvtt} + ${entry.system} v${entry.systemVersion}`;
     try {
+      const openIssues = entry.status === "failed" ? requiredIssues : recoveryIssues;
       const issue = openIssues.find((i) => i.title === title);
       if (!issue) continue;
 

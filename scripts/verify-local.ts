@@ -913,8 +913,16 @@ program
     let pendingReleaseVersion: string | null = null;
     if (options.ifReleasePending && fs.existsSync(reverifyStatePath)) {
       const state = JSON.parse(fs.readFileSync(reverifyStatePath, "utf8"));
-      if (state.requestedVersion !== state.fulfilledVersion) {
-        pendingReleaseVersion = state.requestedVersion;
+      const requestedVersion =
+        typeof state?.requestedVersion === "string" ? state.requestedVersion : "";
+      const fulfilledVersion =
+        typeof state?.fulfilledVersion === "string" ? state.fulfilledVersion : "";
+      if (!requestedVersion || !fulfilledVersion) {
+        console.warn(
+          `[verify] ${reverifyStatePath} is missing a valid requestedVersion/fulfilledVersion - skipping the release-triggered stable sweep this run.`,
+        );
+      } else if (requestedVersion !== fulfilledVersion) {
+        pendingReleaseVersion = requestedVersion;
         console.log(
           `[verify] Release v${pendingReleaseVersion} hasn't been re-verified yet - including stable pairings this run.`,
         );
@@ -1031,8 +1039,11 @@ program
     // triggered, not by every pairing in it passing - a genuine regression
     // is recorded as a "failed" registry entry (see recordFailures above)
     // and reported separately, not by leaving this marked unfulfilled so
-    // it's retried forever.
-    if (pendingReleaseVersion && options.updateRegistry) {
+    // it's retried forever. But that only holds if recordFailures actually
+    // ran: without it, a real failure is never persisted to the registry at
+    // all, so fulfilling here would silently drop the regression instead of
+    // reporting it.
+    if (pendingReleaseVersion && options.updateRegistry && (allPassed || options.recordFailures)) {
       fs.writeFileSync(
         reverifyStatePath,
         JSON.stringify(
