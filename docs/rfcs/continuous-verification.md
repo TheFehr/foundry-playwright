@@ -32,6 +32,8 @@ A version-controlled file that tracks the compatibility status of every `(fvtt v
 
 The registry key is `(fvtt, system, systemMinor)`. A new patch release within the same minor (e.g. dnd5e 5.3.3 → 5.3.4) triggers a new pending entry; the old stable entry remains until re-verified.
 
+A `stable` entry superseded by a newer FVTT build (same major generation, same `system`/`systemMinor`) is moved to `retired-versions.json` rather than staying in this file forever - see [Retiring Superseded Entries](#retiring-superseded-entries-scriptsretire-supersededts) below.
+
 ## The Release Monitor (`scripts/monitor-releases.ts`)
 
 Run nightly (or manually) to detect new system releases:
@@ -88,6 +90,45 @@ each run is enough of a queue:
   issue for it if one doesn't already exist - `close-resolved-issues.ts`
   only ever updates an _existing_ issue, and a `stable` entry that just
   broke was never `pending`, so it never had one.
+
+## Retiring Superseded Entries (`scripts/retire-superseded.ts`)
+
+Nothing above ever removes a `stable` entry, and `monitor-releases.ts`
+deliberately re-checks every FVTT build that has ever gone stable, forever
+(so a later patch within an old generation still gets caught - see step 3
+above). Left unchecked, this only ever grows: by the time this script was
+added, the registry had 29 `stable` rows, many of them redundant history
+(e.g. `14.360.0`/`14.365`/`14.366`/`14.367` all still carrying a `dnd5e 5.3.3`
+entry that `14.368` had long since superseded). A release-triggered
+`--if-release-pending` sweep (above) re-verifies _every_ `stable` row, so an
+unbounded registry means an unbounded sweep - real timing put 29 rows at
+~4.1h against `foundry-verify.service`'s 2h `TimeoutStartSec`.
+
+```bash
+npx tsx scripts/retire-superseded.ts
+```
+
+Groups `stable` entries by `(major FVTT generation, system, systemMinor)`,
+keeps only the entry with the highest `fvtt` build in each group, and moves
+every other entry in that group to `retired-versions.json` (same shape, plus
+`retiredAt` and `supersededBy`) - archived, not deleted, so the history
+survives outside the active sweep set. Scoped to `stable` only:
+`incompatible`/`failed` rows cost nothing at sweep time (nothing ever sweeps
+them), so they aren't part of the problem this fixes.
+
+Run in `verify-nightly.sh` **before** `npm run verify`, not after - the
+superseding entry is typically already `stable` from a past run, so pruning
+first shrinks the set that run's own sweep is about to target, rather than
+tidying up too late to help that run's duration.
+
+**Known gap, not yet fixed:** this only catches redundant _build_ history
+within a still-tracked system minor. A minor that ages out of
+`monitor-releases.ts`'s top-3-tracked window stops being checked against any
+FVTT build from that point on - there's no newer same-minor entry to
+supersede it with, so it never gets picked up here either, and just sits
+stale (e.g. `14.360.0`'s `pf2e 8.0`/`8.1` entries, orphaned once pf2e shipped
+enough later minors to push them out of the window before any later FVTT
+build was ever checked against them).
 
 ## Local Verification (`scripts/verify-local.ts`)
 

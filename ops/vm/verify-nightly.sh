@@ -59,6 +59,13 @@ git pull --rebase --autostash
 # main, then gets pushed and merged via PR further down.
 git checkout -B "$BRANCH" main
 
+# Run before the verify step, not after: the entries this retires are
+# typically already "stable" from past runs, so pruning first shrinks the
+# set the --if-release-pending/--all sweep below is about to target, instead
+# of tidying up too late to help this run's own duration. See
+# docs/rfcs/continuous-verification.md.
+npm run retire-superseded
+
 # Don't let a genuine test failure abort the script — --record-failures already
 # writes it to the registry as "failed" so it stops being retried; we still want
 # to push whatever did succeed and reconcile issues either way. Capture the

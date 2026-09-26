@@ -2,7 +2,7 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { minorOf } from "./version-utils.js";
+import { minorOf, compareVersions } from "./version-utils.js";
 
 /**
  * Release Monitoring Script
@@ -48,16 +48,6 @@ function extractVersion(tag: string, systemId: string): string | null {
   }
   if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
   return null;
-}
-
-function compareVersions(a: string, b: string): number {
-  const ap = a.split(".").map(Number);
-  const bp = b.split(".").map(Number);
-  for (let i = 0; i < Math.max(ap.length, bp.length); i++) {
-    const diff = (ap[i] ?? 0) - (bp[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
 }
 
 function getGithubAuthHeader(): string {
