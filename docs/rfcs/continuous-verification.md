@@ -52,6 +52,43 @@ The monitor:
 
 If a new Foundry generation is detected (no stable entry for that major version yet), it is added to the check set until at least one stable entry is recorded.
 
+## Re-verifying on Library Releases (`ops/vm/reverify-state.json`)
+
+`--all-pending` (below) only catches drift in the _external_ world - a new
+Foundry or system release. It never catches a regression introduced by a
+change to this library itself: a `stable` registry entry is never touched
+again once it's written, so a library-side bug can silently break a
+previously-verified Foundry/system pairing with no signal in the registry.
+
+`reverify-state.json` closes that gap without adding new infrastructure -
+the VM already `git pull`s `main` every night, so a tracked file it reads
+each run is enough of a queue:
+
+```json
+{ "requestedVersion": "1.4.4", "fulfilledVersion": "1.4.3" }
+```
+
+- **`release.yml`** bumps `requestedVersion` to the new version as part of
+  the same signed commit that already bumps `package.json` / `CHANGELOG.md`
+  for every release (no separate PR or workflow). `fulfilledVersion` is left
+  untouched there.
+- **`verify-nightly.sh`** always passes `--if-release-pending`. When
+  `requestedVersion !== fulfilledVersion`, that run also re-verifies every
+  `stable` pairing (equivalent to `--re-verify`) against the current
+  library code, then writes `fulfilledVersion = requestedVersion` back,
+  committed in the same PR as any registry changes. If nothing changed on
+  the library side since the last release, this is a no-op every night.
+- A run that's interrupted before writing `fulfilledVersion` (crash, disk
+  guard, a blackout-deferred merge) just leaves the request unfulfilled, so
+  the next run retries the full stable sweep - at-least-once, not
+  exactly-once, same as the rest of this pipeline's failure handling.
+- A pairing that regresses is written as `status: "failed"`, same as any
+  other genuine verification failure (see `--record-failures` below), and
+  `scripts/report-regressions.ts` files a `verification-required`-labeled
+  issue for it if one doesn't already exist - `close-resolved-issues.ts`
+  only ever updates an _existing_ issue, and a `stable` entry that just
+  broke was never `pending`, so it never had one.
+
 ## Local Verification (`scripts/verify-local.ts`)
 
 Runs the Playwright verification suite against a Docker-orchestrated Foundry instance.
@@ -72,18 +109,19 @@ npm run verify:local -- --docker --all --update-registry --git-commit
 
 **Key flags:**
 
-| Flag                 | Description                                                             |
-| :------------------- | :---------------------------------------------------------------------- |
-| `--docker`           | Spin up a `ghcr.io/felddy/foundryvtt:<version>` container automatically |
-| `--version <v>`      | Foundry version to verify (single target)                               |
-| `--system <id>`      | System ID (default: `dnd5e`)                                            |
-| `--system-minor <m>` | Resolve and pin the latest patch of this minor via GitHub API           |
-| `--all-pending`      | Verify every `pending` entry in the registry                            |
-| `--re-verify`        | Re-verify every `stable` entry                                          |
-| `--all`              | Combine `--all-pending` and `--re-verify`                               |
-| `--update-registry`  | Write results back to `verified-versions.json` on success               |
-| `--git-commit`       | Auto-commit updated registry files                                      |
-| `--keep-container`   | Don't stop the Docker container after the run                           |
+| Flag                   | Description                                                                              |
+| :--------------------- | :--------------------------------------------------------------------------------------- |
+| `--docker`             | Spin up a `ghcr.io/felddy/foundryvtt:<version>` container automatically                  |
+| `--version <v>`        | Foundry version to verify (single target)                                                |
+| `--system <id>`        | System ID (default: `dnd5e`)                                                             |
+| `--system-minor <m>`   | Resolve and pin the latest patch of this minor via GitHub API                            |
+| `--all-pending`        | Verify every `pending` entry in the registry                                             |
+| `--re-verify`          | Re-verify every `stable` entry                                                           |
+| `--all`                | Combine `--all-pending` and `--re-verify`                                                |
+| `--if-release-pending` | Also re-verify every `stable` entry if a release is awaiting re-verification (see above) |
+| `--update-registry`    | Write results back to `verified-versions.json` on success                                |
+| `--git-commit`         | Auto-commit updated registry files                                                       |
+| `--keep-container`     | Don't stop the Docker container after the run                                            |
 
 On success the script also updates `verification-report.md` with a summary table.
 

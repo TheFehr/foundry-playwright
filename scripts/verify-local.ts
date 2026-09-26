@@ -869,6 +869,11 @@ program
     false,
   )
   .option("--all", "Verify all pairings (pending and stable) in the registry", false)
+  .option(
+    "--if-release-pending",
+    "Also re-verify all stable pairings if ops/vm/reverify-state.json shows a library release hasn't been re-verified yet",
+    false,
+  )
   .option("--update-registry", "Update verified-versions.json on successful verification", false)
   .option(
     "--record-failures",
@@ -899,7 +904,32 @@ program
     const modules = options.modules ? options.modules.split(",").map((m: string) => m.trim()) : [];
     let targets: VerifyTarget[] = [];
 
-    if (options.allPending || options.reVerify || options.all) {
+    // Read once, at the start of the run, not after the (potentially
+    // hours-long) verification loop below - if a newer release lands on
+    // main mid-run, this run still only claims to have fulfilled the
+    // version it actually started against, and the newer one is picked up
+    // by the next run instead of being silently swallowed here.
+    const reverifyStatePath = path.join(process.cwd(), "ops/vm/reverify-state.json");
+    let pendingReleaseVersion: string | null = null;
+    if (options.ifReleasePending && fs.existsSync(reverifyStatePath)) {
+      const state = JSON.parse(fs.readFileSync(reverifyStatePath, "utf8"));
+      const requestedVersion =
+        typeof state?.requestedVersion === "string" ? state.requestedVersion : "";
+      const fulfilledVersion =
+        typeof state?.fulfilledVersion === "string" ? state.fulfilledVersion : "";
+      if (!requestedVersion || !fulfilledVersion) {
+        console.warn(
+          `[verify] ${reverifyStatePath} is missing a valid requestedVersion/fulfilledVersion - skipping the release-triggered stable sweep this run.`,
+        );
+      } else if (requestedVersion !== fulfilledVersion) {
+        pendingReleaseVersion = requestedVersion;
+        console.log(
+          `[verify] Release v${pendingReleaseVersion} hasn't been re-verified yet - including stable pairings this run.`,
+        );
+      }
+    }
+
+    if (options.allPending || options.reVerify || options.all || pendingReleaseVersion) {
       const registryPath = path.join(process.cwd(), "verified-versions.json");
       if (fs.existsSync(registryPath)) {
         const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
@@ -923,7 +953,7 @@ program
           if (pending.length > 0) console.log(`Targeting ${pending.length} pending pairings.`);
         }
 
-        if (options.reVerify || options.all) {
+        if (options.reVerify || options.all || pendingReleaseVersion) {
           const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
           targets.push(
             ...stable.map((e: Record<string, unknown>) => ({
@@ -1005,8 +1035,31 @@ program
 
     const allPassed = results.every((r) => r.success);
 
+    // The request is fulfilled by having run the stable-pairing sweep this
+    // triggered, not by every pairing in it passing - a genuine regression
+    // is recorded as a "failed" registry entry (see recordFailures above)
+    // and reported separately, not by leaving this marked unfulfilled so
+    // it's retried forever. But that only holds if recordFailures actually
+    // ran: without it, a real failure is never persisted to the registry at
+    // all, so fulfilling here would silently drop the regression instead of
+    // reporting it.
+    if (pendingReleaseVersion && options.updateRegistry && (allPassed || options.recordFailures)) {
+      fs.writeFileSync(
+        reverifyStatePath,
+        JSON.stringify(
+          { requestedVersion: pendingReleaseVersion, fulfilledVersion: pendingReleaseVersion },
+          null,
+          2,
+        ) + "\n",
+      );
+    }
+
     // Git integration
-    const changedFiles = ["verified-versions.json", "verification-report.md"].filter((f) => {
+    const changedFiles = [
+      "verified-versions.json",
+      "verification-report.md",
+      "ops/vm/reverify-state.json",
+    ].filter((f) => {
       try {
         execFileSync("git", ["diff", "--quiet", f]);
         return false;

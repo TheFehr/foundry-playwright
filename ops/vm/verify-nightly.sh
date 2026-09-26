@@ -64,8 +64,16 @@ git checkout -B "$BRANCH" main
 # to push whatever did succeed and reconcile issues either way. Capture the
 # real exit status instead of masking it, so it still surfaces at the end
 # (e.g. to systemd/monitoring) rather than always reporting success.
+#
+# --if-release-pending is a no-op most nights (ops/vm/reverify-state.json's
+# requestedVersion only moves when release.yml ships a new version) - when it
+# does, this run additionally re-verifies every stable pairing against that
+# release, closing the gap where a library-only regression could sit behind
+# an unchanged "stable" registry entry indefinitely. See
+# docs/rfcs/continuous-verification.md.
 verify_status=0
-npm run verify -- --all-pending --docker --update-registry --record-failures --git-commit ||
+npm run verify -- --all-pending --if-release-pending --docker --update-registry \
+  --record-failures --git-commit ||
   verify_status=$?
 
 # verify-local.ts only commits when something actually changed - if nothing
@@ -97,5 +105,12 @@ git checkout main
 git pull --ff-only origin main
 
 npm run close-resolved-issues
+
+# Must run after close-resolved-issues: a "pending" entry that just failed
+# for the first time still has its original monitor-releases.yml issue open,
+# and close-resolved-issues just reconciled that issue onto it above. This
+# only files new issues for "failed" entries nothing is tracking yet -
+# chiefly a stable entry a --if-release-pending sweep just broke.
+npm run report-regressions
 
 exit "$verify_status"
