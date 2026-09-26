@@ -67,6 +67,21 @@ function run() {
 
   const now = new Date().toISOString();
   for (const [entry, keptFvtt] of supersededBy) {
+    // A crash between the two writes below can leave this run's retirements
+    // already archived but not yet removed from the active registry - a
+    // retry would then recompute the same supersession and land here again.
+    // Skip re-archiving anything already recorded, so a retry can't pile up
+    // duplicate rows for the same (fvtt, system, systemMinor).
+    const alreadyArchived = retired.some(
+      (r) =>
+        r.fvtt === entry.fvtt && r.system === entry.system && r.systemMinor === entry.systemMinor,
+    );
+    if (alreadyArchived) {
+      console.log(
+        `[retire-superseded] ${entry.fvtt} ${entry.system} v${entry.systemVersion} already archived - removing from the active registry only.`,
+      );
+      continue;
+    }
     console.log(
       `[retire-superseded] Retiring ${entry.fvtt} ${entry.system} v${entry.systemVersion} (superseded by ${keptFvtt}).`,
     );
@@ -74,8 +89,12 @@ function run() {
   }
   const remaining = registry.filter((e) => !supersededBy.has(e));
 
-  fs.writeFileSync(registryPath, JSON.stringify(remaining, null, 2) + "\n");
+  // Archive first, then shrink the active registry: an interruption between
+  // the two writes then leaves an entry temporarily duplicated in both files
+  // rather than lost from both (the dedup check above keeps a retry from
+  // double-archiving it either way).
   fs.writeFileSync(retiredPath, JSON.stringify(retired, null, 2) + "\n");
+  fs.writeFileSync(registryPath, JSON.stringify(remaining, null, 2) + "\n");
 
   try {
     execFileSync("git", ["add", "verified-versions.json", "retired-versions.json"]);
@@ -83,6 +102,9 @@ function run() {
       "commit",
       "-m",
       `chore(registry): retire ${supersededBy.size} superseded stable entr${supersededBy.size === 1 ? "y" : "ies"}`,
+      "--",
+      "verified-versions.json",
+      "retired-versions.json",
     ]);
     console.log("[retire-superseded] Committed.");
   } catch (e) {
