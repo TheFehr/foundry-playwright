@@ -1,5 +1,11 @@
 # Changelog
 
+# [1.5.0](https://github.com/TheFehr/foundry-playwright/compare/v1.4.4...v1.5.0) (2026-09-26)
+
+### Features
+
+- **verify:** re-verify stable pairings when the library releases ([#126](https://github.com/TheFehr/foundry-playwright/issues/126)) ([da56a9b](https://github.com/TheFehr/foundry-playwright/commit/da56a9b0e6fcf4c53b4eedf616d236f5841e4dad))
+
 ## [1.4.4](https://github.com/TheFehr/foundry-playwright/compare/v1.4.3...v1.4.4) (2026-09-21)
 
 ### Bug Fixes
