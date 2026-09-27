@@ -1,5 +1,11 @@
 # Changelog
 
+# [1.6.0](https://github.com/TheFehr/foundry-playwright/compare/v1.5.0...v1.6.0) (2026-09-27)
+
+### Features
+
+- **registry:** retire stable entries superseded by a newer build ([#128](https://github.com/TheFehr/foundry-playwright/issues/128)) ([6ada0ee](https://github.com/TheFehr/foundry-playwright/commit/6ada0ee31646696d2b0a8359b7ea0c16d32b3c9b))
+
 # [1.5.0](https://github.com/TheFehr/foundry-playwright/compare/v1.4.4...v1.5.0) (2026-09-26)
 
 ### Features
