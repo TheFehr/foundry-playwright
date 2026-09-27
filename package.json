@@ -40,6 +40,7 @@
     "verify:local": "node --env-file-if-exists=.env ./node_modules/.bin/tsx scripts/verify-local.ts",
     "close-resolved-issues": "tsx scripts/close-resolved-issues.ts",
     "report-regressions": "tsx scripts/report-regressions.ts",
+    "retire-superseded": "tsx scripts/retire-superseded.ts",
     "release": "release-it",
     "prepublishOnly": "npm run build",
     "prepare": "husky"

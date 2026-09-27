@@ -2,7 +2,7 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { minorOf } from "./version-utils.js";
+import { minorOf, compareVersions } from "./version-utils.js";
 
 /**
  * Release Monitoring Script
@@ -48,16 +48,6 @@ function extractVersion(tag: string, systemId: string): string | null {
   }
   if (/^\d+\.\d+\.\d+$/.test(tag)) return tag;
   return null;
-}
-
-function compareVersions(a: string, b: string): number {
-  const ap = a.split(".").map(Number);
-  const bp = b.split(".").map(Number);
-  for (let i = 0; i < Math.max(ap.length, bp.length); i++) {
-    const diff = (ap[i] ?? 0) - (bp[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
 }
 
 function getGithubAuthHeader(): string {
@@ -184,6 +174,10 @@ async function run() {
   try {
     const registryPath = path.join(process.cwd(), "verified-versions.json");
     let registry: RegistryEntry[] = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+    const retiredPath = path.join(process.cwd(), "retired-versions.json");
+    const retired: RegistryEntry[] = fs.existsSync(retiredPath)
+      ? JSON.parse(fs.readFileSync(retiredPath, "utf8"))
+      : [];
 
     const foundryLatest = await fetchFoundryVersion();
     const systems = ["dnd5e", "pf2e"];
@@ -198,9 +192,16 @@ async function run() {
     // otherwise, once a generation's first build goes stable, later patches
     // within that same generation (e.g. 14.360 -> 14.365) never get checked
     // again, silently missing any system that bumps its minimum FVTT build
-    // requirement past the one we happen to be pinned on. Old stable rows
-    // for superseded builds are untouched history (registry key includes
-    // fvtt, so a new build just adds new rows).
+    // requirement past the one we happen to be pinned on. A build fully
+    // retired by retire-superseded.ts (no live stable row left for any
+    // minor) drops out of stableFvttVersions and stops being scanned
+    // entirely - accepted, since the always-current latest build already
+    // provides equivalent forward-looking signal. A build with at least one
+    // live minor stays in fvttToCheck; hasExistingEntry below also checks
+    // retired-versions.json so a retired (fvtt, system, minor) triple isn't
+    // mistaken for "never checked" and re-queued as pending, which would
+    // otherwise re-verify it at real cost only to have it immediately
+    // re-retired the next night.
     const majorFoundry = foundryLatest.split(".")[0];
     const hasGenerationStable = registry.some(
       (e) => e.status === "stable" && e.fvtt.startsWith(`${majorFoundry}.`),
@@ -224,10 +225,16 @@ async function run() {
           const latestPatch = latestByMinor.get(minor)!;
 
           // Registry key is (fvtt, system, systemMinor) — one entry per minor.
-          // Any existing stable, pending, or incompatible row suppresses a new entry.
-          const hasExistingEntry = registry.some(
-            (e) => e.fvtt === fvtt && e.system === systemId && e.systemMinor === minor,
-          );
+          // Any existing stable, pending, or incompatible row suppresses a new
+          // entry - checking retired-versions.json too means a row
+          // retire-superseded.ts already archived still suppresses it.
+          const hasExistingEntry =
+            registry.some(
+              (e) => e.fvtt === fvtt && e.system === systemId && e.systemMinor === minor,
+            ) ||
+            retired.some(
+              (e) => e.fvtt === fvtt && e.system === systemId && e.systemMinor === minor,
+            );
           if (hasExistingEntry) continue;
 
           if (!isCompatibleWithFvtt(systemId, latestPatch, fvtt)) {
