@@ -1,5 +1,5 @@
 import { expect, Locator } from "@playwright/test";
-import { SetupAdapter, BaseGameAdapter, performLegacyJoin } from "./base.js";
+import { SetupAdapter, BaseSetupAdapter, BaseGameAdapter, performLegacyJoin } from "./base.js";
 import { installModuleFromManifest as helperInstallModuleFromManifest } from "../helpers.js";
 
 import { FoundryPage } from "../types/index.js";
@@ -16,10 +16,11 @@ export const V14_USERNAME_LOGIN_BUILD = 366;
 /**
  * Setup adapter for Foundry VTT Version 14, build 366 and newer.
  */
-export class V14SetupAdapter implements SetupAdapter {
+export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
   version = 14;
 
   constructor(page?: FoundryPage) {
+    super();
     if (page?.deprecationTracker) {
       page.deprecationTracker.registerIgnore(["namespaced under foundry"]);
     }
@@ -46,7 +47,7 @@ export class V14SetupAdapter implements SetupAdapter {
     };
 
     const dataTab = tabMap[tabName] || tabName.toLowerCase();
-    console.log(`[V14SetupAdapter] Switching to setup tab: ${tabName} (${dataTab})`);
+    console.log(`${this.tag()} Switching to setup tab: ${tabName} (${dataTab})`);
 
     const alreadyActive = await page.evaluate((dt) => {
       const section = document.querySelector(`[data-application-part="${dt}"]`);
@@ -57,7 +58,7 @@ export class V14SetupAdapter implements SetupAdapter {
     }, dataTab);
 
     if (alreadyActive) {
-      console.log(`[V14SetupAdapter] Tab ${tabName} is already active and visible.`);
+      console.log(`${this.tag()} Tab ${tabName} is already active and visible.`);
       return;
     }
 
@@ -83,10 +84,10 @@ export class V14SetupAdapter implements SetupAdapter {
         { timeout: 30000 },
       )
       .catch(() => {
-        console.warn(`[V14SetupAdapter] Tab ${tabName} is still marked as disabled.`);
+        console.warn(`${this.tag()} Tab ${tabName} is still marked as disabled.`);
       });
 
-    console.log(`[V14SetupAdapter] Clicking tab: ${tabName}`);
+    console.log(`${this.tag()} Clicking tab: ${tabName}`);
     await tabLocator.evaluate((el: Element) => (el as HTMLElement).click());
 
     // Wait for the specific part to be active
@@ -103,7 +104,7 @@ export class V14SetupAdapter implements SetupAdapter {
   }
 
   async handleEULA(page: FoundryPage): Promise<void> {
-    console.log("[V14SetupAdapter] Checking for Analytics/EULA...");
+    console.log(`${this.tag()} Checking for Analytics/EULA...`);
 
     // 0. Handle License Key Activation
     await this.handleLicenseActivation(page, process.env.FOUNDRY_LICENSE_KEY);
@@ -119,7 +120,7 @@ export class V14SetupAdapter implements SetupAdapter {
         hasNot: page.locator('#license-title, h1:has-text("End User License Agreement")'),
       });
     if ((await analyticsDialog.count()) > 0) {
-      console.log("[V14SetupAdapter] Analytics dialog detected. Declining...");
+      console.log(`${this.tag()} Analytics dialog detected. Declining...`);
       const declineBtn = analyticsDialog
         .locator('button[data-action="no"], button:has-text("Decline"), button:has-text("No")')
         .filter({ visible: true })
@@ -147,13 +148,13 @@ export class V14SetupAdapter implements SetupAdapter {
     // 2. Traditional EULA
     const eulaHeading = page.locator("#license-title");
     if (page.url().includes("/license") || (await eulaHeading.count()) > 0) {
-      console.log("[V14SetupAdapter] EULA screen detected. Processing agreement...");
+      console.log(`${this.tag()} EULA screen detected. Processing agreement...`);
 
       // Ensure the footer is visible
       const acknowledgeHeading = page.getByRole("heading", { name: "Acknowledge Agreement" });
       await acknowledgeHeading.waitFor({ state: "visible", timeout: 10000 }).catch(() => {
         console.warn(
-          "[V14SetupAdapter] 'Acknowledge Agreement' heading not found, continuing anyway...",
+          `${this.tag()} 'Acknowledge Agreement' heading not found, continuing anyway...`,
         );
       });
 
@@ -167,7 +168,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
       let checkbox = page.getByLabel("I agree to these terms").first();
       if ((await checkbox.count()) === 0) {
-        console.log("[V14SetupAdapter] getByLabel failed, falling back to broader locators...");
+        console.log(`${this.tag()} getByLabel failed, falling back to broader locators...`);
         checkbox = page
           .locator(
             '#eula-agree, #license-agree, input[type="checkbox"][name="agree"], input[type="checkbox"][name="license-agree"]',
@@ -176,16 +177,16 @@ export class V14SetupAdapter implements SetupAdapter {
       }
 
       if ((await checkbox.count()) > 0) {
-        console.log("[V14SetupAdapter] EULA checkbox found.");
+        console.log(`${this.tag()} EULA checkbox found.`);
         if (!(await checkbox.isChecked())) {
           // Using evaluate to check because standard click can be intercepted
           await checkbox.evaluate((el: Element) => ((el as HTMLInputElement).checked = true));
           await checkbox.dispatchEvent("change");
-          console.log("[V14SetupAdapter] EULA checkbox checked.");
+          console.log(`${this.tag()} EULA checkbox checked.`);
         }
       } else {
         throw new Error(
-          "[V14SetupAdapter] EULA agreement checkbox NOT found. Cannot proceed with setup.",
+          `${this.tag()} EULA agreement checkbox NOT found. Cannot proceed with setup.`,
         );
       }
 
@@ -197,12 +198,12 @@ export class V14SetupAdapter implements SetupAdapter {
       }
 
       if ((await agreementBtn.count()) > 0 && (await agreementBtn.isVisible())) {
-        console.log("[V14SetupAdapter] EULA agreement button found. Clicking...");
+        console.log(`${this.tag()} EULA agreement button found. Clicking...`);
         await agreementBtn.evaluate((el: Element) => (el as HTMLElement).click());
         await page.waitForLoadState("networkidle");
       } else {
         throw new Error(
-          "[V14SetupAdapter] EULA agreement button NOT found or NOT visible. Cannot proceed with setup.",
+          `${this.tag()} EULA agreement button NOT found or NOT visible. Cannot proceed with setup.`,
         );
       }
     }
@@ -211,15 +212,15 @@ export class V14SetupAdapter implements SetupAdapter {
   async handleLicenseActivation(page: FoundryPage, licenseKey?: string): Promise<void> {
     const licenseHeading = page.getByRole("heading", { name: "License Key Activation" });
     if ((await licenseHeading.count()) > 0 && (await licenseHeading.isVisible())) {
-      console.log("[V14SetupAdapter] License Key Activation screen detected.");
+      console.log(`${this.tag()} License Key Activation screen detected.`);
 
       if (!licenseKey) {
         throw new Error(
-          "[V14SetupAdapter] Foundry VTT requires a license key but FOUNDRY_LICENSE_KEY is not set.",
+          `${this.tag()} Foundry VTT requires a license key but FOUNDRY_LICENSE_KEY is not set.`,
         );
       }
 
-      console.log("[V14SetupAdapter] Entering license key...");
+      console.log(`${this.tag()} Entering license key...`);
       const keyInput = page.getByPlaceholder("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX");
       await keyInput.fill(licenseKey);
 
@@ -227,12 +228,12 @@ export class V14SetupAdapter implements SetupAdapter {
       await submitBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
       await page.waitForLoadState("networkidle");
-      console.log("[V14SetupAdapter] License key submitted.");
+      console.log(`${this.tag()} License key submitted.`);
     }
   }
 
   async installSystem(page: FoundryPage, systemId: string, _systemLabel: string): Promise<void> {
-    console.log(`[V14SetupAdapter] Installing system: ${systemId}`);
+    console.log(`${this.tag()} Installing system: ${systemId}`);
     await this.switchTab(page, "Systems");
 
     // Search locally first
@@ -245,7 +246,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
     const localPackage = page.locator(`#systems-list [data-package-id="${systemId}"]`).first();
     if (await localPackage.isVisible()) {
-      console.log(`[V14SetupAdapter] System ${systemId} is already installed.`);
+      console.log(`${this.tag()} System ${systemId} is already installed.`);
       return;
     }
 
@@ -256,7 +257,7 @@ export class V14SetupAdapter implements SetupAdapter {
       .first();
     let installDialog;
     if (await searchRemoteBtn.isVisible()) {
-      console.log("[V14SetupAdapter] Clicking 'Search Installable Packages' button...");
+      console.log(`${this.tag()} Clicking 'Search Installable Packages' button...`);
       await searchRemoteBtn.evaluate((el: Element) => (el as HTMLElement).click());
       installDialog = await this.findInstallerDialog(page);
     } else {
@@ -270,7 +271,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
     // Use manifest fallback for dnd5e to ensure tests pass
     if (systemId === "dnd5e") {
-      console.log("[V14SetupAdapter] Using manifest installation for dnd5e.");
+      console.log(`${this.tag()} Using manifest installation for dnd5e.`);
       const manifestUrl = "https://raw.githubusercontent.com/foundryvtt/dnd5e/master/system.json";
       const manifestInput = installDialog
         .locator(
@@ -323,7 +324,7 @@ export class V14SetupAdapter implements SetupAdapter {
   }
 
   async installModules(page: FoundryPage, moduleIds: string[]): Promise<void> {
-    console.log(`[V14SetupAdapter] Installing modules: ${moduleIds.join(", ")}`);
+    console.log(`${this.tag()} Installing modules: ${moduleIds.join(", ")}`);
     for (const modId of moduleIds) {
       await this.switchTab(page, "Modules");
       const setupFilter = page
@@ -383,7 +384,7 @@ export class V14SetupAdapter implements SetupAdapter {
   }
 
   async installSystemFromManifest(page: FoundryPage, manifestUrl: string): Promise<void> {
-    console.log(`[V14SetupAdapter] Installing system from manifest: ${manifestUrl}`);
+    console.log(`${this.tag()} Installing system from manifest: ${manifestUrl}`);
     const installDialog = await this.openSystemInstallDialog(page);
     await expect(installDialog).toBeVisible({ timeout: 30000 });
     await this.ensureInstallerTab(page, installDialog, "system");
@@ -479,7 +480,7 @@ export class V14SetupAdapter implements SetupAdapter {
     systemLabel: string,
     systemId: string,
   ): Promise<void> {
-    console.log(`[V14SetupAdapter] Creating world: ${worldId}`);
+    console.log(`${this.tag()} Creating world: ${worldId}`);
     await this.switchTab(page, "Worlds");
     await this.dismissStrayDialogs(page);
 
@@ -499,18 +500,18 @@ export class V14SetupAdapter implements SetupAdapter {
     ]).catch(() => false as boolean);
 
     console.log(
-      `[V14SetupAdapter] After Create World click: url=${page.url()}, formVisible=${onCreateForm}`,
+      `${this.tag()} After Create World click: url=${page.url()}, formVisible=${onCreateForm}`,
     );
 
     if (onCreateForm) {
-      console.log("[V14SetupAdapter] On world creation screen. Filling form...");
+      console.log(`${this.tag()} On world creation screen. Filling form...`);
       await page.waitForLoadState("networkidle");
       const configSection = page.locator('section[data-application-part="config"]');
       await configSection.locator('input[name="title"]').fill(worldId);
       const worldIdInput = configSection.locator('input[name="world-id"], input[name="id"]');
       if ((await worldIdInput.count()) > 0) await worldIdInput.fill(worldId);
 
-      console.log(`[V14SetupAdapter] Selecting system: ${systemId}`);
+      console.log(`${this.tag()} Selecting system: ${systemId}`);
       const systemGallery = page.locator('section.systems[data-application-part="systems"]');
       await systemGallery.locator('input[type="search"]').fill(systemId);
       const systemItem = systemGallery
@@ -524,7 +525,7 @@ export class V14SetupAdapter implements SetupAdapter {
         .first();
       await submitBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
-      console.log("[V14SetupAdapter] Waiting for players or setup redirection...");
+      console.log(`${this.tag()} Waiting for players or setup redirection...`);
       await page.waitForURL(
         (u) => u.pathname.includes("/players") || u.pathname.includes("/setup"),
         { timeout: 60000 },
@@ -536,7 +537,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
   async leavePlayersScreen(page: FoundryPage): Promise<void> {
     if (!page.url().includes("/players")) return;
-    console.log("[V14SetupAdapter] On /players screen. Submitting player configuration...");
+    console.log(`${this.tag()} On /players screen. Submitting player configuration...`);
     // Button text has changed between builds ("Save Configuration" -> "Save
     // and Continue" as of 14.368) - the submit/.bright combination is the
     // stable anchor; text is kept only as a fallback. A real .click()
@@ -561,13 +562,13 @@ export class V14SetupAdapter implements SetupAdapter {
 
     if (page.url().includes("/players")) {
       throw new Error(
-        "[V14SetupAdapter] Still on /players after 5 attempts to submit player configuration.",
+        `${this.tag()} Still on /players after 5 attempts to submit player configuration.`,
       );
     }
   }
 
   async launchWorld(page: FoundryPage, worldId: string): Promise<void> {
-    console.log(`[V14SetupAdapter] Launching world: ${worldId}`);
+    console.log(`${this.tag()} Launching world: ${worldId}`);
     await this.switchTab(page, "Worlds");
     const worldBox = page
       .locator(`.package[data-package-id="${worldId}"], [data-package-id="${worldId}"]`)
@@ -648,7 +649,7 @@ export class V14SetupAdapter implements SetupAdapter {
   }
 
   async createWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
-    console.log(`[V14SetupAdapter] Creating backup "${backupName}" for world: ${worldId}`);
+    console.log(`${this.tag()} Creating backup "${backupName}" for world: ${worldId}`);
     await this.switchTab(page, "Worlds");
     await this.dismissStrayDialogs(page);
     const worldBox = page
@@ -698,11 +699,11 @@ export class V14SetupAdapter implements SetupAdapter {
       })
       .catch(() => null);
 
-    console.log(`[V14SetupAdapter] Backup "${backupName}" created.`);
+    console.log(`${this.tag()} Backup "${backupName}" created.`);
   }
 
   async restoreWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
-    console.log(`[V14SetupAdapter] Restoring backup "${backupName}" for world: ${worldId}`);
+    console.log(`${this.tag()} Restoring backup "${backupName}" for world: ${worldId}`);
     const backupsDialog = await this.openBackupsDialog(page, worldId);
 
     // V14 backup entries are div.form-group.slim.package; label/note is in <p class="hint">
@@ -734,7 +735,7 @@ export class V14SetupAdapter implements SetupAdapter {
 
     // V14 performs a full server restart as part of the backup restore process.
     // Poll until the server comes back up and we can reach /setup (or /auth).
-    console.log(`[V14SetupAdapter] Waiting for server restart after restore...`);
+    console.log(`${this.tag()} Waiting for server restart after restore...`);
     await page.waitForTimeout(5000);
     for (let attempt = 1; attempt <= 60; attempt++) {
       try {
@@ -760,11 +761,11 @@ export class V14SetupAdapter implements SetupAdapter {
       await page.waitForLoadState("networkidle").catch(() => null);
     }
 
-    console.log(`[V14SetupAdapter] Backup "${backupName}" restored.`);
+    console.log(`${this.tag()} Backup "${backupName}" restored.`);
   }
 
   async listWorldBackups(page: FoundryPage, worldId: string): Promise<string[]> {
-    console.log(`[V14SetupAdapter] Listing backups for world: ${worldId}`);
+    console.log(`${this.tag()} Listing backups for world: ${worldId}`);
     const backupsDialog = await this.openBackupsDialog(page, worldId);
 
     // V14 backup entries are div.package with [data-entry] or [data-id]; label is in <p class="hint">
@@ -783,7 +784,7 @@ export class V14SetupAdapter implements SetupAdapter {
   }
 
   async deleteWorldBackup(page: FoundryPage, worldId: string, backupName: string): Promise<void> {
-    console.log(`[V14SetupAdapter] Deleting backup "${backupName}" for world: ${worldId}`);
+    console.log(`${this.tag()} Deleting backup "${backupName}" for world: ${worldId}`);
     const backupsDialog = await this.openBackupsDialog(page, worldId);
 
     // V14 has no per-entry delete button; select via checkbox then use bulk "Delete Selected"
@@ -817,7 +818,7 @@ export class V14SetupAdapter implements SetupAdapter {
   }
 
   async deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void> {
-    console.log(`[V14SetupAdapter] Deleting world if exists: ${worldId}`);
+    console.log(`${this.tag()} Deleting world if exists: ${worldId}`);
     await this.switchTab(page, "Worlds");
     await this.dismissStrayDialogs(page);
     const worldBox = page
