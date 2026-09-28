@@ -234,6 +234,20 @@ export interface GameAdapter {
 }
 
 /**
+ * Base for SetupAdapter implementations that other adapters extend to share
+ * behavior within a Foundry major-version generation (V13SetupAdapter
+ * extends V12SetupAdapter, V14LegacySetupAdapter extends V14SetupAdapter).
+ * A log line inherited from the superclass would otherwise hardcode that
+ * superclass's own name even when actually running as the subclass - tag()
+ * reports the real runtime class instead, via the constructor name.
+ */
+export abstract class BaseSetupAdapter {
+  protected tag(): string {
+    return `[${this.constructor.name}]`;
+  }
+}
+
+/**
  * Base implementation of GameAdapter with shared logic for most versions.
  */
 export abstract class BaseGameAdapter implements GameAdapter {

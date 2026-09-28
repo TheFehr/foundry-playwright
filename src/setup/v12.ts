@@ -1,5 +1,5 @@
 import { expect, Locator } from "@playwright/test";
-import { SetupAdapter, BaseGameAdapter, performLegacyJoin } from "./base.js";
+import { SetupAdapter, BaseSetupAdapter, BaseGameAdapter, performLegacyJoin } from "./base.js";
 import { installModuleFromManifest as helperInstallModuleFromManifest } from "../helpers.js";
 
 import { FoundryPage } from "../types/index.js";
@@ -15,10 +15,11 @@ import { FoundryPage } from "../types/index.js";
  * (V11 and earlier, if ever supported) should extend from whichever
  * adapter's behavior they actually share, not necessarily this one.
  */
-export class V12SetupAdapter implements SetupAdapter {
+export class V12SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
   version = 12;
 
   constructor(page?: FoundryPage) {
+    super();
     if (page?.deprecationTracker) {
       // Add version-specific ignores if needed
     }
@@ -32,11 +33,11 @@ export class V12SetupAdapter implements SetupAdapter {
   // the way V14's does - fall back to a plain navigation if it's ever hit.
   async leavePlayersScreen(page: FoundryPage): Promise<void> {
     if (!page.url().includes("/players")) return;
-    console.log("[V12SetupAdapter] On /players screen. Navigating to /join...");
+    console.log(`${this.tag()} On /players screen. Navigating to /join...`);
     await page.goto("/join").catch(() => null);
     await page.waitForLoadState("networkidle");
     if (page.url().includes("/players")) {
-      throw new Error("[V12SetupAdapter] Still on /players after navigating to /join.");
+      throw new Error(`${this.tag()} Still on /players after navigating to /join.`);
     }
   }
 
@@ -76,7 +77,7 @@ export class V12SetupAdapter implements SetupAdapter {
 
     const dataTab = tabMap[tabName] || tabName.toLowerCase();
     const modulesSectionId = this.packagesSectionId("modules");
-    console.log(`[V12SetupAdapter] Switching to setup tab: ${tabName} (${dataTab})`);
+    console.log(`${this.tag()} Switching to setup tab: ${tabName} (${dataTab})`);
 
     // Ensure navigation is visible
     const nav = page.locator(`nav, .navigation, #${modulesSectionId}`).first();
@@ -87,11 +88,11 @@ export class V12SetupAdapter implements SetupAdapter {
       .filter({ hasText: new RegExp(tabName, "i") })
       .first();
 
-    console.log(`[V12SetupAdapter] Waiting for tab locator visibility for "${tabName}"...`);
+    console.log(`${this.tag()} Waiting for tab locator visibility for "${tabName}"...`);
     await expect(tabLocator).toBeVisible({ timeout: 20000 });
 
     const tabText = await tabLocator.innerText();
-    console.log(`[V12SetupAdapter] Found tab: "${tabText}". Clicking...`);
+    console.log(`${this.tag()} Found tab: "${tabText}". Clicking...`);
 
     // Use evaluate to bypass Playwright's overlay-blocking actionability check.
     // Standard click() inherits the test timeout and hangs when a modal dialog is present.
@@ -120,11 +121,11 @@ export class V12SetupAdapter implements SetupAdapter {
       { timeout: 10000 },
     );
 
-    console.log(`[V12SetupAdapter] Tab ${tabName} is now active.`);
+    console.log(`${this.tag()} Tab ${tabName} is now active.`);
   }
 
   async handleEULA(page: FoundryPage): Promise<void> {
-    console.log("[V12SetupAdapter] Handling EULA...");
+    console.log(`${this.tag()} Handling EULA...`);
 
     // 0. Handle License Key Activation
     await this.handleLicenseActivation(page, process.env.FOUNDRY_LICENSE_KEY);
@@ -141,7 +142,7 @@ export class V12SetupAdapter implements SetupAdapter {
       }
     } else {
       throw new Error(
-        "[V12SetupAdapter] EULA agreement checkbox NOT found. Cannot proceed with setup.",
+        `${this.tag()} EULA agreement checkbox NOT found. Cannot proceed with setup.`,
       );
     }
 
@@ -153,26 +154,26 @@ export class V12SetupAdapter implements SetupAdapter {
         await page.waitForURL((u) => !u.pathname.includes("/license"), { timeout: 20000 });
       } catch {
         throw new Error(
-          "[V12SetupAdapter] Failed to navigate away from EULA screen after clicking Agree.",
+          `${this.tag()} Failed to navigate away from EULA screen after clicking Agree.`,
         );
       }
     } else {
-      throw new Error("[V12SetupAdapter] Stuck on /license but no agreement button found.");
+      throw new Error(`${this.tag()} Stuck on /license but no agreement button found.`);
     }
   }
 
   async handleLicenseActivation(page: FoundryPage, licenseKey?: string): Promise<void> {
     const licenseHeading = page.getByRole("heading", { name: "License Key Activation" });
     if ((await licenseHeading.count()) > 0 && (await licenseHeading.isVisible())) {
-      console.log("[V12SetupAdapter] License Key Activation screen detected.");
+      console.log(`${this.tag()} License Key Activation screen detected.`);
 
       if (!licenseKey) {
         throw new Error(
-          "[V12SetupAdapter] Foundry VTT requires a license key but FOUNDRY_LICENSE_KEY is not set.",
+          `${this.tag()} Foundry VTT requires a license key but FOUNDRY_LICENSE_KEY is not set.`,
         );
       }
 
-      console.log("[V12SetupAdapter] Entering license key...");
+      console.log(`${this.tag()} Entering license key...`);
       const keyInput = page.getByPlaceholder("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX");
       await keyInput.fill(licenseKey);
 
@@ -180,12 +181,12 @@ export class V12SetupAdapter implements SetupAdapter {
       await submitBtn.click();
 
       await page.waitForLoadState("networkidle");
-      console.log("[V12SetupAdapter] License key submitted.");
+      console.log(`${this.tag()} License key submitted.`);
     }
   }
 
   async installSystem(page: FoundryPage, systemId: string, _systemLabel: string): Promise<void> {
-    console.log(`[V12SetupAdapter] Installing system: ${systemId}`);
+    console.log(`${this.tag()} Installing system: ${systemId}`);
     await this.switchTab(page, "Systems");
 
     // Check if already installed
@@ -193,7 +194,7 @@ export class V12SetupAdapter implements SetupAdapter {
       .locator(`#${this.packagesSectionId("systems")} [data-package-id="${systemId}"]`)
       .first();
     if (await localPackage.isVisible()) {
-      console.log(`[V12SetupAdapter] System ${systemId} is already installed.`);
+      console.log(`${this.tag()} System ${systemId} is already installed.`);
       return;
     }
 
@@ -227,7 +228,7 @@ export class V12SetupAdapter implements SetupAdapter {
   }
 
   async installModules(page: FoundryPage, moduleIds: string[]): Promise<void> {
-    console.log(`[V12SetupAdapter] Installing modules: ${moduleIds.join(", ")}`);
+    console.log(`${this.tag()} Installing modules: ${moduleIds.join(", ")}`);
     await this.switchTab(page, "Modules");
 
     for (const modId of moduleIds) {
@@ -267,7 +268,7 @@ export class V12SetupAdapter implements SetupAdapter {
   }
 
   async installSystemFromManifest(page: FoundryPage, manifestUrl: string): Promise<void> {
-    console.log(`[V12SetupAdapter] Installing system from manifest: ${manifestUrl}`);
+    console.log(`${this.tag()} Installing system from manifest: ${manifestUrl}`);
 
     // Extract system id from URL so we can scope the verification selector.
     const systemIdMatch = /github\.com\/foundryvtt\/([^/]+)\/releases/.exec(manifestUrl);
@@ -280,7 +281,7 @@ export class V12SetupAdapter implements SetupAdapter {
         .locator(`#${this.packagesSectionId("systems")} [data-package-id="${systemId}"]`)
         .first();
       if (await already.isVisible()) {
-        console.log(`[V12SetupAdapter] System ${systemId} already installed — skipping.`);
+        console.log(`${this.tag()} System ${systemId} already installed — skipping.`);
         return;
       }
     }
@@ -304,7 +305,7 @@ export class V12SetupAdapter implements SetupAdapter {
     }, manifestUrl);
     if (!installed.ok) {
       console.warn(
-        `[V12SetupAdapter] installSystemFromManifest: ${installed.reason} — install may not have started.`,
+        `${this.tag()} installSystemFromManifest: ${installed.reason} — install may not have started.`,
       );
     }
 
@@ -322,7 +323,7 @@ export class V12SetupAdapter implements SetupAdapter {
   }
 
   async openSystemInstallDialog(page: FoundryPage): Promise<Locator> {
-    console.log("[V12SetupAdapter] Opening System Install Dialog...");
+    console.log(`${this.tag()} Opening System Install Dialog...`);
     await this.switchTab(page, "Systems");
     await this.dismissAnalyticsDialog(page);
 
@@ -344,7 +345,7 @@ export class V12SetupAdapter implements SetupAdapter {
   }
 
   async openModuleInstallDialog(page: FoundryPage): Promise<Locator> {
-    console.log("[V12SetupAdapter] Opening Module Install Dialog...");
+    console.log(`${this.tag()} Opening Module Install Dialog...`);
     await this.switchTab(page, "Modules");
 
     const installBtn = page
@@ -370,7 +371,7 @@ export class V12SetupAdapter implements SetupAdapter {
     systemLabel: string,
     systemId: string,
   ): Promise<void> {
-    console.log(`[V12SetupAdapter] Creating world: ${worldId}`);
+    console.log(`${this.tag()} Creating world: ${worldId}`);
     await this.switchTab(page, "Worlds");
     await this.dismissAnalyticsDialog(page);
 
@@ -378,7 +379,7 @@ export class V12SetupAdapter implements SetupAdapter {
       .locator("button")
       .filter({ hasText: /Create World/i })
       .first();
-    console.log("[V12SetupAdapter] Clicking Create World button...");
+    console.log(`${this.tag()} Clicking Create World button...`);
     await createBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
     // The WorldConfig Application renders with id="world-config" on the outer container div,
@@ -386,7 +387,7 @@ export class V12SetupAdapter implements SetupAdapter {
     const createDialog = page.locator("#world-config, .window-app#world-config").last();
 
     await createDialog.waitFor({ state: "visible", timeout: 20000 });
-    console.log("[V12SetupAdapter] World creation dialog is visible.");
+    console.log(`${this.tag()} World creation dialog is visible.`);
 
     const titleInput = createDialog
       .locator('input[name="title"], input[name*="title" i], input[placeholder*="Title" i]')
@@ -417,7 +418,7 @@ export class V12SetupAdapter implements SetupAdapter {
       await systemSelect.first().selectOption({ value: systemId }, { timeout: 5000 });
     } catch {
       console.warn(
-        `[V12SetupAdapter] Failed to select system by ID "${systemId}". Trying label "${systemLabel}"...`,
+        `${this.tag()} Failed to select system by ID "${systemId}". Trying label "${systemLabel}"...`,
       );
       // Fallback to label
       await systemSelect.first().selectOption({ label: systemLabel });
@@ -436,7 +437,7 @@ export class V12SetupAdapter implements SetupAdapter {
   }
 
   async launchWorld(page: FoundryPage, worldId: string): Promise<void> {
-    console.log(`[V12SetupAdapter] Launching world: ${worldId}`);
+    console.log(`${this.tag()} Launching world: ${worldId}`);
     await this.switchTab(page, "Worlds");
     const worldBox = page.locator(`[data-package-id="${worldId}"]`).first();
     await worldBox.waitFor({ state: "visible", timeout: 15000 });
@@ -463,7 +464,7 @@ export class V12SetupAdapter implements SetupAdapter {
     _backupName: string,
   ): Promise<void> {
     throw new Error(
-      "[V12SetupAdapter] World backups are not supported on this Foundry version. Use V14 or later.",
+      `${this.tag()} World backups are not supported on this Foundry version. Use V14 or later.`,
     );
   }
 
@@ -473,13 +474,13 @@ export class V12SetupAdapter implements SetupAdapter {
     _backupName: string,
   ): Promise<void> {
     throw new Error(
-      "[V12SetupAdapter] World backup restore is not supported on this Foundry version. Use V14 or later.",
+      `${this.tag()} World backup restore is not supported on this Foundry version. Use V14 or later.`,
     );
   }
 
   async listWorldBackups(_page: FoundryPage, _worldId: string): Promise<string[]> {
     throw new Error(
-      "[V12SetupAdapter] World backup listing is not supported on this Foundry version. Use V14 or later.",
+      `${this.tag()} World backup listing is not supported on this Foundry version. Use V14 or later.`,
     );
   }
 
@@ -489,12 +490,12 @@ export class V12SetupAdapter implements SetupAdapter {
     _backupName: string,
   ): Promise<void> {
     throw new Error(
-      "[V12SetupAdapter] World backup deletion is not supported on this Foundry version. Use V14 or later.",
+      `${this.tag()} World backup deletion is not supported on this Foundry version. Use V14 or later.`,
     );
   }
 
   async deleteWorldIfExists(page: FoundryPage, worldId: string): Promise<void> {
-    console.log(`[V12SetupAdapter] Deleting world if exists: ${worldId}`);
+    console.log(`${this.tag()} Deleting world if exists: ${worldId}`);
     await this.switchTab(page, "Worlds");
     await this.dismissAnalyticsDialog(page);
     const worldBox = page.locator(`[data-package-id="${worldId}"]`).first();
@@ -544,7 +545,7 @@ export class V12SetupAdapter implements SetupAdapter {
         { timeout: 10000 },
       )
       .catch(() => {
-        console.log("[V12SetupAdapter] Installation progress indicator not detected.");
+        console.log(`${this.tag()} Installation progress indicator not detected.`);
       });
     await page
       .waitForFunction(
@@ -567,7 +568,7 @@ export class V12SetupAdapter implements SetupAdapter {
         .first()
         .waitFor({ state: "visible", timeout: 30000 });
     } catch {
-      console.log("[V12SetupAdapter] Package not immediately visible. Refreshing tab...");
+      console.log(`${this.tag()} Package not immediately visible. Refreshing tab...`);
       await this.switchTab(page, "Worlds"); // Transition away and back
       await this.switchTab(page, tabName);
       await page
