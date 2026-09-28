@@ -125,7 +125,7 @@ jobs:
           # re-verified. fulfilledVersion carries over unchanged from
           # whatever's on disk at BASE_SHA - it's only advanced by that VM
           # run once it's actually swept the stable entries against $NEXT.
-          jq --arg v "$NEXT" '.requestedVersion = $v' ops/vm/reverify-state.json \
+          jq --arg v "$NEXT" '.requestedVersion = $v' reverify-state.json \
             >/tmp/reverify-state.json
           base64 -w0 /tmp/reverify-state.json | tr -d '\n' >/tmp/reverify.b64
 
@@ -150,7 +150,7 @@ jobs:
                       { path: "package.json", contents: $pkg },
                       { path: "package-lock.json", contents: $lock },
                       { path: "CHANGELOG.md", contents: $changelog },
-                      { path: "ops/vm/reverify-state.json", contents: $reverify }
+                      { path: "reverify-state.json", contents: $reverify }
                     ]
                   }
                 }

@@ -871,7 +871,7 @@ program
   .option("--all", "Verify all pairings (pending and stable) in the registry", false)
   .option(
     "--if-release-pending",
-    "Also re-verify all stable pairings if ops/vm/reverify-state.json shows a library release hasn't been re-verified yet",
+    "Also re-verify all stable pairings if reverify-state.json shows a library release hasn't been re-verified yet",
     false,
   )
   .option("--update-registry", "Update verified-versions.json on successful verification", false)
@@ -909,7 +909,7 @@ program
     // main mid-run, this run still only claims to have fulfilled the
     // version it actually started against, and the newer one is picked up
     // by the next run instead of being silently swallowed here.
-    const reverifyStatePath = path.join(process.cwd(), "ops/vm/reverify-state.json");
+    const reverifyStatePath = path.join(process.cwd(), "reverify-state.json");
     let pendingReleaseVersion: string | null = null;
     if (options.ifReleasePending && fs.existsSync(reverifyStatePath)) {
       const state = JSON.parse(fs.readFileSync(reverifyStatePath, "utf8"));
@@ -1058,7 +1058,7 @@ program
     const changedFiles = [
       "verified-versions.json",
       "verification-report.md",
-      "ops/vm/reverify-state.json",
+      "reverify-state.json",
     ].filter((f) => {
       try {
         execFileSync("git", ["diff", "--quiet", f]);
