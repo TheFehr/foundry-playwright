@@ -8,6 +8,12 @@
  */
 const THIRD_PARTY_ORIGIN = /\/(?:systems|modules)\/(?!fake-module\/)[^/]+\//;
 
+// A V8 stack-trace frame line, e.g. `    at foo (http://host/systems/pf2e/pf2e.mjs:1:1)`.
+// Restricting THIRD_PARTY_ORIGIN to these lines (rather than the whole message
+// text) means a first-party deprecation whose human-readable description merely
+// mentions a systems/modules-shaped path can't be mistaken for a real stack frame.
+const STACK_FRAME_LINE = /^\s*at\s/;
+
 /**
  * Scoped tracker for deprecation and warning messages.
  * Allows adapters to register patterns that should be ignored or explicitly failed.
@@ -63,7 +69,11 @@ export class DeprecationTracker {
     // not something we can fix or should fail verification over; it's
     // still surfaced via console.warn regardless, just not as a failure.
     if (lowerText.includes("deprecated") || lowerText.includes("deprecation")) {
-      if (!THIRD_PARTY_ORIGIN.test(text)) return true;
+      const stackLines = text
+        .split("\n")
+        .filter((line) => STACK_FRAME_LINE.test(line))
+        .join("\n");
+      if (!THIRD_PARTY_ORIGIN.test(stackLines)) return true;
     }
 
     // Check custom failure patterns - an explicit registration always

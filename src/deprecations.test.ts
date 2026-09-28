@@ -16,6 +16,12 @@ const FAKE_MODULE_DEPRECATION = `Something is deprecated.
     at Object.logCompatibilityWarning (http://127.0.0.1:30000/scripts/foundry.mjs:6715:17)
     at Init (http://127.0.0.1:30000/modules/fake-module/module.js:12:3)`;
 
+// No real stack frame at all - the systems/ path only appears in the
+// human-readable description, which must not be mistaken for a stack frame.
+const MENTIONS_PATH_BUT_NOT_A_FRAME = `The API at /systems/pf2e/config is deprecated.
+    at Object.logCompatibilityWarning (http://127.0.0.1:30000/scripts/foundry.mjs:6715:17)
+    at eval (eval at evaluate (:234:30), <anonymous>:3:1)`;
+
 describe("DeprecationTracker", () => {
   describe("shouldFail", () => {
     it("fails a deprecation with no system/module frame in its stack (our own code)", () => {
@@ -31,6 +37,11 @@ describe("DeprecationTracker", () => {
     it("fails a deprecation whose stack only traces into the fake-module test fixture", () => {
       const tracker = new DeprecationTracker();
       expect(tracker.shouldFail(FAKE_MODULE_DEPRECATION)).toBe(true);
+    });
+
+    it("fails a deprecation whose description text merely mentions a systems/modules-shaped path, with no such path in an actual stack frame", () => {
+      const tracker = new DeprecationTracker();
+      expect(tracker.shouldFail(MENTIONS_PATH_BUT_NOT_A_FRAME)).toBe(true);
     });
 
     it("still fails a third-party-originated deprecation if explicitly registered as a failure pattern", () => {
