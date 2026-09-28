@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.4](https://github.com/TheFehr/foundry-playwright/compare/v1.6.3...v1.6.4) (2026-09-28)
+
+### Bug Fixes
+
+- **deprecations:** don't fail verification on a third-party deprecation ([#135](https://github.com/TheFehr/foundry-playwright/issues/135)) ([89469ae](https://github.com/TheFehr/foundry-playwright/commit/89469aef788d15f40cb338947ea57334a153d569))
+
 ## [1.6.3](https://github.com/TheFehr/foundry-playwright/compare/v1.6.2...v1.6.3) (2026-09-28)
 
 ### Bug Fixes
