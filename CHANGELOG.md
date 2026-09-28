@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.2](https://github.com/TheFehr/foundry-playwright/compare/v1.6.1...v1.6.2) (2026-09-28)
+
+### Bug Fixes
+
+- **setup:** log the real runtime adapter class, not the superclass ([#132](https://github.com/TheFehr/foundry-playwright/issues/132)) ([333dc99](https://github.com/TheFehr/foundry-playwright/commit/333dc9937a076c644fea8d4dbc84dedf2ecd2c5d))
+
 ## [1.6.1](https://github.com/TheFehr/foundry-playwright/compare/v1.6.0...v1.6.1) (2026-09-28)
 
 # [1.6.0](https://github.com/TheFehr/foundry-playwright/compare/v1.5.0...v1.6.0) (2026-09-27)
