@@ -129,6 +129,21 @@ export class V12SetupAdapter implements SetupAdapter {
     // 0. Handle License Key Activation
     await this.handleLicenseActivation(page, process.env.FOUNDRY_LICENSE_KEY);
 
+    // Foundry renders the EULA content client-side after navigating to
+    // /license - checking for the checkbox immediately can race that render.
+    // Confirmed live against 13.351.0: a "checkbox NOT found" throw whose
+    // own captured page snapshot showed the checkbox present moments later.
+    // V14SetupAdapter already guards this the same way, against the same
+    // heading text.
+    await page
+      .getByRole("heading", { name: "Acknowledge Agreement" })
+      .waitFor({ state: "visible", timeout: 10000 })
+      .catch(() => {
+        console.warn(
+          "[V12SetupAdapter] 'Acknowledge Agreement' heading not found, continuing anyway...",
+        );
+      });
+
     await page.evaluate(() => {
       const eulaContainer = document.querySelector(".scrollable, .license-text, #eula-content");
       if (eulaContainer) eulaContainer.scrollTop = eulaContainer.scrollHeight;
