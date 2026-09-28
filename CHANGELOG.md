@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3](https://github.com/TheFehr/foundry-playwright/compare/v1.6.2...v1.6.3) (2026-09-28)
+
+### Bug Fixes
+
+- **setup:** wait for EULA content to render before checking for the checkbox ([#134](https://github.com/TheFehr/foundry-playwright/issues/134)) ([5c3442d](https://github.com/TheFehr/foundry-playwright/commit/5c3442d5e7f1224cbcd05f95435a587f35cf0dd9))
+
 ## [1.6.2](https://github.com/TheFehr/foundry-playwright/compare/v1.6.1...v1.6.2) (2026-09-28)
 
 ### Bug Fixes
