@@ -54,7 +54,7 @@ The monitor:
 
 If a new Foundry generation is detected (no stable entry for that major version yet), it is added to the check set until at least one stable entry is recorded.
 
-## Re-verifying on Library Releases (`ops/vm/reverify-state.json`)
+## Re-verifying on Library Releases (`reverify-state.json`)
 
 `--all-pending` (below) only catches drift in the _external_ world - a new
 Foundry or system release. It never catches a regression introduced by a
