@@ -422,10 +422,17 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
     // to "any system package row", which could pass just because a different,
     // already-installed system happened to be visible.
     const systemId = await this.resolveManifestPackageId(manifestUrl);
+    // Fail closed rather than falling back to "any system package row" - that
+    // fallback is exactly the false-positive-match bug this method used to
+    // have, and both means of resolving the id (manifest fetch, URL pattern)
+    // failing at once means we genuinely can't verify the right thing installed.
+    if (!systemId) {
+      throw new Error(
+        `${this.tag()} Could not determine the system id for manifest ${manifestUrl} - cannot verify installation.`,
+      );
+    }
     // Scope to the systems application-part so we don't accidentally match hidden module elements.
-    const verificationSelector = systemId
-      ? `[data-package-id="${systemId}"]`
-      : "[data-application-part='systems'] [data-package-id]";
+    const verificationSelector = `[data-package-id="${systemId}"]`;
     await this.waitForInstallation(page, installDialog, verificationSelector, "Systems");
   }
 
@@ -436,7 +443,7 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
   // network hiccup shouldn't be fatal to an otherwise-working install.
   private async resolveManifestPackageId(manifestUrl: string): Promise<string | undefined> {
     try {
-      const response = await fetch(manifestUrl);
+      const response = await fetch(manifestUrl, { signal: AbortSignal.timeout(10000) });
       if (response.ok) {
         const manifest = (await response.json()) as { id?: string };
         if (manifest.id) return manifest.id;
