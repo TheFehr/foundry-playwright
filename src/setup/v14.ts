@@ -302,10 +302,12 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
     await page.keyboard.press("Enter");
     await page.waitForTimeout(4000);
 
+    // data-package-id only - no text-based fallback. A package whose
+    // *description* merely mentions systemId (e.g. a module listing it as a
+    // dependency) would otherwise match too, and with .first() taking
+    // whichever comes first in DOM order, silently select the wrong package.
     const packageRow = installDialog
-      .locator(
-        `.package[data-package-id="${systemId}"], [data-package-id="${systemId}"], li:has-text("${systemId}"), .package:has-text("${systemId}")`,
-      )
+      .locator(`.package[data-package-id="${systemId}"], [data-package-id="${systemId}"]`)
       .filter({ visible: true })
       .first();
 
@@ -360,26 +362,37 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
       await page.keyboard.press("Enter");
       await page.waitForTimeout(4000);
 
+      // data-package-id only - no text-based fallback. Confirmed live: a
+      // registry search for "socketlib" also matches "Lancer Weapon FX" via
+      // has-text, since its own description reads "Requires Sequencer,
+      // Socketlib and...". With .first() taking whichever comes first in DOM
+      // order, that silently installed the wrong package entirely.
       const packageRow = installDialog
-        .locator(
-          `.package[data-package-id="${modId}"], [data-package-id="${modId}"], li:has-text("${modId}"), .package:has-text("${modId}")`,
-        )
+        .locator(`.package[data-package-id="${modId}"], [data-package-id="${modId}"]`)
         .filter({ visible: true })
         .first();
 
-      if (await packageRow.isVisible()) {
-        const installButton = packageRow
-          .locator('button[data-action="installPackage"], button:has-text("Install")')
-          .filter({ visible: true })
-          .first();
-        await installButton.evaluate((el: Element) => (el as HTMLElement).click());
-        await this.waitForInstallation(
-          page,
-          installDialog,
-          `[data-package-id="${modId}"]`,
-          "Modules",
-        );
-      }
+      // A real (polling, throwing) assertion, not a one-shot isVisible() check -
+      // this mirrors installSystem above and V12SetupAdapter's installModules.
+      // The previous `if (await packageRow.isVisible())` silently skipped the
+      // install with no error whenever the registry search hadn't returned a
+      // result yet, which foundrySetup had no way to detect - it would sail on
+      // into world creation and activation for a module that was never
+      // actually installed. Confirmed live against 14.360.0 + socketlib: the
+      // package reliably appears when searched for manually, just not always
+      // within this fixed window, so this needs to wait for it, not give up.
+      await expect(packageRow).toBeVisible({ timeout: 15000 });
+      const installButton = packageRow
+        .locator('button[data-action="installPackage"], button:has-text("Install")')
+        .filter({ visible: true })
+        .first();
+      await installButton.evaluate((el: Element) => (el as HTMLElement).click());
+      await this.waitForInstallation(
+        page,
+        installDialog,
+        `[data-package-id="${modId}"]`,
+        "Modules",
+      );
     }
   }
 
@@ -882,6 +895,28 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
       await closeBtn.evaluate((el: Element) => (el as HTMLElement).click());
     await this.switchTab(page, "Worlds");
     await this.switchTab(page, tabName);
+
+    // Confirm the package actually registered as installed, rather than
+    // trusting the progress indicator's disappearance alone - both waits
+    // above are best-effort (swallowed on timeout), and verificationSelector
+    // was previously accepted here but never checked, so an install that
+    // silently never completed (or was never found by the caller's own
+    // search in the first place) went completely undetected. Mirrors
+    // V12SetupAdapter's equivalent check.
+    try {
+      await page
+        .locator(verificationSelector)
+        .first()
+        .waitFor({ state: "visible", timeout: 30000 });
+    } catch {
+      console.log(`${this.tag()} Package not immediately visible. Refreshing tab...`);
+      await this.switchTab(page, "Worlds");
+      await this.switchTab(page, tabName);
+      await page
+        .locator(verificationSelector)
+        .first()
+        .waitFor({ state: "visible", timeout: 30000 });
+    }
   }
 }
 
