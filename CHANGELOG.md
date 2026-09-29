@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.5](https://github.com/TheFehr/foundry-playwright/compare/v1.6.4...v1.6.5) (2026-09-29)
+
+### Bug Fixes
+
+- **setup:** fix silent module-install skip and wrong-package matches in V14SetupAdapter ([#138](https://github.com/TheFehr/foundry-playwright/issues/138)) ([d17a5d7](https://github.com/TheFehr/foundry-playwright/commit/d17a5d7cd67016149e877922daa8f959204dacfd))
+
 ## [1.6.4](https://github.com/TheFehr/foundry-playwright/compare/v1.6.3...v1.6.4) (2026-09-28)
 
 ### Bug Fixes
