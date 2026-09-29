@@ -416,13 +416,33 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
       .last();
     await installBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
+    // Read the real package id out of the manifest itself rather than guessing
+    // from the URL's shape - a URL regex only covers the foundryvtt org's own
+    // release layout, and for any other host the verification below fell back
+    // to "any system package row", which could pass just because a different,
+    // already-installed system happened to be visible.
+    const systemId = await this.resolveManifestPackageId(manifestUrl);
     // Scope to the systems application-part so we don't accidentally match hidden module elements.
-    const systemIdMatch = /github\.com\/foundryvtt\/([^/]+)\/releases/.exec(manifestUrl);
-    const systemId = systemIdMatch?.[1];
     const verificationSelector = systemId
       ? `[data-package-id="${systemId}"]`
       : "[data-application-part='systems'] [data-package-id]";
     await this.waitForInstallation(page, installDialog, verificationSelector, "Systems");
+  }
+
+  // Fetches manifestUrl and reads its `id` field, so callers can verify the
+  // exact package that install actually targeted instead of guessing from the
+  // manifest URL's shape. Falls back to the github.com/foundryvtt/<id>/releases
+  // URL pattern (the previous heuristic) if the fetch or parse fails, since a
+  // network hiccup shouldn't be fatal to an otherwise-working install.
+  private async resolveManifestPackageId(manifestUrl: string): Promise<string | undefined> {
+    try {
+      const response = await fetch(manifestUrl);
+      if (response.ok) {
+        const manifest = (await response.json()) as { id?: string };
+        if (manifest.id) return manifest.id;
+      }
+    } catch {}
+    return /github\.com\/foundryvtt\/([^/]+)\/releases/.exec(manifestUrl)?.[1];
   }
 
   async installModuleFromManifest(page: FoundryPage, manifestUrl: string): Promise<void> {
