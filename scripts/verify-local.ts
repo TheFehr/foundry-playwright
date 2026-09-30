@@ -361,8 +361,8 @@ async function verifyVersion(
   // Only possible when systemVersion is actually known (a manifest pin from
   // --system-version/--system-minor, a pending target, or a pinned
   // stable-resweep target) - an unpinned ad hoc run has nothing to check yet.
-  if (systemVersion && !isCompatibleWithFvtt(system, systemVersion, version)) {
-    const rangeNote = formatCompatRange(fetchCompatRange(system, systemVersion));
+  if (systemVersion && !(await isCompatibleWithFvtt(system, systemVersion, version))) {
+    const rangeNote = formatCompatRange(await fetchCompatRange(system, systemVersion));
     console.log(
       `--- Skipping ${version} (System: ${system} v${systemVersion}): declares compatibility ${rangeNote}; incompatible with FVTT ${version}. ---`,
     );

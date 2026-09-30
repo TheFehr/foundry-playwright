@@ -1,5 +1,3 @@
-import { execSync } from "child_process";
-
 export function minorOf(version: string): string {
   const [major, minor] = version.split(".");
   return major && minor ? `${major}.${minor}` : "unknown";
@@ -53,7 +51,16 @@ function normalizeMaximum(bound: string): string {
 // published version's compatibility range is immutable, and both
 // monitor-releases.ts and verify-local.ts can end up checking the same
 // (systemId, version) more than once in a single run.
-export function fetchCompatRange(systemId: string, version: string): CompatRange {
+//
+// Uses fetch rather than shelling out to curl - systemId/version can
+// originate from a registry file's own contents (verify-local.ts's
+// --all-pending/--all targets read directly from verified-versions.json),
+// not just from freshly regex-validated GitHub release tags, so interpolating
+// either into a shell command string would be a command-injection risk. A
+// native request has no shell to inject into regardless of what the URL
+// contains. Bounded with a timeout so a stalled request can't block an
+// entire verification sweep indefinitely.
+export async function fetchCompatRange(systemId: string, version: string): Promise<CompatRange> {
   const key = `${systemId}@${version}`;
   if (compatCache.has(key)) return compatCache.get(key)!;
 
@@ -61,8 +68,12 @@ export function fetchCompatRange(systemId: string, version: string): CompatRange
   if (!url) return {};
 
   try {
-    const json = execSync(`curl -sfL "${url}"`, { encoding: "utf8" });
-    const manifest = JSON.parse(json) as { compatibility?: Record<string, string> };
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) {
+      compatCache.set(key, {});
+      return {};
+    }
+    const manifest = (await response.json()) as { compatibility?: Record<string, string> };
     const compat = manifest.compatibility ?? {};
     const result: CompatRange = {};
     if (compat["minimum"]) result.minimum = String(compat["minimum"]);
@@ -75,12 +86,12 @@ export function fetchCompatRange(systemId: string, version: string): CompatRange
   }
 }
 
-export function isCompatibleWithFvtt(
+export async function isCompatibleWithFvtt(
   systemId: string,
   systemVersion: string,
   fvttVersion: string,
-): boolean {
-  const { minimum, maximum } = fetchCompatRange(systemId, systemVersion);
+): Promise<boolean> {
+  const { minimum, maximum } = await fetchCompatRange(systemId, systemVersion);
   if (minimum !== undefined && compareVersions(fvttVersion, minimum) < 0) return false;
   if (maximum !== undefined && compareVersions(fvttVersion, normalizeMaximum(maximum)) >= 0)
     return false;

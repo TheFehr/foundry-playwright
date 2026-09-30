@@ -180,8 +180,8 @@ async function run() {
             );
           if (hasExistingEntry) continue;
 
-          if (!isCompatibleWithFvtt(systemId, latestPatch, fvtt)) {
-            const rangeNote = formatCompatRange(fetchCompatRange(systemId, latestPatch));
+          if (!(await isCompatibleWithFvtt(systemId, latestPatch, fvtt))) {
+            const rangeNote = formatCompatRange(await fetchCompatRange(systemId, latestPatch));
             console.log(
               `[monitor] Incompatible: ${systemId} v${latestPatch} (${rangeNote}) with FVTT ${fvtt}`,
             );
