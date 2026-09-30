@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.7](https://github.com/TheFehr/foundry-playwright/compare/v1.6.6...v1.6.7) (2026-09-30)
+
+### Bug Fixes
+
+- **registry:** commit per combo and batch the stable resweep across nights ([#142](https://github.com/TheFehr/foundry-playwright/issues/142)) ([307cea6](https://github.com/TheFehr/foundry-playwright/commit/307cea689983490cfad1dec909bff25dc7485d4c))
+
 ## [1.6.6](https://github.com/TheFehr/foundry-playwright/compare/v1.6.5...v1.6.6) (2026-09-30)
 
 ### Bug Fixes
