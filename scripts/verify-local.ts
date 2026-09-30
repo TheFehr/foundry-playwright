@@ -886,6 +886,40 @@ interface VerifyTarget {
   systemVersion?: string;
   systemMinor?: string;
   modules: string[];
+  // Set only on targets from the automatic, release-triggered stable resweep
+  // batch - marks them as needing a reverify-state.json progress update once
+  // verified, distinct from pending targets and an explicit --re-verify/--all
+  // sweep (which is uncapped and untracked).
+  stableResweepBatch?: boolean;
+}
+
+function pairingKey(e: { fvtt: string; system: string; systemMinor: string }): string {
+  return `${e.fvtt}|${e.system}|${e.systemMinor}`;
+}
+
+// A --if-release-pending stable resweep can cover a couple dozen (fvtt,
+// system, systemMinor) rows, each a full Docker+Playwright run (10-40+
+// minutes) - trying to fit them all into one nightly run risks the same
+// thing that actually happened once: several unrelated rows all failing or
+// running long back to back exhausted the whole timeout window before the
+// sweep finished, with nothing to show for it but a killed process. Batching
+// it small and tracking cross-run progress in reverify-state.json means each
+// night makes bounded, guaranteed forward progress instead of gambling the
+// whole window on one run.
+const STABLE_RESWEEP_BATCH_SIZE = 2;
+
+interface ReverifyState {
+  requestedVersion?: string;
+  fulfilledVersion?: string;
+  // (fvtt, system, systemMinor) pairings already re-verified against
+  // requestedVersion by a previous --if-release-pending batch this cycle.
+  // Scoped to requestedVersion via verifiedPairingsFor, not just present/
+  // absent - release.yml's version bump only ever sets requestedVersion
+  // itself, so a newer release landing mid-sweep must not let a stale
+  // progress list (verified against the *previous* pending release) be
+  // mistaken for progress against the new one.
+  verifiedPairingsFor?: string;
+  verifiedPairings?: string[];
 }
 
 const program = new Command();
@@ -915,7 +949,7 @@ program
   .option("--all", "Verify all pairings (pending and stable) in the registry", false)
   .option(
     "--if-release-pending",
-    "Also re-verify all stable pairings if reverify-state.json shows a library release hasn't been re-verified yet",
+    `Also re-verify stable pairings, ${STABLE_RESWEEP_BATCH_SIZE} per run, if reverify-state.json shows a library release hasn't been fully re-verified yet. Deferred entirely on a run that also finds new --all-pending work.`,
     false,
   )
   .option("--update-registry", "Update verified-versions.json on successful verification", false)
@@ -955,23 +989,45 @@ program
     // by the next run instead of being silently swallowed here.
     const reverifyStatePath = path.join(process.cwd(), "reverify-state.json");
     let pendingReleaseVersion: string | null = null;
+    let alreadyVerifiedThisCycle = new Set<string>();
+    // Reused at the end of the run to preserve the last-confirmed-fulfilled
+    // value when this run only makes partial progress on the resweep, rather
+    // than accidentally clobbering it with an empty/stale value.
+    let existingFulfilledVersion = "";
     if (options.ifReleasePending && fs.existsSync(reverifyStatePath)) {
-      const state = JSON.parse(fs.readFileSync(reverifyStatePath, "utf8"));
+      const state: ReverifyState = JSON.parse(fs.readFileSync(reverifyStatePath, "utf8"));
       const requestedVersion =
-        typeof state?.requestedVersion === "string" ? state.requestedVersion : "";
+        typeof state.requestedVersion === "string" ? state.requestedVersion : "";
       const fulfilledVersion =
-        typeof state?.fulfilledVersion === "string" ? state.fulfilledVersion : "";
+        typeof state.fulfilledVersion === "string" ? state.fulfilledVersion : "";
+      existingFulfilledVersion = fulfilledVersion;
       if (!requestedVersion || !fulfilledVersion) {
         console.warn(
           `[verify] ${reverifyStatePath} is missing a valid requestedVersion/fulfilledVersion - skipping the release-triggered stable sweep this run.`,
         );
       } else if (requestedVersion !== fulfilledVersion) {
         pendingReleaseVersion = requestedVersion;
+        // A progress list only means something against the requestedVersion
+        // it was built for - a newer release bumping requestedVersion mid-
+        // sweep (release.yml only ever sets that one field) must not let
+        // progress from the *previous* pending release be mistaken for
+        // progress against this one.
+        if (
+          state.verifiedPairingsFor === requestedVersion &&
+          Array.isArray(state.verifiedPairings)
+        ) {
+          alreadyVerifiedThisCycle = new Set(state.verifiedPairings);
+        }
         console.log(
-          `[verify] Release v${pendingReleaseVersion} hasn't been re-verified yet - including stable pairings this run.`,
+          `[verify] Release v${pendingReleaseVersion} hasn't been fully re-verified yet (${alreadyVerifiedThisCycle.size} pairing(s) already covered this cycle).`,
         );
       }
     }
+
+    // Tracked so the automatic release-triggered resweep below can defer to
+    // genuinely new work discovered this run, rather than competing with it
+    // for the same time budget.
+    let pendingTargetCount = 0;
 
     if (options.allPending || options.reVerify || options.all || pendingReleaseVersion) {
       const registryPath = path.join(process.cwd(), "verified-versions.json");
@@ -981,6 +1037,7 @@ program
 
         if (options.allPending || options.all) {
           const pending = list.filter((e: Record<string, unknown>) => e.status === "pending");
+          pendingTargetCount = pending.length;
           targets.push(
             ...pending.map((e: Record<string, unknown>) => ({
               version: e["fvtt"] as string,
@@ -997,34 +1054,67 @@ program
           if (pending.length > 0) console.log(`Targeting ${pending.length} pending pairings.`);
         }
 
-        if (options.reVerify || options.all || pendingReleaseVersion) {
+        const stableTargetOf = (e: Record<string, unknown>) => ({
+          version: e["fvtt"] as string,
+          system: e["system"] as string,
+          // Pin to the exact version this row was actually verified stable
+          // with, not "whatever's latest" - re-verifying is meant to catch
+          // a regression in this library against a config we already know
+          // works, not to silently drift onto a newer system release that
+          // was never part of this row's claim. Leaving this unpinned
+          // previously meant every re-verify sweep (e.g. --if-release-
+          // pending) tried installing today's actual-latest system
+          // version regardless of what each row recorded - once that
+          // latest version's own compatibility range moved past an older,
+          // still-pinned FVTT build, every affected row failed the exact
+          // same way, repeatedly, for the same non-issue.
+          systemVersion: e["systemVersion"] as string | undefined,
+          systemMinor: e["systemMinor"] as string | undefined,
+          modules: Array.isArray(e["modules"])
+            ? (e["modules"] as Record<string, unknown>[]).map(
+                (m: Record<string, unknown>) => m["id"] as string,
+              )
+            : [],
+        });
+
+        if (options.reVerify || options.all) {
+          // Explicit, deliberate full resweep - uncapped and untracked, same
+          // as a direct request for "everything, right now" has always meant.
           const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
-          targets.push(
-            ...stable.map((e: Record<string, unknown>) => ({
-              version: e["fvtt"] as string,
-              system: e["system"] as string,
-              // Pin to the exact version this row was actually verified stable
-              // with, not "whatever's latest" - re-verifying is meant to catch
-              // a regression in this library against a config we already know
-              // works, not to silently drift onto a newer system release that
-              // was never part of this row's claim. Leaving this unpinned
-              // previously meant every re-verify sweep (e.g. --if-release-
-              // pending) tried installing today's actual-latest system
-              // version regardless of what each row recorded - once that
-              // latest version's own compatibility range moved past an older,
-              // still-pinned FVTT build, every affected row failed the exact
-              // same way, repeatedly, for the same non-issue.
-              systemVersion: e["systemVersion"] as string | undefined,
-              systemMinor: e["systemMinor"] as string | undefined,
-              modules: Array.isArray(e["modules"])
-                ? (e["modules"] as Record<string, unknown>[]).map(
-                    (m: Record<string, unknown>) => m["id"] as string,
-                  )
-                : [],
-            })),
-          );
+          targets.push(...stable.map(stableTargetOf));
           if (stable.length > 0)
             console.log(`Targeting ${stable.length} stable pairings for re-verification.`);
+        } else if (pendingReleaseVersion) {
+          // Automatic, release-triggered resweep: bounded to a small batch
+          // per run (see STABLE_RESWEEP_BATCH_SIZE) and resumed via
+          // reverify-state.json's progress list across as many nightly runs
+          // as it takes, rather than trying to fit a potentially dozens-of-
+          // rows sweep into one run's timeout. Deferred entirely on a run
+          // that already found genuinely new pending work - that's the more
+          // actionable thing to spend this run's time budget on.
+          if (pendingTargetCount > 0) {
+            console.log(
+              `[verify] Deferring the release-triggered stable resweep this run - ${pendingTargetCount} new pending pairing(s) take priority.`,
+            );
+          } else {
+            const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
+            const remaining = stable.filter(
+              (e: Record<string, unknown>) =>
+                !alreadyVerifiedThisCycle.has(
+                  pairingKey({
+                    fvtt: e["fvtt"] as string,
+                    system: e["system"] as string,
+                    systemMinor: e["systemMinor"] as string,
+                  }),
+                ),
+            );
+            const batch = remaining.slice(0, STABLE_RESWEEP_BATCH_SIZE);
+            targets.push(...batch.map((e) => ({ ...stableTargetOf(e), stableResweepBatch: true })));
+            if (batch.length > 0)
+              console.log(
+                `Targeting ${batch.length} of ${remaining.length} remaining stable pairing(s) for this cycle's resweep.`,
+              );
+          }
         }
       } else {
         console.error("Registry file not found.");
@@ -1051,11 +1141,46 @@ program
 
     if (targets.length === 0) {
       console.log("No versions matched the criteria. Nothing to verify.");
-      return;
+      // Deliberately not returning here: a release-triggered resweep can
+      // still need to record that its final batch finished on a *previous*
+      // run - e.g. the registry's stable set shrank between runs (a row
+      // this cycle had already covered got retired), leaving nothing left
+      // to target this run even though reverify-state.json was never
+      // updated to reflect that the sweep is actually done. Falling through
+      // lets the fulfillment check below run regardless.
     }
 
     const results: { key: string; success: boolean; failures: TestFailure[]; skipped?: boolean }[] =
       [];
+
+    // Commits registry/report changes immediately when --git-commit is set,
+    // so a run interrupted partway through (the systemd timeout this whole
+    // batching scheme exists to survive) leaves every already-completed
+    // target's result safely committed instead of sitting as an uncommitted
+    // diff - which once blocked the *next* run's own git checkout outright.
+    // No-op in non---git-commit mode; that path keeps its original single
+    // "suggested command" summary at the very end instead.
+    function commitIfChanged(files: string[], message: string): void {
+      if (!options.gitCommit) return;
+      const changed = files.filter((f) => {
+        try {
+          execFileSync("git", ["diff", "--quiet", f]);
+          return false;
+        } catch {
+          return true;
+        }
+      });
+      if (changed.length === 0) return;
+      try {
+        execFileSync("git", ["add", ...changed]);
+        execFileSync("git", ["commit", "-m", message], { stdio: "inherit" });
+      } catch (e) {
+        console.error("Failed to commit changes:", (e as Error).message);
+        process.exit(1);
+      }
+    }
+
+    const newlyVerifiedKeys = new Set<string>();
 
     for (const target of targets) {
       const result = await verifyVersion(target.version, {
@@ -1070,12 +1195,37 @@ program
       const sysLabel = target.systemVersion
         ? `${target.system} v${target.systemVersion}`
         : target.system;
+      const key = `${target.version} (${sysLabel})`;
+      const status = result.skipped ? "INCOMPATIBLE" : result.success ? "PASS" : "FAIL";
       results.push({
-        key: `${target.version} (${sysLabel})`,
+        key,
         success: result.success,
         failures: result.failures,
         skipped: result.skipped,
       });
+
+      // A registry write actually happened for this pairing only under the
+      // same conditions verifyVersion itself gates on - a genuine failure
+      // that wasn't persisted (--record-failures off) must not count as
+      // "done for this cycle", or a future resweep batch would silently
+      // never learn about it at all.
+      const wasRecorded =
+        options.updateRegistry &&
+        (result.success || (result.failures.length > 0 && options.recordFailures));
+      if (target.stableResweepBatch && wasRecorded) {
+        newlyVerifiedKeys.add(
+          pairingKey({
+            fvtt: target.version,
+            system: target.system,
+            systemMinor: target.systemMinor ?? "",
+          }),
+        );
+      }
+
+      commitIfChanged(
+        ["verified-versions.json", "verification-report.md"],
+        `chore(registry): verify ${key} [${status}]`,
+      );
     }
 
     console.log("\n--- Verification Summary ---");
@@ -1091,59 +1241,72 @@ program
 
     const allPassed = results.every((r) => r.success);
 
-    // The request is fulfilled by having run the stable-pairing sweep this
-    // triggered, not by every pairing in it passing - a genuine regression
-    // is recorded as a "failed" registry entry (see recordFailures above)
-    // and reported separately, not by leaving this marked unfulfilled so
-    // it's retried forever. But that only holds if recordFailures actually
-    // ran: without it, a real failure is never persisted to the registry at
-    // all, so fulfilling here would silently drop the regression instead of
-    // reporting it.
-    if (pendingReleaseVersion && options.updateRegistry && (allPassed || options.recordFailures)) {
-      fs.writeFileSync(
-        reverifyStatePath,
-        JSON.stringify(
-          { requestedVersion: pendingReleaseVersion, fulfilledVersion: pendingReleaseVersion },
-          null,
-          2,
-        ) + "\n",
+    // Persist this cycle's resweep progress, or mark it fulfilled outright
+    // once every currently-stable pairing has been covered - but only when
+    // the automatic resweep actually ran this run. When it was deferred to
+    // prioritize new pending work (pendingTargetCount > 0), existing state
+    // must be left untouched rather than treated as "nothing to do."
+    if (pendingReleaseVersion && options.updateRegistry && pendingTargetCount === 0) {
+      const finalVerifiedSet = new Set([...alreadyVerifiedThisCycle, ...newlyVerifiedKeys]);
+      const registryPath = path.join(process.cwd(), "verified-versions.json");
+      const currentRegistry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      const currentStable = (Array.isArray(currentRegistry) ? currentRegistry : []).filter(
+        (e: Record<string, unknown>) => e["status"] === "stable",
+      );
+      const stillRemaining = currentStable.filter(
+        (e: Record<string, unknown>) =>
+          !finalVerifiedSet.has(
+            pairingKey({
+              fvtt: e["fvtt"] as string,
+              system: e["system"] as string,
+              systemMinor: e["systemMinor"] as string,
+            }),
+          ),
+      );
+
+      const newState: ReverifyState =
+        stillRemaining.length === 0
+          ? { requestedVersion: pendingReleaseVersion, fulfilledVersion: pendingReleaseVersion }
+          : {
+              requestedVersion: pendingReleaseVersion,
+              fulfilledVersion: existingFulfilledVersion,
+              verifiedPairingsFor: pendingReleaseVersion,
+              verifiedPairings: [...finalVerifiedSet],
+            };
+      fs.writeFileSync(reverifyStatePath, JSON.stringify(newState, null, 2) + "\n");
+
+      commitIfChanged(
+        ["reverify-state.json"],
+        stillRemaining.length === 0
+          ? `chore(registry): mark v${pendingReleaseVersion} release re-verification fulfilled`
+          : `chore(registry): record resweep progress for v${pendingReleaseVersion} (${finalVerifiedSet.size}/${currentStable.length} pairings)`,
       );
     }
 
-    // Git integration
-    const changedFiles = [
-      "verified-versions.json",
-      "verification-report.md",
-      "reverify-state.json",
-    ].filter((f) => {
-      try {
-        execFileSync("git", ["diff", "--quiet", f]);
-        return false;
-      } catch {
-        return true;
-      }
-    });
-
-    if (changedFiles.length > 0) {
-      const summary = results
-        .map((r) => `${r.key} [${r.skipped ? "INCOMPATIBLE" : r.success ? "PASS" : "FAIL"}]`)
-        .join(", ");
-      const commitMsg = `chore(registry): verify ${summary}`;
-
-      if (options.gitCommit) {
-        console.log(`\n--- Auto-committing changes ---`);
+    // Non---git-commit mode only: the incremental commits above already
+    // cover --git-commit runs, so this is just the original "one combined
+    // suggested command" behavior for a fully manual/dry-run invocation.
+    if (!options.gitCommit) {
+      const changedFiles = [
+        "verified-versions.json",
+        "verification-report.md",
+        "reverify-state.json",
+      ].filter((f) => {
         try {
-          execFileSync("git", ["add", ...changedFiles]);
-          execFileSync("git", ["commit", "-m", commitMsg], { stdio: "inherit" });
-          console.log("Commit successful.");
-        } catch (e) {
-          console.error("Failed to commit changes:", (e as Error).message);
-          process.exit(1);
+          execFileSync("git", ["diff", "--quiet", f]);
+          return false;
+        } catch {
+          return true;
         }
-      } else {
+      });
+
+      if (changedFiles.length > 0) {
+        const summary = results
+          .map((r) => `${r.key} [${r.skipped ? "INCOMPATIBLE" : r.success ? "PASS" : "FAIL"}]`)
+          .join(", ");
         console.log(`\n--- Suggested Commit ---`);
         console.log(`git add ${changedFiles.join(" ")}`);
-        console.log(`git commit -m "${commitMsg}"`);
+        console.log(`git commit -m "chore(registry): verify ${summary}"`);
       }
     }
 
