@@ -5,16 +5,7 @@
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-06-10T08:53:14.555Z",
-    "notes": "Verified locally with dnd5e v5.3.3."
-  },
-  {
-    "fvtt": "14.360.0",
-    "system": "dnd5e",
-    "systemMinor": "5.3",
-    "systemVersion": "5.3.3",
-    "status": "stable",
-    "timestamp": "2026-06-10T08:58:00.455Z",
+    "timestamp": "2026-09-30T20:55:52.897Z",
     "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
@@ -23,7 +14,7 @@
     "systemMinor": "7.12",
     "systemVersion": "7.12.2",
     "status": "stable",
-    "timestamp": "2026-06-10T08:27:30.507Z",
+    "timestamp": "2026-09-30T21:08:36.651Z",
     "notes": "Verified locally with pf2e v7.12.2."
   },
   {
@@ -54,15 +45,6 @@
     "notes": "System declares compatibility minimum: 14; incompatible with FVTT 13."
   },
   {
-    "fvtt": "14.360.0",
-    "system": "pf2e",
-    "systemMinor": "8.2",
-    "systemVersion": "8.2.0",
-    "status": "stable",
-    "timestamp": "2026-06-10T09:04:38.486Z",
-    "notes": "Verified locally with pf2e v8.2.0."
-  },
-  {
     "fvtt": "13.351.0",
     "system": "dnd5e",
     "systemMinor": "5.2",
@@ -88,15 +70,6 @@
     "status": "incompatible",
     "timestamp": "2026-06-10T07:05:45.000Z",
     "notes": "dnd5e v5.2.5 EnchantmentData schema incompatibility with Foundry V14.360.0: 'Class EnchantmentData must define a changes field in its schema'. Actor creation fails validation even with minimal data."
-  },
-  {
-    "fvtt": "14.360.0",
-    "system": "dnd5e",
-    "systemMinor": "5.1",
-    "systemVersion": "5.1.10",
-    "status": "stable",
-    "timestamp": "2026-06-10T07:24:00.071Z",
-    "notes": "Verified locally with dnd5e v5.1.10."
   },
   {
     "fvtt": "13.351.0",
@@ -137,29 +110,11 @@
   {
     "fvtt": "14.365",
     "system": "dnd5e",
-    "systemMinor": "5.3",
-    "systemVersion": "5.3.3",
-    "status": "stable",
-    "timestamp": "2026-08-03T18:08:56.848Z",
-    "notes": "Verified locally with dnd5e v5.3.3."
-  },
-  {
-    "fvtt": "14.365",
-    "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
     "status": "incompatible",
     "timestamp": "2026-08-23T07:39:16.000Z",
     "notes": "Confirmed incompatible: dnd5e 5.2.x was never intended to support FoundryVTT V14 (maintainer confirmation: https://github.com/foundryvtt/dnd5e/issues/6704 - \"it isn't expected that 5.2.x be compatible with V14. The 5.3.x branch is already.\"). Actor creation crashes with [Actor5e] validation errors (SchemaField#_validateRecursive on currency/abilities/skills/tools/traits) on every V14 build tested (14.360.0, 14.365, 14.366, 14.367). Not a foundry-playwright regression."
-  },
-  {
-    "fvtt": "14.365",
-    "system": "dnd5e",
-    "systemMinor": "5.1",
-    "systemVersion": "5.1.10",
-    "status": "stable",
-    "timestamp": "2026-08-03T18:23:14.656Z",
-    "notes": "Verified locally with dnd5e v5.1.10."
   },
   {
     "fvtt": "13.351.0",
@@ -180,42 +135,6 @@
     "notes": "System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
   },
   {
-    "fvtt": "14.365",
-    "system": "pf2e",
-    "systemMinor": "8.4",
-    "systemVersion": "8.4.0",
-    "status": "stable",
-    "timestamp": "2026-08-03T18:30:32.686Z",
-    "notes": "Verified locally with pf2e v8.4.0."
-  },
-  {
-    "fvtt": "14.365",
-    "system": "pf2e",
-    "systemMinor": "8.3",
-    "systemVersion": "8.3.0",
-    "status": "stable",
-    "timestamp": "2026-08-03T18:37:24.090Z",
-    "notes": "Verified locally with pf2e v8.3.0."
-  },
-  {
-    "fvtt": "14.365",
-    "system": "pf2e",
-    "systemMinor": "8.2",
-    "systemVersion": "8.2.0",
-    "status": "stable",
-    "timestamp": "2026-08-03T18:44:13.818Z",
-    "notes": "Verified locally with pf2e v8.2.0."
-  },
-  {
-    "fvtt": "14.366",
-    "system": "dnd5e",
-    "systemMinor": "5.3",
-    "systemVersion": "5.3.3",
-    "status": "stable",
-    "timestamp": "2026-08-22T18:08:14.976Z",
-    "notes": "Verified locally with dnd5e v5.3.3."
-  },
-  {
     "fvtt": "14.366",
     "system": "dnd5e",
     "systemMinor": "5.2",
@@ -223,51 +142,6 @@
     "status": "incompatible",
     "timestamp": "2026-08-23T07:39:16.000Z",
     "notes": "Confirmed incompatible: dnd5e 5.2.x was never intended to support FoundryVTT V14 (maintainer confirmation: https://github.com/foundryvtt/dnd5e/issues/6704 - \"it isn't expected that 5.2.x be compatible with V14. The 5.3.x branch is already.\"). Actor creation crashes with [Actor5e] validation errors (SchemaField#_validateRecursive on currency/abilities/skills/tools/traits) on every V14 build tested (14.360.0, 14.365, 14.366, 14.367). Not a foundry-playwright regression."
-  },
-  {
-    "fvtt": "14.366",
-    "system": "dnd5e",
-    "systemMinor": "5.1",
-    "systemVersion": "5.1.10",
-    "status": "stable",
-    "timestamp": "2026-08-22T18:24:43.959Z",
-    "notes": "Verified locally with dnd5e v5.1.10."
-  },
-  {
-    "fvtt": "14.366",
-    "system": "pf2e",
-    "systemMinor": "8.4",
-    "systemVersion": "8.4.0",
-    "status": "stable",
-    "timestamp": "2026-08-22T18:33:18.915Z",
-    "notes": "Verified locally with pf2e v8.4.0."
-  },
-  {
-    "fvtt": "14.366",
-    "system": "pf2e",
-    "systemMinor": "8.3",
-    "systemVersion": "8.3.0",
-    "status": "stable",
-    "timestamp": "2026-08-22T18:41:23.110Z",
-    "notes": "Verified locally with pf2e v8.3.0."
-  },
-  {
-    "fvtt": "14.366",
-    "system": "pf2e",
-    "systemMinor": "8.2",
-    "systemVersion": "8.2.0",
-    "status": "stable",
-    "timestamp": "2026-08-22T18:49:40.702Z",
-    "notes": "Verified locally with pf2e v8.2.0."
-  },
-  {
-    "fvtt": "14.367",
-    "system": "dnd5e",
-    "systemMinor": "5.3",
-    "systemVersion": "5.3.3",
-    "status": "stable",
-    "timestamp": "2026-08-22T18:56:44.301Z",
-    "notes": "Verified locally with dnd5e v5.3.3."
   },
   {
     "fvtt": "14.367",
@@ -295,15 +169,6 @@
     "status": "stable",
     "timestamp": "2026-08-22T19:21:16.197Z",
     "notes": "Verified locally with pf2e v8.4.1."
-  },
-  {
-    "fvtt": "14.367",
-    "system": "pf2e",
-    "systemMinor": "8.3",
-    "systemVersion": "8.3.0",
-    "status": "stable",
-    "timestamp": "2026-08-22T19:29:12.030Z",
-    "notes": "Verified locally with pf2e v8.3.0."
   },
   {
     "fvtt": "14.367",
@@ -340,15 +205,6 @@
     "status": "failed",
     "timestamp": "2026-09-06T18:20:56.147Z",
     "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m)"
-  },
-  {
-    "fvtt": "14.366",
-    "system": "pf2e",
-    "systemMinor": "8.5",
-    "systemVersion": "8.5.0",
-    "status": "stable",
-    "timestamp": "2026-09-06T18:31:44.182Z",
-    "notes": "Verified locally with pf2e v8.5.0."
   },
   {
     "fvtt": "14.367",
