@@ -2,7 +2,13 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { minorOf, compareVersions } from "./version-utils.js";
+import {
+  minorOf,
+  compareVersions,
+  isCompatibleWithFvtt,
+  fetchCompatRange,
+  formatCompatRange,
+} from "./version-utils.js";
 
 /**
  * Release Monitoring Script
@@ -95,69 +101,6 @@ function topMinors(latestByMinor: Map<string, string>, count = TRACKED_MINOR_COU
     .slice(0, count);
 }
 
-function buildManifestUrl(systemId: string, version: string): string | null {
-  switch (systemId) {
-    case "dnd5e":
-      return `https://github.com/foundryvtt/dnd5e/releases/download/release-${version}/system.json`;
-    case "pf2e":
-      return `https://github.com/foundryvtt/pf2e/releases/download/pf2e-${version}/system.json`;
-    default:
-      return null;
-  }
-}
-
-interface CompatRange {
-  minimum?: string;
-  maximum?: string;
-}
-
-const compatCache = new Map<string, CompatRange>();
-
-function fetchCompatRange(systemId: string, version: string): CompatRange {
-  const key = `${systemId}@${version}`;
-  if (compatCache.has(key)) return compatCache.get(key)!;
-
-  const url = buildManifestUrl(systemId, version);
-  if (!url) return {};
-
-  try {
-    const json = execSync(`curl -sfL "${url}"`, { encoding: "utf8" });
-    const manifest = JSON.parse(json) as { compatibility?: Record<string, string> };
-    const compat = manifest.compatibility ?? {};
-    const result: CompatRange = {};
-    if (compat["minimum"]) result.minimum = String(compat["minimum"]);
-    if (compat["maximum"]) result.maximum = String(compat["maximum"]);
-    compatCache.set(key, result);
-    return result;
-  } catch {
-    compatCache.set(key, {});
-    return {};
-  }
-}
-
-// A bare-major maximum (e.g. "14") means "compatible through all of 14.x" -
-// normalize it to an exclusive ceiling at the next major so a full version
-// compare against e.g. "14.360.0" doesn't wrongly treat it as exceeding "14".
-// A bare-major minimum needs no such adjustment: compareVersions already
-// treats missing components as 0, so "14" naturally floors at 14.0.0.
-function normalizeMaximum(bound: string): string {
-  const parts = bound.split(".");
-  if (parts.length > 1) return bound;
-  return `${parseInt(parts[0]!, 10) + 1}.0.0`;
-}
-
-function isCompatibleWithFvtt(
-  systemId: string,
-  systemVersion: string,
-  fvttVersion: string,
-): boolean {
-  const { minimum, maximum } = fetchCompatRange(systemId, systemVersion);
-  if (minimum !== undefined && compareVersions(fvttVersion, minimum) < 0) return false;
-  if (maximum !== undefined && compareVersions(fvttVersion, normalizeMaximum(maximum)) >= 0)
-    return false;
-  return true;
-}
-
 async function fetchFoundryVersion(): Promise<string> {
   console.log("[monitor] Fetching latest Foundry VTT version...");
   const html = execSync("curl -sf https://foundryvtt.com/releases/", { encoding: "utf8" });
@@ -237,14 +180,8 @@ async function run() {
             );
           if (hasExistingEntry) continue;
 
-          if (!isCompatibleWithFvtt(systemId, latestPatch, fvtt)) {
-            const { minimum, maximum } = fetchCompatRange(systemId, latestPatch);
-            const rangeNote = [
-              minimum !== undefined ? `minimum: ${minimum}` : null,
-              maximum !== undefined ? `maximum: ${maximum}` : null,
-            ]
-              .filter(Boolean)
-              .join(", ");
+          if (!(await isCompatibleWithFvtt(systemId, latestPatch, fvtt))) {
+            const rangeNote = formatCompatRange(await fetchCompatRange(systemId, latestPatch));
             console.log(
               `[monitor] Incompatible: ${systemId} v${latestPatch} (${rangeNote}) with FVTT ${fvtt}`,
             );
