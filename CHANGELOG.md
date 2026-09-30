@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.6](https://github.com/TheFehr/foundry-playwright/compare/v1.6.5...v1.6.6) (2026-09-30)
+
+### Bug Fixes
+
+- **registry:** skip known-incompatible combos before Docker instead of retrying them ([#140](https://github.com/TheFehr/foundry-playwright/issues/140)) ([6ea4fe8](https://github.com/TheFehr/foundry-playwright/commit/6ea4fe8c54d26cca4602f62245ca5024a9d194f7))
+
 ## [1.6.5](https://github.com/TheFehr/foundry-playwright/compare/v1.6.4...v1.6.5) (2026-09-29)
 
 ### Bug Fixes
