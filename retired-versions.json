@@ -1,1 +1,178 @@
-[]
+[
+  {
+    "fvtt": "14.360.0",
+    "system": "dnd5e",
+    "systemMinor": "5.3",
+    "systemVersion": "5.3.3",
+    "status": "stable",
+    "timestamp": "2026-06-10T08:58:00.455Z",
+    "notes": "Verified locally with dnd5e v5.3.3.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.365",
+    "system": "dnd5e",
+    "systemMinor": "5.3",
+    "systemVersion": "5.3.3",
+    "status": "stable",
+    "timestamp": "2026-08-03T18:08:56.848Z",
+    "notes": "Verified locally with dnd5e v5.3.3.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.366",
+    "system": "dnd5e",
+    "systemMinor": "5.3",
+    "systemVersion": "5.3.3",
+    "status": "stable",
+    "timestamp": "2026-08-22T18:08:14.976Z",
+    "notes": "Verified locally with dnd5e v5.3.3.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.367",
+    "system": "dnd5e",
+    "systemMinor": "5.3",
+    "systemVersion": "5.3.3",
+    "status": "stable",
+    "timestamp": "2026-08-22T18:56:44.301Z",
+    "notes": "Verified locally with dnd5e v5.3.3.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "pf2e",
+    "systemMinor": "8.2",
+    "systemVersion": "8.2.0",
+    "status": "stable",
+    "timestamp": "2026-06-10T09:04:38.486Z",
+    "notes": "Verified locally with pf2e v8.2.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.365",
+    "system": "pf2e",
+    "systemMinor": "8.2",
+    "systemVersion": "8.2.0",
+    "status": "stable",
+    "timestamp": "2026-08-03T18:44:13.818Z",
+    "notes": "Verified locally with pf2e v8.2.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.366",
+    "system": "pf2e",
+    "systemMinor": "8.2",
+    "systemVersion": "8.2.0",
+    "status": "stable",
+    "timestamp": "2026-08-22T18:49:40.702Z",
+    "notes": "Verified locally with pf2e v8.2.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "dnd5e",
+    "systemMinor": "5.1",
+    "systemVersion": "5.1.10",
+    "status": "stable",
+    "timestamp": "2026-06-10T07:24:00.071Z",
+    "notes": "Verified locally with dnd5e v5.1.10.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.365",
+    "system": "dnd5e",
+    "systemMinor": "5.1",
+    "systemVersion": "5.1.10",
+    "status": "stable",
+    "timestamp": "2026-08-03T18:23:14.656Z",
+    "notes": "Verified locally with dnd5e v5.1.10.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.366",
+    "system": "dnd5e",
+    "systemMinor": "5.1",
+    "systemVersion": "5.1.10",
+    "status": "stable",
+    "timestamp": "2026-08-22T18:24:43.959Z",
+    "notes": "Verified locally with dnd5e v5.1.10.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.365",
+    "system": "pf2e",
+    "systemMinor": "8.4",
+    "systemVersion": "8.4.0",
+    "status": "stable",
+    "timestamp": "2026-08-03T18:30:32.686Z",
+    "notes": "Verified locally with pf2e v8.4.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.366",
+    "system": "pf2e",
+    "systemMinor": "8.4",
+    "systemVersion": "8.4.0",
+    "status": "stable",
+    "timestamp": "2026-08-22T18:33:18.915Z",
+    "notes": "Verified locally with pf2e v8.4.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.365",
+    "system": "pf2e",
+    "systemMinor": "8.3",
+    "systemVersion": "8.3.0",
+    "status": "stable",
+    "timestamp": "2026-08-03T18:37:24.090Z",
+    "notes": "Verified locally with pf2e v8.3.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.366",
+    "system": "pf2e",
+    "systemMinor": "8.3",
+    "systemVersion": "8.3.0",
+    "status": "stable",
+    "timestamp": "2026-08-22T18:41:23.110Z",
+    "notes": "Verified locally with pf2e v8.3.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.367",
+    "system": "pf2e",
+    "systemMinor": "8.3",
+    "systemVersion": "8.3.0",
+    "status": "stable",
+    "timestamp": "2026-08-22T19:29:12.030Z",
+    "notes": "Verified locally with pf2e v8.3.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.366",
+    "system": "pf2e",
+    "systemMinor": "8.5",
+    "systemVersion": "8.5.0",
+    "status": "stable",
+    "timestamp": "2026-09-06T18:31:44.182Z",
+    "notes": "Verified locally with pf2e v8.5.0.",
+    "retiredAt": "2026-09-30T20:46:12.647Z",
+    "supersededBy": "14.367"
+  }
+]
