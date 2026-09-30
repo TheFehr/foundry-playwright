@@ -366,9 +366,10 @@ async function verifyVersion(
     console.log(
       `--- Skipping ${version} (System: ${system} v${systemVersion}): declares compatibility ${rangeNote}; incompatible with FVTT ${version}. ---`,
     );
-    // Contained the same way as the pass/fail paths below: a registry/report
-    // write failure here shouldn't crash the whole --all-pending/--all sweep
-    // over what is otherwise a correctly-identified, non-actionable result.
+    // registry and markdown writes are caught independently (not one shared
+    // try/catch) so a markdown-write hiccup can never erase a `recorded`
+    // that a preceding, already-successful registry write earned - recorded
+    // must reflect only the registry write's own outcome.
     let recorded = false;
     try {
       if (updateRegistry) {
@@ -383,6 +384,13 @@ async function verifyVersion(
         });
         recorded = true;
       }
+    } catch (persistError) {
+      console.error(
+        `[verifyVersion] Failed to persist incompatible-skip registry entry for ${version}: ${(persistError as Error).message}`,
+      );
+      recorded = false;
+    }
+    try {
       upsertMarkdownSummary({
         version,
         system: `${system} (v${systemVersion})`,
@@ -394,9 +402,8 @@ async function verifyVersion(
       });
     } catch (persistError) {
       console.error(
-        `[verifyVersion] Failed to persist incompatible-skip results for ${version}: ${(persistError as Error).message}`,
+        `[verifyVersion] Failed to persist incompatible-skip markdown summary for ${version}: ${(persistError as Error).message}`,
       );
-      recorded = false;
     }
     return { success: true, failures: [], skipped: true, recorded };
   }
@@ -632,23 +639,23 @@ async function verifyVersion(
 
     console.log(`--- Verification Successful for ${version} ---`);
 
-    // Persist results (registry, then the markdown summary derived from it —
-    // same order the fail path below uses, so the two can't silently diverge
-    // on which one ran). Caught rather than thrown: a disk-write hiccup here
-    // shouldn't override a real test pass with a misleading failure result.
+    // Computed unconditionally (not just under updateRegistry) so the
+    // markdown row below always matches the registry's own normalization
+    // instead of showing a raw "unknown" version or the fake-module test
+    // scaffold when they diverge.
+    const realModules = filterRealModules(meta.modules);
+    const resolvedSystemVersion = resolveVerifiedSystemVersion(
+      meta.system.version,
+      manifestUrl,
+      systemVersion,
+    );
+
+    // Registry and markdown writes are caught independently (not one shared
+    // try/catch) so a markdown-write hiccup can never erase a `recorded`
+    // that a preceding, already-successful registry write earned - recorded
+    // must reflect only the registry write's own outcome.
     let passRecorded = false;
     try {
-      // Computed unconditionally (not just under updateRegistry) so the
-      // markdown row below always matches the registry's own normalization
-      // instead of showing a raw "unknown" version or the fake-module test
-      // scaffold when they diverge.
-      const realModules = filterRealModules(meta.modules);
-      const resolvedSystemVersion = resolveVerifiedSystemVersion(
-        meta.system.version,
-        manifestUrl,
-        systemVersion,
-      );
-
       if (updateRegistry) {
         if (resolvedSystemVersion === "unknown") {
           console.warn(
@@ -670,7 +677,13 @@ async function verifyVersion(
           passRecorded = true;
         }
       }
-
+    } catch (persistError) {
+      console.error(
+        `[verifyVersion] Failed to persist registry entry for ${version}: ${(persistError as Error).message}`,
+      );
+      passRecorded = false;
+    }
+    try {
       upsertMarkdownSummary({
         version,
         system: `${meta.system.id} (v${resolvedSystemVersion})`,
@@ -681,9 +694,8 @@ async function verifyVersion(
       });
     } catch (persistError) {
       console.error(
-        `[verifyVersion] Failed to persist results for ${version}: ${(persistError as Error).message}`,
+        `[verifyVersion] Failed to persist markdown summary for ${version}: ${(persistError as Error).message}`,
       );
-      passRecorded = false;
     }
     return { success: true, failures: [], recorded: passRecorded };
   } catch (error: unknown) {
@@ -716,10 +728,10 @@ async function verifyVersion(
           `Not recording failure details for ${version}: cannot determine which system version was actually tested (metadata missing/invalid and no manifest pin this run).`,
         );
       } else {
-        // Same order and error containment as the pass path above: registry
-        // first, then the markdown summary, with a write failure logged
-        // rather than escaping this already-executing catch block (which
-        // would abort the whole run instead of returning the real result).
+        // Registry and markdown writes are caught independently (not one
+        // shared try/catch) so a markdown-write hiccup can never erase a
+        // `recorded` that a preceding, already-successful registry write
+        // earned - recorded must reflect only the registry write's outcome.
         try {
           if (updateRegistry && recordFailures) {
             console.log(`Recording failure in verified-versions.json for ${version}...`);
@@ -736,6 +748,13 @@ async function verifyVersion(
             console.log("Registry updated with failure entry.");
             failRecorded = true;
           }
+        } catch (persistError) {
+          console.error(
+            `[verifyVersion] Failed to persist failure registry entry for ${version}: ${(persistError as Error).message}`,
+          );
+          failRecorded = false;
+        }
+        try {
           upsertMarkdownSummary({
             version,
             system: `${meta.system.id || system} (v${resolvedSystemVersion})`,
@@ -747,9 +766,8 @@ async function verifyVersion(
           });
         } catch (persistError) {
           console.error(
-            `[verifyVersion] Failed to persist failure results for ${version}: ${(persistError as Error).message}`,
+            `[verifyVersion] Failed to persist failure markdown summary for ${version}: ${(persistError as Error).message}`,
           );
-          failRecorded = false;
         }
       }
     } else if (updateRegistry && recordFailures) {
@@ -1107,10 +1125,23 @@ program
         });
 
         if (options.reVerify || options.all) {
-          // Explicit, deliberate full resweep - uncapped and untracked, same
-          // as a direct request for "everything, right now" has always meant.
+          // Explicit, deliberate full resweep - uncapped, same as a direct
+          // request for "everything, right now" has always meant. Still
+          // tagged for resweep-progress tracking when a release resweep also
+          // happens to be pending (--re-verify/--all combined with
+          // --if-release-pending) - otherwise this branch's targets never
+          // set stableResweepBatch, so a manual full resweep that covers
+          // every currently-stable pairing would silently fail to credit
+          // reverify-state.json at all, leaving the automatic capped batch
+          // path thinking a resweep is still needed on subsequent nights
+          // even though a human already finished it by hand.
           const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
-          targets.push(...stable.map(stableTargetOf));
+          targets.push(
+            ...stable.map((e) => ({
+              ...stableTargetOf(e),
+              stableResweepBatch: pendingReleaseVersion !== null,
+            })),
+          );
           if (stable.length > 0)
             console.log(`Targeting ${stable.length} stable pairings for re-verification.`);
         } else if (pendingReleaseVersion) {
