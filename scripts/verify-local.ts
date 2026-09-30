@@ -3,7 +3,13 @@ import path from "path";
 import fs from "fs";
 import { DockerFoundryOrchestrator, getHostUidGid, isPodmanRuntime } from "../src/docker.js";
 import { Command } from "commander";
-import { minorOf } from "./version-utils.js";
+import {
+  minorOf,
+  buildManifestUrl,
+  isCompatibleWithFvtt,
+  fetchCompatRange,
+  formatCompatRange,
+} from "./version-utils.js";
 
 /**
  * Local Verification Script
@@ -49,17 +55,6 @@ function compareVersions(a: string, b: string): number {
     if (diff !== 0) return diff;
   }
   return 0;
-}
-
-function buildManifestUrl(systemId: string, version: string): string | null {
-  switch (systemId) {
-    case "dnd5e":
-      return `https://github.com/foundryvtt/dnd5e/releases/download/release-${version}/system.json`;
-    case "pf2e":
-      return `https://github.com/foundryvtt/pf2e/releases/download/pf2e-${version}/system.json`;
-    default:
-      return null;
-  }
 }
 
 /**
@@ -130,7 +125,7 @@ interface RegistryEntryWrite {
   systemMinor: string;
   systemVersion: string;
   modules?: { id: string; version: string }[];
-  status: "stable" | "failed";
+  status: "stable" | "failed" | "incompatible";
   timestamp: string;
   notes: string;
 }
@@ -340,7 +335,7 @@ interface VerifyVersionOptions {
 async function verifyVersion(
   version: string,
   options: VerifyVersionOptions,
-): Promise<{ success: boolean; failures: TestFailure[] }> {
+): Promise<{ success: boolean; failures: TestFailure[]; skipped?: boolean }> {
   const {
     system,
     modules,
@@ -353,6 +348,46 @@ async function verifyVersion(
   console.log(
     `\n--- Verifying Version: ${version} (System: ${system}${systemVersion ? ` v${systemVersion}` : ""}, Modules: ${modules.join(", ") || "none"}) ---`,
   );
+
+  // Fail fast on a known compatibility mismatch, before ever touching Docker
+  // or Playwright: a system version whose manifest already declares it
+  // incompatible with this FVTT build can never pass, regardless of how many
+  // times it's retried. Checking this up front (a single manifest fetch)
+  // instead of only discovering it 10-40 minutes into a doomed browser-based
+  // install is what actually stops a stable-resweep or pending run from
+  // burning its whole time budget on an outcome that was already knowable -
+  // this exact scenario ate an entire nightly run's 3.5-hour timeout window
+  // retrying the same incompatible combo across several registry rows.
+  // Only possible when systemVersion is actually known (a manifest pin from
+  // --system-version/--system-minor, a pending target, or a pinned
+  // stable-resweep target) - an unpinned ad hoc run has nothing to check yet.
+  if (systemVersion && !isCompatibleWithFvtt(system, systemVersion, version)) {
+    const rangeNote = formatCompatRange(fetchCompatRange(system, systemVersion));
+    console.log(
+      `--- Skipping ${version} (System: ${system} v${systemVersion}): declares compatibility ${rangeNote}; incompatible with FVTT ${version}. ---`,
+    );
+    if (updateRegistry) {
+      upsertRegistryEntry({
+        fvtt: version,
+        system,
+        systemMinor: minorOf(systemVersion),
+        systemVersion,
+        status: "incompatible",
+        timestamp: new Date().toISOString(),
+        notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${version}.`,
+      });
+    }
+    upsertMarkdownSummary({
+      version,
+      system: `${system} (v${systemVersion})`,
+      modules: modules.join(", ") || "none",
+      status: "INCOMPATIBLE",
+      date: new Date().toISOString().split("T")[0],
+      docker: isDocker ? "Yes" : "No",
+      notes: rangeNote,
+    });
+    return { success: true, failures: [], skipped: true };
+  }
 
   let foundryUrl = process.env.FOUNDRY_URL || "http://localhost:30000";
   const rootless = process.env.FOUNDRY_PLAYWRIGHT_ROOTLESS === "1";
@@ -959,8 +994,18 @@ program
             ...stable.map((e: Record<string, unknown>) => ({
               version: e["fvtt"] as string,
               system: e["system"] as string,
-              // Don't pin systemVersion for re-verify: let installSystem handle already-installed
-              // systems; the registry update records whatever version is actually installed.
+              // Pin to the exact version this row was actually verified stable
+              // with, not "whatever's latest" - re-verifying is meant to catch
+              // a regression in this library against a config we already know
+              // works, not to silently drift onto a newer system release that
+              // was never part of this row's claim. Leaving this unpinned
+              // previously meant every re-verify sweep (e.g. --if-release-
+              // pending) tried installing today's actual-latest system
+              // version regardless of what each row recorded - once that
+              // latest version's own compatibility range moved past an older,
+              // still-pinned FVTT build, every affected row failed the exact
+              // same way, repeatedly, for the same non-issue.
+              systemVersion: e["systemVersion"] as string | undefined,
               systemMinor: e["systemMinor"] as string | undefined,
               modules: Array.isArray(e["modules"])
                 ? (e["modules"] as Record<string, unknown>[]).map(
@@ -1000,7 +1045,8 @@ program
       return;
     }
 
-    const results: { key: string; success: boolean; failures: TestFailure[] }[] = [];
+    const results: { key: string; success: boolean; failures: TestFailure[]; skipped?: boolean }[] =
+      [];
 
     for (const target of targets) {
       const result = await verifyVersion(target.version, {
@@ -1019,12 +1065,13 @@ program
         key: `${target.version} (${sysLabel})`,
         success: result.success,
         failures: result.failures,
+        skipped: result.skipped,
       });
     }
 
     console.log("\n--- Verification Summary ---");
     results.forEach((r) => {
-      const status = r.success ? "PASS" : "FAIL";
+      const status = r.skipped ? "INCOMPATIBLE" : r.success ? "PASS" : "FAIL";
       console.log(`${r.key}: ${status}`);
       if (r.failures.length > 0) {
         r.failures.forEach((f) =>
@@ -1069,7 +1116,9 @@ program
     });
 
     if (changedFiles.length > 0) {
-      const summary = results.map((r) => `${r.key} [${r.success ? "PASS" : "FAIL"}]`).join(", ");
+      const summary = results
+        .map((r) => `${r.key} [${r.skipped ? "INCOMPATIBLE" : r.success ? "PASS" : "FAIL"}]`)
+        .join(", ");
       const commitMsg = `chore(registry): verify ${summary}`;
 
       if (options.gitCommit) {
