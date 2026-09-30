@@ -366,26 +366,35 @@ async function verifyVersion(
     console.log(
       `--- Skipping ${version} (System: ${system} v${systemVersion}): declares compatibility ${rangeNote}; incompatible with FVTT ${version}. ---`,
     );
-    if (updateRegistry) {
-      upsertRegistryEntry({
-        fvtt: version,
-        system,
-        systemMinor: minorOf(systemVersion),
-        systemVersion,
-        status: "incompatible",
-        timestamp: new Date().toISOString(),
-        notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${version}.`,
+    // Contained the same way as the pass/fail paths below: a registry/report
+    // write failure here shouldn't crash the whole --all-pending/--all sweep
+    // over what is otherwise a correctly-identified, non-actionable result.
+    try {
+      if (updateRegistry) {
+        upsertRegistryEntry({
+          fvtt: version,
+          system,
+          systemMinor: minorOf(systemVersion),
+          systemVersion,
+          status: "incompatible",
+          timestamp: new Date().toISOString(),
+          notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${version}.`,
+        });
+      }
+      upsertMarkdownSummary({
+        version,
+        system: `${system} (v${systemVersion})`,
+        modules: modules.join(", ") || "none",
+        status: "INCOMPATIBLE",
+        date: new Date().toISOString().split("T")[0],
+        docker: isDocker ? "Yes" : "No",
+        notes: rangeNote,
       });
+    } catch (persistError) {
+      console.error(
+        `[verifyVersion] Failed to persist incompatible-skip results for ${version}: ${(persistError as Error).message}`,
+      );
     }
-    upsertMarkdownSummary({
-      version,
-      system: `${system} (v${systemVersion})`,
-      modules: modules.join(", ") || "none",
-      status: "INCOMPATIBLE",
-      date: new Date().toISOString().split("T")[0],
-      docker: isDocker ? "Yes" : "No",
-      notes: rangeNote,
-    });
     return { success: true, failures: [], skipped: true };
   }
 
