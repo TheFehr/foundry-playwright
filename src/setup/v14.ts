@@ -1,6 +1,9 @@
 import { expect, Locator } from "@playwright/test";
 import { SetupAdapter, BaseSetupAdapter, BaseGameAdapter, performLegacyJoin } from "./base.js";
-import { installModuleFromManifest as helperInstallModuleFromManifest } from "../helpers.js";
+import {
+  installModuleFromManifest as helperInstallModuleFromManifest,
+  waitUntilWorldLaunched,
+} from "../helpers.js";
 
 import { FoundryPage } from "../types/index.js";
 
@@ -200,7 +203,7 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
       if ((await agreementBtn.count()) > 0 && (await agreementBtn.isVisible())) {
         console.log(`${this.tag()} EULA agreement button found. Clicking...`);
         await agreementBtn.evaluate((el: Element) => (el as HTMLElement).click());
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       } else {
         throw new Error(
           `${this.tag()} EULA agreement button NOT found or NOT visible. Cannot proceed with setup.`,
@@ -227,7 +230,7 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
       const submitBtn = page.getByRole("button", { name: "Submit Key" });
       await submitBtn.evaluate((el: Element) => (el as HTMLElement).click());
 
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       console.log(`${this.tag()} License key submitted.`);
     }
   }
@@ -545,7 +548,7 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
 
     if (onCreateForm) {
       console.log(`${this.tag()} On world creation screen. Filling form...`);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       const configSection = page.locator('section[data-application-part="config"]');
       await configSection.locator('input[name="title"]').fill(worldId);
       const worldIdInput = configSection.locator('input[name="world-id"], input[name="id"]');
@@ -595,7 +598,16 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
     // /players). Retry rather than assume one click is enough.
     for (let attempt = 1; attempt <= 5 && page.url().includes("/players"); attempt++) {
       await playersSubmitBtn.click().catch(() => null);
-      await page.waitForLoadState("networkidle").catch(() => null);
+      // Waits for the URL to actually leave /players, not for the page to
+      // go network-idle - a successful submit launches the world into a
+      // live, continuously-connected session that may never satisfy "no
+      // network activity for 500ms". Confirmed live: this previously had no
+      // timeout at all, so a race here (the click succeeds and launches the
+      // world, but this wait never resolves) could burn this entire
+      // beforeAll hook's timeout on one single stuck wait, well before the
+      // very next line's own "did we leave /players" check ever got a
+      // chance to run.
+      await waitUntilWorldLaunched(page);
       if (!page.url().includes("/players")) break;
       await page.waitForTimeout(1000);
     }
@@ -798,7 +810,7 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
         .locator('button[type="submit"]')
         .first()
         .evaluate((el: Element) => (el as HTMLElement).click());
-      await page.waitForLoadState("networkidle").catch(() => null);
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
     }
 
     console.log(`${this.tag()} Backup "${backupName}" restored.`);

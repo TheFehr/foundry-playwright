@@ -1,5 +1,12 @@
 import { Page } from "@playwright/test";
-import { disableTour, waitForReady, validateStack, shutdownWorldDirectly } from "./helpers.js";
+import {
+  disableTour,
+  waitForReady,
+  validateStack,
+  shutdownWorldDirectly,
+  waitUntilWorldClosed,
+  waitUntilLeftJoinScreen,
+} from "./helpers.js";
 import { getSetupAdapter } from "./setup/index.js";
 
 /**
@@ -9,7 +16,16 @@ import { getSetupAdapter } from "./setup/index.js";
 export async function returnToSetup(page: Page, adminPassword?: string, _version?: string) {
   console.log("[returnToSetup] Returning to setup screen...");
 
-  let maxAttempts = 3;
+  // Each real transition (about:blank -> /setup default jump -> /auth or
+  // /join -> Setup) can legitimately cost more than one attempt on its own -
+  // confirmed live, repeatedly: a shutdown/login submit that doesn't take
+  // effect on the first try still lands on a fully successful Setup screen
+  // one single attempt later, which 3 wasn't always enough budget for (every
+  // one of those observed cases threw here despite Setup being reached
+  // moments after the final attempt). Now that every wait in this loop is
+  // bounded, a higher ceiling only costs a few more seconds in the rare
+  // genuine-failure case, not a hang.
+  let maxAttempts = 6;
   for (let i = 0; i < maxAttempts; i++) {
     const url = page.url();
     console.log(`[returnToSetup] Attempt ${i + 1}. Current URL: ${url}`);
@@ -27,15 +43,31 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
         await page
           .waitForURL((u) => u.pathname.includes("/setup"), { timeout: 10000 })
           .catch(() => null);
-        await page.waitForLoadState("networkidle");
+        // Best-effort settle only - the isSetup check right below is the real,
+        // bounded gate, so this never needs to be able to hang on its own.
+        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       }
 
-      // Definitively check for setup application root
-      const isSetup = await page.evaluate(
-        () =>
-          !!document.querySelector("foundry-app#setup") ||
-          document.body.classList.contains("setup"),
-      );
+      // Definitively check for setup application root - a bounded wait
+      // rather than a single point-in-time check, since the URL can update
+      // before the Setup app has actually rendered. Confirmed live (direct
+      // DOM inspection): body.classList.contains("setup") is the real,
+      // correct signal for this build - "foundry-app#setup" never matches
+      // at all here, kept only as a harmless fallback for other versions.
+      // 15s, not 5s: returning here from an active, just-launched game
+      // session involves a full page reload (confirmed via the VM trace
+      // that found this bug - many seconds of template recompilation
+      // logged during exactly this transition), unlike the much faster
+      // fresh-login path a 5s bound was tuned against.
+      const isSetup = await page
+        .waitForFunction(
+          () =>
+            !!document.querySelector("foundry-app#setup") ||
+            document.body.classList.contains("setup"),
+          { timeout: 15000 },
+        )
+        .then(() => true)
+        .catch(() => false);
       if (isSetup) {
         console.log("[returnToSetup] Successfully reached Setup screen.");
         return;
@@ -45,7 +77,28 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
     if (url.includes("/auth")) {
       console.log("[returnToSetup] On /auth screen. Checking for admin login...");
       const pwInput = page.locator('input[name="adminPassword"]');
-      if (await pwInput.isVisible()) {
+      // A still-valid admin session can land here only to be auto-redirected
+      // onward by Foundry's own client-side JS - that decision isn't instant.
+      // Confirmed live: an immediate, unawaited isVisible() check can run
+      // before that redirect fires, wrongly concluding "not logged in" and
+      // bouncing to /setup just as /setup was about to bounce back here on
+      // its own - burning attempts on a race instead of letting the page
+      // settle. Give it a brief bounded window for either outcome first.
+      const pwVisible = await pwInput
+        .waitFor({ state: "visible", timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!pwVisible) {
+        const movedOnOwn = await page
+          .waitForURL((u) => !u.pathname.includes("/auth"), { timeout: 3000 })
+          .then(() => true)
+          .catch(() => false);
+        if (movedOnOwn) {
+          console.log("[returnToSetup] /auth auto-redirected on its own.");
+          continue;
+        }
+      }
+      if (pwVisible) {
         await pwInput.fill(adminPassword || process.env.FOUNDRY_ADMIN_PASSWORD || "password");
         await page
           .locator('button[type="submit"], button:has-text("Log In")')
@@ -56,11 +109,18 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
           page.waitForURL((u) => u.pathname.includes("/setup"), { timeout: 20000 }),
           page.waitForSelector("foundry-app#setup, body.setup", { timeout: 20000 }),
         ]).catch(() => null);
-        await page.waitForLoadState("networkidle");
+        // Best-effort settle - the race above is the real gate, and the next
+        // loop iteration re-reads page.url() regardless, so this must not be
+        // able to hang on its own.
+        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       } else {
         console.log("[returnToSetup] On /auth but no admin login found. Navigating to /setup...");
         await page.goto("/setup").catch(() => null);
-        await page.waitForLoadState("networkidle");
+        // Confirmed live: this previously had no timeout at all and could hang
+        // here indefinitely (e.g. if /setup keeps some background activity
+        // alive), burning the whole retry loop on one single stuck wait
+        // instead of letting the next iteration re-check page state.
+        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       }
       continue;
     }
@@ -77,7 +137,7 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
           .locator('button[type="submit"]')
           .first()
           .evaluate((el: Element) => (el as HTMLElement).click());
-        await page.waitForTimeout(5000); // Allow time for shutdown
+        await waitUntilLeftJoinScreen(page);
       } else {
         // Admin already authenticated — the form still renders a submit button labelled
         // "Return to Setup" (with an info message instead of the password input).
@@ -92,12 +152,12 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
         if (await returnBtn.isVisible()) {
           console.log("[returnToSetup] Return-to-setup button found. Clicking...");
           await returnBtn.evaluate((el: Element) => (el as HTMLElement).click());
-          await page.waitForTimeout(5000);
+          await waitUntilLeftJoinScreen(page);
         } else {
           await page.goto("/setup").catch(() => null);
         }
       }
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       continue;
     }
 
@@ -107,7 +167,7 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
     if (url.includes("/players")) {
       console.log("[returnToSetup] On /players screen. Navigating to /join for admin shutdown...");
       await page.goto("/join").catch(() => null);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       continue;
     }
 
@@ -127,15 +187,33 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
         })
         .catch(() => null);
       await page.waitForTimeout(3000);
-      await page.waitForLoadState("networkidle");
+      // Waits for the URL to actually leave /game, not for the page to go
+      // network-idle - a live Foundry session keeps a persistent WebSocket
+      // connection with continuous traffic, so it may never satisfy "no
+      // network activity for 500ms" even once this shutdown attempt has
+      // genuinely succeeded. Confirmed live: this previously had no timeout
+      // at all, so a race here could burn this entire beforeAll hook's
+      // timeout on one single stuck wait instead of letting the outer
+      // maxAttempts loop retry.
+      await waitUntilWorldClosed(page);
       continue;
     }
 
     // Default: try direct jump
     console.log(`[returnToSetup] Navigating to /setup...`);
     await page.goto("/setup").catch(() => null);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
   }
+
+  // Exhausting every attempt without ever hitting the early `return` above
+  // means Setup was never actually reached - throw rather than letting the
+  // caller silently proceed as if it had. A caller then calling something
+  // like switchTab(page, "Worlds") against whatever page we're actually
+  // still on produces a confusing, unrelated-looking timeout instead of
+  // this function's own clear, specific failure.
+  throw new Error(
+    `[returnToSetup] Failed to reach the Setup screen after ${maxAttempts} attempts (stuck at ${page.url()}).`,
+  );
 }
 
 /**
@@ -271,7 +349,9 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
   for (let attempt = 1; attempt <= maxAttempts && !done; attempt++) {
     if (page.url() === "about:blank") await page.goto("/").catch(() => null);
     await disableTour(page);
-    await page.waitForLoadState("networkidle").catch(() => null);
+    // Best-effort settle - the url/DOM checks below re-read live state
+    // regardless, so this can never be allowed to hang on its own.
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
 
     const url = page.url();
 
@@ -282,7 +362,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
       );
       await page.waitForTimeout(10000);
       await page.goto("/").catch(() => null);
-      await page.waitForLoadState("networkidle").catch(() => null);
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       continue;
     }
 
@@ -316,7 +396,7 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
         await page
           .waitForURL((u) => u.pathname.includes("/setup"), { timeout: 15000 })
           .catch(() => null);
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       }
       continue;
     }
@@ -488,7 +568,12 @@ export async function foundrySetup(page: Page, config: FoundrySetupConfig) {
       }
     }, moduleIds);
 
-    await page.waitForLoadState("networkidle");
+    // Not "await waitForURL" - a reload back into a live world re-establishes
+    // the same persistent WebSocket traffic that makes plain networkidle
+    // unreliable elsewhere in this file, so this must stay bounded. The
+    // page.url() check right below re-reads live state regardless of whether
+    // this settles cleanly.
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
 
     // The reload can land on /players (a lighter, pre-join interstitial)
     // instead of /game if there was no established client session to resume
@@ -527,7 +612,7 @@ export async function foundryTeardown(page: Page, config: FoundrySetupConfig) {
   console.log("[foundryTeardown] Starting teardown...");
 
   await returnToSetup(page, adminPassword, version).catch(() => null);
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
 
   const adapter = await getSetupAdapter(page, version);
   await disableTour(page);
@@ -540,7 +625,7 @@ export async function foundryTeardown(page: Page, config: FoundrySetupConfig) {
  */
 export async function loginAs(page: Page, userName: string, password?: string) {
   if (!page.url().includes("/join")) await page.goto("/join");
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
   const adapter = await getSetupAdapter(page);
   await adapter.login(page, userName, password);
   await page.waitForURL(/\/game/, { timeout: 60000 });

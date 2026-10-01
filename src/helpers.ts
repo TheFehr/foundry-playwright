@@ -419,6 +419,58 @@ export async function waitForReady(page: Page) {
   await page.waitForFunction(() => window.game?.ready, { timeout: 60000 });
 }
 
+// Waits for the page to navigate away from a URL path containing
+// pathSubstring, within timeoutMs. Resolves either way rather than
+// throwing - callers treat "still there after the timeout" as a normal
+// retry case, not a hard failure; this is a bounded hint, not a gate.
+async function waitForUrlAway(
+  page: Page,
+  pathSubstring: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  try {
+    await page.waitForURL((url) => !url.pathname.includes(pathSubstring), { timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Waits for a live world/game session to actually be left (the URL moving
+ * off /game), rather than for the page to go network-idle. A live Foundry
+ * session keeps a persistent WebSocket connection with continuous traffic,
+ * so "no network activity for 500ms" may never be satisfied even once a
+ * shutdown/navigation away from it has genuinely succeeded - confirmed live
+ * as the cause of returnToSetup occasionally hanging for an entire test
+ * hook's timeout instead of the few seconds the transition actually takes.
+ */
+export async function waitUntilWorldClosed(page: Page, timeoutMs = 5000): Promise<boolean> {
+  return waitForUrlAway(page, "/game", timeoutMs);
+}
+
+/**
+ * Waits for a just-submitted world-creation/player-configuration screen
+ * (/players) to actually launch the world, for the same reason
+ * waitUntilWorldClosed avoids networkidle - the destination may be a live,
+ * continuously-connected session that never goes network-idle.
+ */
+export async function waitUntilWorldLaunched(page: Page, timeoutMs = 5000): Promise<boolean> {
+  return waitForUrlAway(page, "/players", timeoutMs);
+}
+
+/**
+ * Waits for a just-submitted admin shutdown/return-to-setup action on the
+ * /join screen to actually take effect, for the same reason
+ * waitUntilWorldClosed avoids networkidle. Confirmed live: a fixed sleep
+ * here raced the real redirect (the destination landed on Setup only one
+ * retry-loop iteration later than this resolved), burning a returnToSetup
+ * attempt on a transition that was already in flight.
+ */
+export async function waitUntilLeftJoinScreen(page: Page, timeoutMs = 8000): Promise<boolean> {
+  return waitForUrlAway(page, "/join", timeoutMs);
+}
+
 /**
  * Gracefully shuts down the active world and returns the server to the Setup screen.
  * This utilizes the direct client API and must be executed within an authenticated GM session.
@@ -571,7 +623,10 @@ export async function handleReload(page: Page) {
     .last();
   await expect(dialog).toBeVisible();
   await dialog.locator('button:has-text("Yes")').first().click();
-  await page.waitForLoadState("networkidle");
+  // Best-effort settle - a reload can land back on a live game session with
+  // persistent WebSocket traffic that never satisfies networkidle, and
+  // waitForReady below is the real, bounded gate regardless.
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
   await waitForReady(page);
 }
 
