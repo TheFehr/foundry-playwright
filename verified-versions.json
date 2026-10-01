@@ -211,9 +211,9 @@
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.0",
-    "status": "stable",
-    "timestamp": "2026-09-06T18:46:17.683Z",
-    "notes": "Verified locally with pf2e v8.5.0."
+    "status": "failed",
+    "timestamp": "2026-10-01T19:11:29.975Z",
+    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m)"
   },
   {
     "fvtt": "13.351.0",
