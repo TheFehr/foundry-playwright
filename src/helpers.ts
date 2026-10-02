@@ -416,7 +416,12 @@ async function installFromManifest(
  */
 export async function waitForReady(page: Page) {
   console.log("[waitForReady] Waiting for game to be ready...");
-  await page.waitForFunction(() => window.game?.ready, { timeout: 60000 });
+  // waitForFunction(pageFunction, arg, options) is strictly positional - the
+  // predicate above takes no argument, so this must be explicit undefined
+  // rather than omitted, or the options object below is treated as the arg
+  // instead and the 60s timeout is silently never applied (falls back to
+  // Playwright's own default, which is unbounded here).
+  await page.waitForFunction(() => window.game?.ready, undefined, { timeout: 60000 });
 }
 
 // Waits for the page to navigate away from a URL path containing

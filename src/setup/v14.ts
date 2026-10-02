@@ -740,15 +740,23 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
 
     // Wait for the progress indicator to appear first (short timeout — it may be brief),
     // then wait for it to disappear so we don't resolve before the backup actually starts.
+    // waitForFunction(pageFunction, arg, options) is strictly positional -
+    // these predicates take no argument, so the explicit undefined below is
+    // required, or the options object is treated as the arg instead and the
+    // timeouts are silently never applied.
     await page
-      .waitForFunction(() => !!document.querySelector(".notification.info, .progress-bar.active"), {
-        timeout: 5000,
-      })
+      .waitForFunction(
+        () => !!document.querySelector(".notification.info, .progress-bar.active"),
+        undefined,
+        { timeout: 5000 },
+      )
       .catch(() => null);
     await page
-      .waitForFunction(() => !document.querySelector(".notification.info, .progress-bar.active"), {
-        timeout: 120000,
-      })
+      .waitForFunction(
+        () => !document.querySelector(".notification.info, .progress-bar.active"),
+        undefined,
+        { timeout: 120000 },
+      )
       .catch(() => null);
 
     console.log(`${this.tag()} Backup "${backupName}" created.`);
@@ -915,15 +923,23 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
     tabName: string,
   ): Promise<void> {
     // Wait for installation progress to appear (up to 10s), then wait for it to finish.
+    // waitForFunction(pageFunction, arg, options) is strictly positional -
+    // these predicates take no argument, so the explicit undefined below is
+    // required, or the options object is treated as the arg instead and the
+    // timeouts are silently never applied.
     await page
-      .waitForFunction(() => !!document.querySelector(".notification.info, .progress-bar.active"), {
-        timeout: 10000,
-      })
+      .waitForFunction(
+        () => !!document.querySelector(".notification.info, .progress-bar.active"),
+        undefined,
+        { timeout: 10000 },
+      )
       .catch(() => null);
     await page
-      .waitForFunction(() => !document.querySelector(".notification.info, .progress-bar.active"), {
-        timeout: 300000,
-      })
+      .waitForFunction(
+        () => !document.querySelector(".notification.info, .progress-bar.active"),
+        undefined,
+        { timeout: 300000 },
+      )
       .catch(() => null);
 
     const closeBtn = dialog

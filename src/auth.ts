@@ -9,6 +9,29 @@ import {
 } from "./helpers.js";
 import { getSetupAdapter } from "./setup/index.js";
 
+// Definitively checks for the setup application root, rather than a single
+// point-in-time check, since the URL can update before the Setup app has
+// actually rendered. Confirmed live (direct DOM inspection):
+// body.classList.contains("setup") is the real, correct signal for this
+// build - "foundry-app#setup" never matches at all here, kept only as a
+// harmless fallback for other versions.
+async function checkIsSetup(page: Page, timeoutMs: number): Promise<boolean> {
+  return page
+    .waitForFunction(
+      () =>
+        !!document.querySelector("foundry-app#setup") || document.body.classList.contains("setup"),
+      // waitForFunction(pageFunction, arg, options) is strictly positional -
+      // the predicate above takes no argument, so this must be explicit
+      // undefined rather than omitted, or the next positional (the options
+      // object) is treated as the arg instead and the timeout below is
+      // silently never applied.
+      undefined,
+      { timeout: timeoutMs },
+    )
+    .then(() => true)
+    .catch(() => false);
+}
+
 /**
  * Navigates from within a world or the join screen back to the setup screen.
  * Implements RFC 0008 transition logic.
@@ -48,27 +71,12 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
         await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
       }
 
-      // Definitively check for setup application root - a bounded wait
-      // rather than a single point-in-time check, since the URL can update
-      // before the Setup app has actually rendered. Confirmed live (direct
-      // DOM inspection): body.classList.contains("setup") is the real,
-      // correct signal for this build - "foundry-app#setup" never matches
-      // at all here, kept only as a harmless fallback for other versions.
       // 15s, not 5s: returning here from an active, just-launched game
       // session involves a full page reload (confirmed via the VM trace
       // that found this bug - many seconds of template recompilation
       // logged during exactly this transition), unlike the much faster
       // fresh-login path a 5s bound was tuned against.
-      const isSetup = await page
-        .waitForFunction(
-          () =>
-            !!document.querySelector("foundry-app#setup") ||
-            document.body.classList.contains("setup"),
-          { timeout: 15000 },
-        )
-        .then(() => true)
-        .catch(() => false);
-      if (isSetup) {
+      if (await checkIsSetup(page, 15000)) {
         console.log("[returnToSetup] Successfully reached Setup screen.");
         return;
       }
@@ -203,6 +211,20 @@ export async function returnToSetup(page: Page, adminPassword?: string, _version
     console.log(`[returnToSetup] Navigating to /setup...`);
     await page.goto("/setup").catch(() => null);
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => null);
+  }
+
+  // The loop above only re-checks Setup readiness at the *start* of the
+  // /setup branch - if the final attempt's own transition (a shutdown,
+  // login, or redirect) is what actually lands on Setup, that happens at
+  // the end of the iteration via `continue`, and the loop exits before ever
+  // re-reading page state. Confirmed live, repeatedly: the screenshot at
+  // the moment of the throw below showed a fully, successfully loaded
+  // Setup screen - the transition had already succeeded, just one
+  // iteration too late for the loop to notice. Give it one last bounded
+  // check before concluding this is a genuine failure.
+  if (page.url().includes("/setup") && (await checkIsSetup(page, 15000))) {
+    console.log("[returnToSetup] Successfully reached Setup screen (final check).");
+    return;
   }
 
   // Exhausting every attempt without ever hitting the early `return` above
