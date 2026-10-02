@@ -55,7 +55,7 @@
     "dotenv": "17.4.2",
     "husky": "9.1.7",
     "lint-staged": "17.6.0",
-    "oxfmt": "0.48.0",
+    "oxfmt": "0.71.0",
     "oxlint": "1.63.0",
     "release-it": "20.0.1",
     "tsx": "4.21.0",
