@@ -256,9 +256,9 @@
     "system": "dnd5e",
     "systemMinor": "6.0",
     "systemVersion": "6.0.0",
-    "status": "stable",
-    "timestamp": "2026-09-11T18:18:21.967Z",
-    "notes": "Verified locally with dnd5e v6.0.0."
+    "status": "failed",
+    "timestamp": "2026-10-02T04:28:37.402Z",
+    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m)"
   },
   {
     "fvtt": "14.368",
@@ -274,9 +274,9 @@
     "system": "dnd5e",
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
-    "status": "stable",
-    "timestamp": "2026-09-20T18:19:43.426Z",
-    "notes": "Verified locally with dnd5e v5.3.3."
+    "status": "failed",
+    "timestamp": "2026-10-02T04:56:34.998Z",
+    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m); export: version metadata (\u001b[31m\"beforeAll\" hook timeout of 600000ms exceeded.\u001b[39m)"
   },
   {
     "fvtt": "14.368",
