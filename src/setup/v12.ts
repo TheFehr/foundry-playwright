@@ -551,12 +551,17 @@ export class V12SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
   ): Promise<void> {
     // Wait for progress indicator to appear (up to 10s), then wait for it to disappear.
     // Using waitForFunction is more efficient than locator.waitFor for polling DOM state.
+    // waitForFunction(pageFunction, arg, options) is strictly positional -
+    // these predicates take no argument, so the explicit undefined below is
+    // required, or the options object is treated as the arg instead and the
+    // timeouts are silently never applied.
     await page
       .waitForFunction(
         () =>
           !!document.querySelector(
             ".notification.info, .progress-bar.active, .notification.warning",
           ),
+        undefined,
         { timeout: 10000 },
       )
       .catch(() => {
@@ -568,6 +573,7 @@ export class V12SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
           !document.querySelector(
             ".notification.info, .progress-bar.active, .notification.warning",
           ),
+        undefined,
         { timeout: 300000 },
       )
       .catch(() => null);
