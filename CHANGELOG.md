@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.8](https://github.com/TheFehr/foundry-playwright/compare/v1.6.7...v1.6.8) (2026-10-03)
+
+### Bug Fixes
+
+- **setup:** bound every networkidle wait and fix two returnToSetup races ([#162](https://github.com/TheFehr/foundry-playwright/issues/162)) ([80b5cdc](https://github.com/TheFehr/foundry-playwright/commit/80b5cdc87422d7c5741e260fa688713d9bd7f9a0))
+
 ## [1.6.7](https://github.com/TheFehr/foundry-playwright/compare/v1.6.6...v1.6.7) (2026-09-30)
 
 ### Bug Fixes
