@@ -23,7 +23,7 @@
     "systemMinor": "8.1",
     "systemVersion": "8.1.2",
     "status": "stable",
-    "timestamp": "2026-10-01T05:13:42.355Z",
+    "timestamp": "2026-10-03T18:18:51.573Z",
     "notes": "Verified locally with pf2e v8.1.2."
   },
   {
@@ -50,7 +50,7 @@
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
     "status": "stable",
-    "timestamp": "2026-10-01T05:23:26.305Z",
+    "timestamp": "2026-10-03T18:27:49.768Z",
     "notes": "Verified locally with dnd5e v5.2.5."
   },
   {
