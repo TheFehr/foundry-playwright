@@ -85,9 +85,9 @@
     "system": "pf2e",
     "systemMinor": "8.0",
     "systemVersion": "8.0.3",
-    "status": "failed",
-    "timestamp": "2026-10-01T06:59:31.455Z",
-    "notes": "Automated verification failed: user management: create, update, and login (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m); export: version metadata (\u001b[31m\"beforeAll\" hook timeout of 600000ms exceeded.\u001b[39m)"
+    "status": "pending",
+    "timestamp": "2026-10-03T00:00:00.000Z",
+    "notes": "Reset to pending: this entry's \"failed\" status was caused by a foundry-playwright bug (an unbounded wait in returnToSetup causing a beforeAll hook timeout), not a real incompatibility - fixed in #162. No independent evidence either way for this exact version; let the next verification run determine the real result."
   },
   {
     "fvtt": "13.351.0",
@@ -157,18 +157,18 @@
     "system": "dnd5e",
     "systemMinor": "5.1",
     "systemVersion": "5.1.10",
-    "status": "failed",
-    "timestamp": "2026-10-01T08:20:44.416Z",
-    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m); user management: create, update, and login (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m); export: version metadata (\u001b[31m\"beforeAll\" hook timeout of 600000ms exceeded.\u001b[39m)"
+    "status": "incompatible",
+    "timestamp": "2026-10-03T00:00:00.000Z",
+    "notes": "Confirmed incompatible: dnd5e 5.1.x predates 5.2.x, which the dnd5e maintainer confirmed was never intended to support FoundryVTT V14 (https://github.com/foundryvtt/dnd5e/issues/6704 - \"it isn't expected that 5.2.x be compatible with V14. The 5.3.x branch is already.\"); 5.1.x being older cannot be compatible either. This row was previously recorded \"failed\" due to an unrelated foundry-playwright bug (an unbounded wait in returnToSetup causing a beforeAll hook timeout, fixed in #162) that masked the real result - confirmed via direct manual reproduction: actor creation crashes with \"Class EnchantmentData must define a changes field in its schema\", the same failure class already documented for 5.2.x. Not a foundry-playwright regression."
   },
   {
     "fvtt": "14.367",
     "system": "pf2e",
     "systemMinor": "8.4",
     "systemVersion": "8.4.1",
-    "status": "failed",
-    "timestamp": "2026-10-01T09:03:35.041Z",
-    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m); user management: create, update, and login (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m); export: version metadata (\u001b[31m\"beforeAll\" hook timeout of 600000ms exceeded.\u001b[39m)"
+    "status": "pending",
+    "timestamp": "2026-10-03T00:00:00.000Z",
+    "notes": "Reset to pending: this entry's \"failed\" status was caused by a foundry-playwright bug (an unbounded wait in returnToSetup causing a beforeAll hook timeout), not a real incompatibility - fixed in #162. No independent evidence either way for this exact version; let the next verification run determine the real result."
   },
   {
     "fvtt": "14.367",
