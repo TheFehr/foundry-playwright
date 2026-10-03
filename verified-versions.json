@@ -85,9 +85,9 @@
     "system": "pf2e",
     "systemMinor": "8.0",
     "systemVersion": "8.0.3",
-    "status": "pending",
-    "timestamp": "2026-10-03T00:00:00.000Z",
-    "notes": "Reset to pending: this entry's \"failed\" status was caused by a foundry-playwright bug (an unbounded wait in returnToSetup causing a beforeAll hook timeout), not a real incompatibility - fixed in #162. No independent evidence either way for this exact version; let the next verification run determine the real result."
+    "status": "stable",
+    "timestamp": "2026-10-03T15:31:33.355Z",
+    "notes": "Verified locally with pf2e v8.0.3."
   },
   {
     "fvtt": "13.351.0",
