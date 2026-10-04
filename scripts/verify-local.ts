@@ -344,6 +344,11 @@ interface VerifyVersionOptions {
   updateRegistry: boolean;
   recordFailures: boolean;
   keepContainer: boolean;
+  // Captured once by the caller at the start of the run, not read fresh at
+  // each registry write - a write should be stamped with the version this
+  // specific run's test actually ran under, not whatever package.json
+  // happens to contain by the time that particular write executes.
+  pkgVersion: string;
 }
 
 async function verifyVersion(
@@ -358,6 +363,7 @@ async function verifyVersion(
     updateRegistry,
     recordFailures,
     keepContainer,
+    pkgVersion,
   } = options;
   console.log(
     `\n--- Verifying Version: ${version} (System: ${system}${systemVersion ? ` v${systemVersion}` : ""}, Modules: ${modules.join(", ") || "none"}) ---`,
@@ -395,7 +401,7 @@ async function verifyVersion(
           status: "incompatible",
           timestamp: new Date().toISOString(),
           notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${version}.`,
-          verifiedWith: getPackageVersion(),
+          verifiedWith: pkgVersion,
         });
         recorded = true;
       }
@@ -687,7 +693,7 @@ async function verifyVersion(
             status: "stable",
             timestamp: new Date().toISOString(),
             notes: `Verified locally with ${meta.system.id} v${resolvedSystemVersion}.`,
-            verifiedWith: getPackageVersion(),
+            verifiedWith: pkgVersion,
           });
           console.log("Registry updated successfully.");
           passRecorded = true;
@@ -760,7 +766,7 @@ async function verifyVersion(
               status: "failed",
               timestamp: new Date().toISOString(),
               notes: `Automated verification failed: ${formatFailures(failures)}`,
-              verifiedWith: getPackageVersion(),
+              verifiedWith: pkgVersion,
             });
             console.log("Registry updated with failure entry.");
             failRecorded = true;
@@ -1160,6 +1166,7 @@ program
         updateRegistry: options.updateRegistry,
         recordFailures: options.recordFailures,
         keepContainer: options.keepContainer,
+        pkgVersion,
       });
       const sysLabel = target.systemVersion
         ? `${target.system} v${target.systemVersion}`

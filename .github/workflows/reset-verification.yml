@@ -136,6 +136,30 @@ jobs:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
 
+      # close-resolved-issues.ts's escalation path (POST needs-investigation,
+      # DELETE verification-required) only looks for a "failed" entry's
+      # issue under verification-required - once stripped by that first
+      # escalation, it's gone from that query for good. Resetting to
+      # "pending" effectively restarts this issue's lifecycle, so it needs
+      # that label back, or a second failure after this reset gets no new
+      # comment and no fresh checkbox - silently as dead an end as if this
+      # workflow didn't exist. needs-investigation comes off in the same
+      # call, restoring the exact label state a freshly-filed pending entry
+      # from monitor-releases.ts has - these two labels are meant to be
+      # mutually exclusive lifecycle stages, and leaving both on at once
+      # (harmless to the scripts, which only ever add to one list or the
+      # other) would still be a confusing, never-otherwise-seen state for a
+      # human reading the issue.
+      - name: Reset issue labels
+        if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --add-label verification-required \
+            --remove-label needs-investigation
+
       - name: Confirm reset on the issue
         if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
         env:
