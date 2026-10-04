@@ -66,6 +66,18 @@ jobs:
           # comment can't re-match it either - just against a comment id we
           # already know instead of one we had to go find.
           gh api "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" --jq .body > /tmp/comment-body.txt
+
+          # Same check as reset-verification.yml's own "Mark checkbox
+          # handled" step: confirm the comment we're about to overwrite
+          # still actually has the checked box we parsed COMMENT_ID to find,
+          # before touching it. The id came from a branch name, not a fresh
+          # lookup - cheap to assert it still points at what we expect
+          # rather than trusting that past parsing step's output blindly.
+          if ! grep -qiE '^\s*-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->' /tmp/comment-body.txt; then
+            echo "Comment $COMMENT_ID no longer has the expected checked reset-to-pending box - refusing to overwrite it." >&2
+            exit 1
+          fi
+
           sed -i -E "s/^(\s*)-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->.*/\1- [x] ~~Reset to pending~~ (merged in #$PR_NUMBER)/i" \
             /tmp/comment-body.txt
           gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \

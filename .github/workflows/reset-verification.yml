@@ -248,6 +248,18 @@ jobs:
         run: |
           gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" \
             --jq .body > /tmp/comment-body.txt
+
+          # Confirm the comment still has the exact checked, unhandled box
+          # this run is about to rewrite before touching it at all - a stale
+          # or already-handled comment (e.g. a second, overlapping event for
+          # the same checkbox) would otherwise make sed a silent no-op and
+          # this step would still PATCH the comment back unchanged, masking
+          # the fact that nothing was actually verified here.
+          if ! grep -qiE '^\s*-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->' /tmp/comment-body.txt; then
+            echo "Comment ${{ github.event.comment.id }} no longer has the expected checked reset-to-pending box - refusing to overwrite it." >&2
+            exit 1
+          fi
+
           sed -i -E 's/^(\s*)-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->.*/\1- [x] ~~Reset to pending~~ (handled by @${{ github.event.sender.login }})/i' \
             /tmp/comment-body.txt
           gh api --method PATCH "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" \
