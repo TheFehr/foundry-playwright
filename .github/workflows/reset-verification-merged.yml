@@ -36,7 +36,15 @@ jobs:
           BRANCH: ${{ github.event.pull_request.head.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          ISSUE_NUMBER="${BRANCH#reset-verification-}"
+          # Branch is reset-verification-<issueNumber>-<commentId> - both
+          # pure digits, split on the last "-" to recover each half, rather
+          # than searching the issue's comments for the checkbox (which
+          # needed --paginate past the first 30 and was doing real,
+          # avoidable work to re-find something the triggering workflow
+          # already knew directly).
+          REST="${BRANCH#reset-verification-}"
+          ISSUE_NUMBER="${REST%-*}"
+          COMMENT_ID="${REST##*-}"
 
           # Restores the exact label state a freshly-filed pending entry
           # from monitor-releases.ts has - see reset-verification.yml's own
@@ -53,24 +61,12 @@ jobs:
             --repo "${{ github.repository }}" \
             --body "🔄 Reset to \`pending\` in #$PR_NUMBER - the next verification run will retry this combo."
 
-          # Finds the specific unhandled checkbox comment
-          # reset-verification.yml left behind - same match/rewrite pattern
-          # that workflow's own "Mark checkbox handled" step uses, so a
-          # later unrelated edit to this comment can't re-match it either.
-          COMMENT_ID=""
-          for id in $(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" --jq '.[].id'); do
-            BODY=$(gh api "repos/${{ github.repository }}/issues/comments/$id" --jq .body)
-            if echo "$BODY" | grep -qiE '^\s*-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->'; then
-              COMMENT_ID="$id"
-            fi
-          done
-
-          if [ -n "$COMMENT_ID" ]; then
-            gh api "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" --jq .body > /tmp/comment-body.txt
-            sed -i -E "s/^(\s*)-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->.*/\1- [x] ~~Reset to pending~~ (merged in #$PR_NUMBER)/i" \
-              /tmp/comment-body.txt
-            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
-              -f body="$(cat /tmp/comment-body.txt)"
-          else
-            echo "No unhandled reset checkbox found on issue $ISSUE_NUMBER - nothing to mark."
-          fi
+          # Same match/rewrite pattern as reset-verification.yml's own
+          # "Mark checkbox handled" step, so a later unrelated edit to this
+          # comment can't re-match it either - just against a comment id we
+          # already know instead of one we had to go find.
+          gh api "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" --jq .body > /tmp/comment-body.txt
+          sed -i -E "s/^(\s*)-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->.*/\1- [x] ~~Reset to pending~~ (merged in #$PR_NUMBER)/i" \
+            /tmp/comment-body.txt
+          gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+            -f body="$(cat /tmp/comment-body.txt)"
