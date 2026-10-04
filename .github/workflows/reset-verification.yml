@@ -127,16 +127,58 @@ jobs:
           commit-message: "chore(registry): reset FVTT ${{ steps.triage.outputs.fvtt }} + ${{ steps.triage.outputs.system }} v${{ steps.triage.outputs.system_version }} to pending [no-release]"
           title: "chore(registry): reset FVTT ${{ steps.triage.outputs.fvtt }} + ${{ steps.triage.outputs.system }} v${{ steps.triage.outputs.system_version }} to pending [no-release]"
           body: "Manually reset via issue #${{ github.event.issue.number }} by @${{ github.event.sender.login }}."
-          branch: reset-verification-${{ github.event.issue.number }}
+          # Carries both the issue number and the triggering comment's id -
+          # reset-verification-merged.yml parses this directly off the
+          # branch name once the merge is confirmed real, so it can PATCH
+          # that exact comment instead of searching/paginating through the
+          # issue's full comment history to re-find it (see that workflow).
+          branch: reset-verification-${{ github.event.issue.number }}-${{ github.event.comment.id }}
           delete-branch: true
           sign-commits: true
 
+      # Confirmed live 2026-10-04: repo-level auto-merge is enabled
+      # (allow_auto_merge: true) and main's only required check is
+      # build-and-lint with no reviewer requirement that could block
+      # auto-merge from ever completing - so a bare `gh pr merge --auto
+      # --squash` genuinely should always succeed in *enabling* the merge
+      # here. No `|| gh pr merge --squash` fallback: that fallback's own
+      # failure mode - --auto failing outright (e.g. auto-merge genuinely
+      # disabled) and the immediate --squash retry hitting the exact
+      # "Required status check ... is expected" race PR #194 hit under the
+      # original bare---squash code this whole fix replaces - doesn't apply
+      # to this repo's current config, so it brings back the original bug
+      # for no benefit (caught via CodeRabbit review on this PR). A
+      # fallback that can silently reintroduce the bug it's meant to guard
+      # against isn't defense in depth, it's a second copy of the bug -
+      # better to let a genuine, unexpected failure here surface loudly
+      # than paper over it with a worse retry.
+      #
+      # Best-effort kickoff only - nothing below this step depends on it
+      # having actually completed. --auto can *enable* auto-merge without
+      # merging synchronously if a check is still pending at this exact
+      # instant, so eagerly declaring success right after this call could
+      # tell the issue "reset to pending" and mark the checkbox handled
+      # before the registry change is actually on main - and if auto-merge
+      # later gets canceled or the PR closes unmerged, there'd be no
+      # automated path left to notice or recover.
+      # reset-verification-merged.yml is the real completion signal
+      # instead, triggered directly by the merge event - see that workflow
+      # for the labels/comment/checkbox-handling this one used to do here
+      # for this path.
       - name: Merge the reset PR
         if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
+        run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
 
+      # Only for the no-new-PR case (an earlier run's merge already landed
+      # on main, confirmed by status already reading "pending" with nothing
+      # for this run's own diff to catch) - nothing to wait for there, so
+      # immediate label reconciliation is safe. The fresh-reset case (a PR
+      # just opened this run) is handled by reset-verification-merged.yml
+      # instead, only once that PR's merge is confirmed real - see this
+      # job's "Merge the reset PR" step for why that distinction matters.
+      #
       # close-resolved-issues.ts's escalation path (POST needs-investigation,
       # DELETE verification-required) only looks for a "failed" entry's
       # issue under verification-required - once stripped by that first
@@ -146,20 +188,11 @@ jobs:
       # comment and no fresh checkbox - silently as dead an end as if this
       # workflow didn't exist. needs-investigation comes off in the same
       # call, restoring the exact label state a freshly-filed pending entry
-      # from monitor-releases.ts has - these two labels are meant to be
-      # mutually exclusive lifecycle stages, and leaving both on at once
-      # (harmless to the scripts, which only ever add to one list or the
-      # other) would still be a confusing, never-otherwise-seen state for a
-      # human reading the issue.
-      #
-      # Gated on the entry's actual current status (reset-failed-entry.ts's
-      # own output), not on this run having produced a PR - a checkbox
-      # retry where the registry side already succeeded on a prior run but
-      # this same label step failed separately is a real case: the entry is
-      # "pending" right now regardless of whether *this* invocation is what
-      # made it so, and that's exactly when the labels need reconciling.
-      - name: Reset issue labels
-        if: steps.triage.outputs.proceed == 'true' && steps.reset.outputs.status == 'pending'
+      # from monitor-releases.ts has.
+      - name: Reset issue labels (already pending)
+        if: >-
+          steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false' &&
+          steps.reset.outputs.status == 'pending'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -167,15 +200,6 @@ jobs:
             --repo "${{ github.repository }}" \
             --add-label verification-required \
             --remove-label needs-investigation
-
-      - name: Confirm reset on the issue
-        if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue comment "${{ github.event.issue.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "🔄 Reset to \`pending\` in #${{ steps.cpr.outputs.pull-request-number }} - the next verification run will retry this combo."
 
       # The registry entry can have already moved on from "failed" by the
       # time someone checks this box - an ordinary nightly run resolved it
@@ -208,21 +232,34 @@ jobs:
             --repo "${{ github.repository }}" \
             --body "🔄 Already \`pending\` from an earlier reset - re-synced this issue's labels in case that run didn't finish cleanly."
 
-      # Only rewritten once the reset has been fully handled one way or the
-      # other (merged, or confirmed as a no-op) - if an earlier step fails
-      # instead, the checkbox stays in its checked-but-unhandled form, so
-      # simply unchecking and re-checking it (a one-click retry) fires a
-      # fresh event this workflow will act on again, rather than requiring
-      # someone to hand-edit the raw markdown back to a matchable form.
+      # Only for the no-new-PR case, same reasoning as "Reset issue labels
+      # (already pending)" above - the fresh-reset case leaves the checkbox
+      # untouched here on purpose, handled by reset-verification-merged.yml
+      # only once the merge is confirmed real. If an earlier step in *this*
+      # path fails instead, the checkbox stays in its checked-but-unhandled
+      # form, so simply unchecking and re-checking it (a one-click retry)
+      # fires a fresh event this workflow will act on again, rather than
+      # requiring someone to hand-edit the raw markdown back to a matchable
+      # form.
       - name: Mark checkbox handled
-        if: >-
-          steps.triage.outputs.proceed == 'true' &&
-          (steps.cpr.outputs.pull-request-number != '' || steps.diff.outputs.updated == 'false')
+        if: steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" \
             --jq .body > /tmp/comment-body.txt
+
+          # Confirm the comment still has the exact checked, unhandled box
+          # this run is about to rewrite before touching it at all - a stale
+          # or already-handled comment (e.g. a second, overlapping event for
+          # the same checkbox) would otherwise make sed a silent no-op and
+          # this step would still PATCH the comment back unchanged, masking
+          # the fact that nothing was actually verified here.
+          if ! grep -qiE '^\s*-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->' /tmp/comment-body.txt; then
+            echo "Comment ${{ github.event.comment.id }} no longer has the expected checked reset-to-pending box - refusing to overwrite it." >&2
+            exit 1
+          fi
+
           sed -i -E 's/^(\s*)-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->.*/\1- [x] ~~Reset to pending~~ (handled by @${{ github.event.sender.login }})/i' \
             /tmp/comment-body.txt
           gh api --method PATCH "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" \
