@@ -46,7 +46,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "commander": "^14.0.3"
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
