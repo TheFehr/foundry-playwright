@@ -137,9 +137,20 @@ jobs:
       # check ... is expected") even when the checks are in fact about to
       # pass seconds later. Confirmed live 2026-10-04 on PR #194 opened by
       # this exact workflow: build-and-lint finished 22s after the bare
-      # --squash attempt failed. --auto tells GitHub to merge once it
-      # actually considers the PR mergeable instead of requiring that to
-      # already be true at this exact instant.
+      # --squash attempt failed.
+      #
+      # Best-effort kickoff only - nothing below this step depends on it
+      # having actually completed. --auto can *enable* auto-merge without
+      # merging synchronously if a check is still pending at this exact
+      # instant (confirmed via CodeRabbit review on #195), so eagerly
+      # declaring success right after this call could tell the issue "reset
+      # to pending" and mark the checkbox handled before the registry
+      # change is actually on main - and if auto-merge later gets canceled
+      # or the PR closes unmerged, there'd be no automated path left to
+      # notice or recover. reset-verification-merged.yml is the real
+      # completion signal instead, triggered directly by the merge event -
+      # see that workflow for the labels/comment/checkbox-handling this one
+      # used to do here for this path.
       - name: Merge the reset PR
         if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
         env:
@@ -148,6 +159,14 @@ jobs:
           gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}" ||
             gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
 
+      # Only for the no-new-PR case (an earlier run's merge already landed
+      # on main, confirmed by status already reading "pending" with nothing
+      # for this run's own diff to catch) - nothing to wait for there, so
+      # immediate label reconciliation is safe. The fresh-reset case (a PR
+      # just opened this run) is handled by reset-verification-merged.yml
+      # instead, only once that PR's merge is confirmed real - see this
+      # job's "Merge the reset PR" step for why that distinction matters.
+      #
       # close-resolved-issues.ts's escalation path (POST needs-investigation,
       # DELETE verification-required) only looks for a "failed" entry's
       # issue under verification-required - once stripped by that first
@@ -157,20 +176,11 @@ jobs:
       # comment and no fresh checkbox - silently as dead an end as if this
       # workflow didn't exist. needs-investigation comes off in the same
       # call, restoring the exact label state a freshly-filed pending entry
-      # from monitor-releases.ts has - these two labels are meant to be
-      # mutually exclusive lifecycle stages, and leaving both on at once
-      # (harmless to the scripts, which only ever add to one list or the
-      # other) would still be a confusing, never-otherwise-seen state for a
-      # human reading the issue.
-      #
-      # Gated on the entry's actual current status (reset-failed-entry.ts's
-      # own output), not on this run having produced a PR - a checkbox
-      # retry where the registry side already succeeded on a prior run but
-      # this same label step failed separately is a real case: the entry is
-      # "pending" right now regardless of whether *this* invocation is what
-      # made it so, and that's exactly when the labels need reconciling.
-      - name: Reset issue labels
-        if: steps.triage.outputs.proceed == 'true' && steps.reset.outputs.status == 'pending'
+      # from monitor-releases.ts has.
+      - name: Reset issue labels (already pending)
+        if: >-
+          steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false' &&
+          steps.reset.outputs.status == 'pending'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -178,15 +188,6 @@ jobs:
             --repo "${{ github.repository }}" \
             --add-label verification-required \
             --remove-label needs-investigation
-
-      - name: Confirm reset on the issue
-        if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue comment "${{ github.event.issue.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "🔄 Reset to \`pending\` in #${{ steps.cpr.outputs.pull-request-number }} - the next verification run will retry this combo."
 
       # The registry entry can have already moved on from "failed" by the
       # time someone checks this box - an ordinary nightly run resolved it
@@ -219,16 +220,17 @@ jobs:
             --repo "${{ github.repository }}" \
             --body "🔄 Already \`pending\` from an earlier reset - re-synced this issue's labels in case that run didn't finish cleanly."
 
-      # Only rewritten once the reset has been fully handled one way or the
-      # other (merged, or confirmed as a no-op) - if an earlier step fails
-      # instead, the checkbox stays in its checked-but-unhandled form, so
-      # simply unchecking and re-checking it (a one-click retry) fires a
-      # fresh event this workflow will act on again, rather than requiring
-      # someone to hand-edit the raw markdown back to a matchable form.
+      # Only for the no-new-PR case, same reasoning as "Reset issue labels
+      # (already pending)" above - the fresh-reset case leaves the checkbox
+      # untouched here on purpose, handled by reset-verification-merged.yml
+      # only once the merge is confirmed real. If an earlier step in *this*
+      # path fails instead, the checkbox stays in its checked-but-unhandled
+      # form, so simply unchecking and re-checking it (a one-click retry)
+      # fires a fresh event this workflow will act on again, rather than
+      # requiring someone to hand-edit the raw markdown back to a matchable
+      # form.
       - name: Mark checkbox handled
-        if: >-
-          steps.triage.outputs.proceed == 'true' &&
-          (steps.cpr.outputs.pull-request-number != '' || steps.diff.outputs.updated == 'false')
+        if: steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -1,0 +1,76 @@
+name: Reset Verification Merged
+
+# Completes what reset-verification.yml starts. That workflow only
+# attempts the reset PR's merge - gh pr merge --auto can *enable*
+# auto-merge without completing it synchronously if a required check is
+# still pending at that exact instant (confirmed via CodeRabbit review on
+# #195) - and deliberately leaves the issue's checkbox unhandled rather
+# than eagerly declaring success before the merge is real. This workflow
+# is the authoritative "it actually merged" signal instead of a
+# poll/timeout: triggered directly by the merge event itself, so there's
+# no race window to get wrong. If the PR instead closes without merging
+# (auto-merge canceled, or someone closes it by hand), this workflow's own
+# `if:` below simply never runs, leaving the checkbox checked-but-
+# unhandled as a visible sign something needs a look - exactly the
+# CodeRabbit-suggested fallback.
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  complete:
+    runs-on: ubuntu-latest
+    # reset-verification.yml always names its branch this way - parsed
+    # directly from it below rather than the PR body, since a branch name
+    # is structured data a human can't accidentally reword, unlike the
+    # "Manually reset via issue #N" sentence in the body.
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'reset-verification-')
+    permissions:
+      issues: write
+    steps:
+      - name: Reconcile the issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ISSUE_NUMBER="${BRANCH#reset-verification-}"
+
+          # Restores the exact label state a freshly-filed pending entry
+          # from monitor-releases.ts has - see reset-verification.yml's own
+          # "Reset issue labels (already pending)" step for the full
+          # reasoning (a second failure after this reset needs
+          # verification-required back, or close-resolved-issues.ts's
+          # escalation path finds nothing to comment on).
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --add-label verification-required \
+            --remove-label needs-investigation
+
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --body "🔄 Reset to \`pending\` in #$PR_NUMBER - the next verification run will retry this combo."
+
+          # Finds the specific unhandled checkbox comment
+          # reset-verification.yml left behind - same match/rewrite pattern
+          # that workflow's own "Mark checkbox handled" step uses, so a
+          # later unrelated edit to this comment can't re-match it either.
+          COMMENT_ID=""
+          for id in $(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" --jq '.[].id'); do
+            BODY=$(gh api "repos/${{ github.repository }}/issues/comments/$id" --jq .body)
+            if echo "$BODY" | grep -qiE '^\s*-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->'; then
+              COMMENT_ID="$id"
+            fi
+          done
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" --jq .body > /tmp/comment-body.txt
+            sed -i -E "s/^(\s*)-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->.*/\1- [x] ~~Reset to pending~~ (merged in #$PR_NUMBER)/i" \
+              /tmp/comment-body.txt
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+              -f body="$(cat /tmp/comment-body.txt)"
+          else
+            echo "No unhandled reset checkbox found on issue $ISSUE_NUMBER - nothing to mark."
+          fi
