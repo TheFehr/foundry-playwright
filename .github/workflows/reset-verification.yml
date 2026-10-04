@@ -1,0 +1,229 @@
+name: Reset Verification
+
+# Triggered by checking the reset checkbox close-resolved-issues.ts posts on
+# a "failed" entry's issue (see that script) - a "failed" registry entry is
+# never retried by any automated sweep, so this is the only way back in
+# short of hand-editing verified-versions.json. See docs/rfcs/continuous-
+# verification.md.
+#
+# Checking a task-list checkbox in a comment fires issue_comment.edited with
+# `sender` set to whoever clicked it, not the comment's original author -
+# this repo is public, so the permission check below is load-bearing, not
+# defense in depth.
+on:
+  issue_comment:
+    types: [edited]
+
+concurrency:
+  group: reset-verification-${{ github.event.comment.id }}
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    # Cheap, rough pre-filter so unrelated comment edits don't even spin up
+    # a job - the real, precise check (actually checked, right now, not
+    # already handled) happens in the triage step below, where a proper
+    # regex is available.
+    if: contains(github.event.comment.body, 'reset-to-pending')
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Triage
+        id: triage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          SENDER: ${{ github.event.sender.login }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          proceed=false
+
+          # Only an unhandled, currently-checked box should trigger this -
+          # the handling step below rewrites the line afterward specifically
+          # so a later unrelated edit to the same comment can't re-match it.
+          if echo "$COMMENT_BODY" | grep -qiE '^\s*-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->'; then
+
+            LEVEL=$(gh api "repos/${{ github.repository }}/collaborators/$SENDER/permission" \
+              --jq .permission 2>/dev/null || echo "none")
+            echo "Sender $SENDER has permission: $LEVEL"
+
+            if [ "$LEVEL" = "admin" ] || [ "$LEVEL" = "write" ]; then
+              # "Verification Required: FVTT <fvtt> + <system> v<version>"
+              if [[ "$ISSUE_TITLE" =~ FVTT\ (.+)\ \+\ ([a-z0-9]+)\ v(.+)$ ]]; then
+                echo "fvtt=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+                echo "system=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+                echo "system_version=${BASH_REMATCH[3]}" >> "$GITHUB_OUTPUT"
+                proceed=true
+              else
+                echo "Could not parse FVTT/system/version from issue title: $ISSUE_TITLE"
+              fi
+            else
+              echo "Sender does not have write access - ignoring this checkbox."
+            fi
+          else
+            echo "Checkbox not in its freshly-checked, unhandled form - nothing to do."
+          fi
+
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.triage.outputs.proceed == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        if: steps.triage.outputs.proceed == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.14.1"
+          cache: "npm"
+
+      - name: Install Dependencies
+        if: steps.triage.outputs.proceed == 'true'
+        run: npm install
+
+      - name: Reset entry
+        if: steps.triage.outputs.proceed == 'true'
+        id: reset
+        env:
+          RESET_FVTT: ${{ steps.triage.outputs.fvtt }}
+          RESET_SYSTEM: ${{ steps.triage.outputs.system }}
+          RESET_SYSTEM_VERSION: ${{ steps.triage.outputs.system_version }}
+          RESET_ACTOR: ${{ github.event.sender.login }}
+          RESET_ISSUE: ${{ github.event.issue.number }}
+        run: npx tsx scripts/reset-failed-entry.ts
+
+      - name: Check for changes
+        if: steps.triage.outputs.proceed == 'true'
+        id: diff
+        run: |
+          if git diff --exit-code verified-versions.json; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Same App-token + PR + squash pattern as monitor-releases.yml - the
+      # default GITHUB_TOKEN can't open PRs here, and main requires every
+      # change to land via one.
+      - name: Generate Token
+        if: steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'true'
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ secrets.CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open PR with the reset
+        if: steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        id: cpr
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          commit-message: "chore(registry): reset FVTT ${{ steps.triage.outputs.fvtt }} + ${{ steps.triage.outputs.system }} v${{ steps.triage.outputs.system_version }} to pending [no-release]"
+          title: "chore(registry): reset FVTT ${{ steps.triage.outputs.fvtt }} + ${{ steps.triage.outputs.system }} v${{ steps.triage.outputs.system_version }} to pending [no-release]"
+          body: "Manually reset via issue #${{ github.event.issue.number }} by @${{ github.event.sender.login }}."
+          branch: reset-verification-${{ github.event.issue.number }}
+          delete-branch: true
+          sign-commits: true
+
+      - name: Merge the reset PR
+        if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
+
+      # close-resolved-issues.ts's escalation path (POST needs-investigation,
+      # DELETE verification-required) only looks for a "failed" entry's
+      # issue under verification-required - once stripped by that first
+      # escalation, it's gone from that query for good. Resetting to
+      # "pending" effectively restarts this issue's lifecycle, so it needs
+      # that label back, or a second failure after this reset gets no new
+      # comment and no fresh checkbox - silently as dead an end as if this
+      # workflow didn't exist. needs-investigation comes off in the same
+      # call, restoring the exact label state a freshly-filed pending entry
+      # from monitor-releases.ts has - these two labels are meant to be
+      # mutually exclusive lifecycle stages, and leaving both on at once
+      # (harmless to the scripts, which only ever add to one list or the
+      # other) would still be a confusing, never-otherwise-seen state for a
+      # human reading the issue.
+      #
+      # Gated on the entry's actual current status (reset-failed-entry.ts's
+      # own output), not on this run having produced a PR - a checkbox
+      # retry where the registry side already succeeded on a prior run but
+      # this same label step failed separately is a real case: the entry is
+      # "pending" right now regardless of whether *this* invocation is what
+      # made it so, and that's exactly when the labels need reconciling.
+      - name: Reset issue labels
+        if: steps.triage.outputs.proceed == 'true' && steps.reset.outputs.status == 'pending'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --add-label verification-required \
+            --remove-label needs-investigation
+
+      - name: Confirm reset on the issue
+        if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "🔄 Reset to \`pending\` in #${{ steps.cpr.outputs.pull-request-number }} - the next verification run will retry this combo."
+
+      # The registry entry can have already moved on from "failed" by the
+      # time someone checks this box - an ordinary nightly run resolved it
+      # in between, say. reset-failed-entry.ts treats that as a no-op
+      # (nothing for diff to catch, so the PR steps above never ran), but
+      # the checkbox still needs marking, or it's stuck in checked-but-
+      # unhandled form with no automated step left to ever get to it.
+      - name: Confirm no-op on the issue
+        if: >-
+          steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false' &&
+          steps.reset.outputs.status != 'pending'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "ℹ️ This entry is no longer \`failed\` (likely already resolved by a normal run) - nothing to reset."
+
+      # Distinct from the no-op above: the entry actually is "pending" (a
+      # prior reset's registry change already landed), just not because of
+      # this run - the labels step above is what actually mattered here.
+      - name: Confirm already-pending on the issue
+        if: >-
+          steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false' &&
+          steps.reset.outputs.status == 'pending'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "🔄 Already \`pending\` from an earlier reset - re-synced this issue's labels in case that run didn't finish cleanly."
+
+      # Only rewritten once the reset has been fully handled one way or the
+      # other (merged, or confirmed as a no-op) - if an earlier step fails
+      # instead, the checkbox stays in its checked-but-unhandled form, so
+      # simply unchecking and re-checking it (a one-click retry) fires a
+      # fresh event this workflow will act on again, rather than requiring
+      # someone to hand-edit the raw markdown back to a matchable form.
+      - name: Mark checkbox handled
+        if: >-
+          steps.triage.outputs.proceed == 'true' &&
+          (steps.cpr.outputs.pull-request-number != '' || steps.diff.outputs.updated == 'false')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" \
+            --jq .body > /tmp/comment-body.txt
+          sed -i -E 's/^(\s*)-\s*\[x\]\s*<!--\s*reset-to-pending\s*-->.*/\1- [x] ~~Reset to pending~~ (handled by @${{ github.event.sender.login }})/i' \
+            /tmp/comment-body.txt
+          gh api --method PATCH "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" \
+            -f body="$(cat /tmp/comment-body.txt)"

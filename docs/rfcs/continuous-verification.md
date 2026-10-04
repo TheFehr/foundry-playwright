@@ -18,9 +18,14 @@ A version-controlled file that tracks the compatibility status of every `(fvtt v
   "systemVersion": "5.3.3",
   "status": "stable",
   "timestamp": "2026-06-03T12:23:02.024Z",
-  "notes": "Verified locally with dnd5e v5.3.3."
+  "notes": "Verified locally with dnd5e v5.3.3.",
+  "verifiedWith": "1.6.8"
 }
 ```
+
+`verifiedWith` is the foundry-playwright version (from `package.json`) this
+entry was actually tested under - see
+[Re-verifying on Library Releases](#re-verifying-on-library-releases) below.
 
 **Status values:**
 
@@ -54,7 +59,7 @@ The monitor:
 
 If a new Foundry generation is detected (no stable entry for that major version yet), it is added to the check set until at least one stable entry is recorded.
 
-## Re-verifying on Library Releases (`reverify-state.json`)
+## Re-verifying on Library Releases (`verifiedWith`)
 
 `--all-pending` (below) only catches drift in the _external_ world - a new
 Foundry or system release. It never catches a regression introduced by a
@@ -62,28 +67,26 @@ change to this library itself: a `stable` registry entry is never touched
 again once it's written, so a library-side bug can silently break a
 previously-verified Foundry/system pairing with no signal in the registry.
 
-`reverify-state.json` closes that gap without adding new infrastructure -
-the VM already `git pull`s `main` every night, so a tracked file it reads
-each run is enough of a queue:
+Each registry entry's own `verifiedWith` field closes that gap, with no
+separate state file to keep in sync:
 
-```json
-{ "requestedVersion": "1.4.4", "fulfilledVersion": "1.4.3" }
-```
-
-- **`release.yml`** bumps `requestedVersion` to the new version as part of
-  the same signed commit that already bumps `package.json` / `CHANGELOG.md`
-  for every release (no separate PR or workflow). `fulfilledVersion` is left
-  untouched there.
-- **`verify-nightly.sh`** always passes `--if-release-pending`. When
-  `requestedVersion !== fulfilledVersion`, that run also re-verifies every
-  `stable` pairing (equivalent to `--re-verify`) against the current
-  library code, then writes `fulfilledVersion = requestedVersion` back,
-  committed in the same PR as any registry changes. If nothing changed on
-  the library side since the last release, this is a no-op every night.
-- A run that's interrupted before writing `fulfilledVersion` (crash, disk
-  guard, a blackout-deferred merge) just leaves the request unfulfilled, so
-  the next run retries the full stable sweep - at-least-once, not
-  exactly-once, same as the rest of this pipeline's failure handling.
+- Every registry write (`--update-registry`, any status) stamps
+  `verifiedWith` with the current `package.json` `version`, read live at
+  run time. `release.yml` doesn't need to touch anything verification-
+  related when it cuts a release - it already bumps `package.json` for
+  every release, and that's the only signal this needs.
+- **`verify-nightly.sh`** always passes `--if-release-pending`. On a run
+  with no genuinely new `--all-pending` work, this filters every `stable`
+  entry to those whose `verifiedWith` doesn't match the current
+  `package.json` version, and re-verifies a small batch of them (see
+  `STABLE_RESWEEP_BATCH_SIZE` in `verify-local.ts`) - resumed across as
+  many nightly runs as it takes, simply by re-filtering the same way each
+  time. Deferred entirely on a run that also finds new `--all-pending`
+  work.
+- No separate "is the resweep fully caught up" flag to maintain either -
+  that's just "every `stable` entry's `verifiedWith` equals the current
+  `package.json` version," derived the same way the remaining-work filter
+  is.
 - A pairing that regresses is written as `status: "failed"`, same as any
   other genuine verification failure (see `--record-failures` below), and
   `scripts/report-regressions.ts` files a `verification-required`-labeled

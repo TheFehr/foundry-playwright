@@ -24,6 +24,15 @@ interface TestFailure {
   error?: string;
 }
 
+// The single source of truth for "what library version is this run
+// verifying with" - release.yml bumps this same field in the same commit
+// it bumps CHANGELOG.md/package-lock.json, so reading it live here means
+// nothing else needs to separately track or shadow it.
+function getPackageVersion(): string {
+  const pkgPath = path.join(process.cwd(), "package.json");
+  return (JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { version: string }).version;
+}
+
 function formatFailures(failures: TestFailure[]): string {
   return failures.map((f) => (f.error ? `${f.title} (${f.error})` : f.title)).join("; ");
 }
@@ -128,6 +137,11 @@ interface RegistryEntryWrite {
   status: "stable" | "failed" | "incompatible";
   timestamp: string;
   notes: string;
+  // The foundry-playwright version this entry was actually tested under -
+  // lets a later run tell "verified, but against older library code" apart
+  // from "verified against what's on disk right now" without a separate
+  // cross-run state file. See docs/rfcs/continuous-verification.md.
+  verifiedWith: string;
 }
 
 function upsertRegistryEntry(entry: RegistryEntryWrite): void {
@@ -330,6 +344,11 @@ interface VerifyVersionOptions {
   updateRegistry: boolean;
   recordFailures: boolean;
   keepContainer: boolean;
+  // Captured once by the caller at the start of the run, not read fresh at
+  // each registry write - a write should be stamped with the version this
+  // specific run's test actually ran under, not whatever package.json
+  // happens to contain by the time that particular write executes.
+  pkgVersion: string;
 }
 
 async function verifyVersion(
@@ -344,6 +363,7 @@ async function verifyVersion(
     updateRegistry,
     recordFailures,
     keepContainer,
+    pkgVersion,
   } = options;
   console.log(
     `\n--- Verifying Version: ${version} (System: ${system}${systemVersion ? ` v${systemVersion}` : ""}, Modules: ${modules.join(", ") || "none"}) ---`,
@@ -381,6 +401,7 @@ async function verifyVersion(
           status: "incompatible",
           timestamp: new Date().toISOString(),
           notes: `System declares compatibility ${rangeNote}; incompatible with FVTT ${version}.`,
+          verifiedWith: pkgVersion,
         });
         recorded = true;
       }
@@ -672,6 +693,7 @@ async function verifyVersion(
             status: "stable",
             timestamp: new Date().toISOString(),
             notes: `Verified locally with ${meta.system.id} v${resolvedSystemVersion}.`,
+            verifiedWith: pkgVersion,
           });
           console.log("Registry updated successfully.");
           passRecorded = true;
@@ -744,6 +766,7 @@ async function verifyVersion(
               status: "failed",
               timestamp: new Date().toISOString(),
               notes: `Automated verification failed: ${formatFailures(failures)}`,
+              verifiedWith: pkgVersion,
             });
             console.log("Registry updated with failure entry.");
             failRecorded = true;
@@ -913,15 +936,6 @@ interface VerifyTarget {
   systemVersion?: string;
   systemMinor?: string;
   modules: string[];
-  // Set only on targets from the automatic, release-triggered stable resweep
-  // batch - marks them as needing a reverify-state.json progress update once
-  // verified, distinct from pending targets and an explicit --re-verify/--all
-  // sweep (which is uncapped and untracked).
-  stableResweepBatch?: boolean;
-}
-
-function pairingKey(e: { fvtt: string; system: string; systemMinor: string }): string {
-  return `${e.fvtt}|${e.system}|${e.systemMinor}`;
 }
 
 // A --if-release-pending stable resweep can cover a couple dozen (fvtt,
@@ -930,24 +944,11 @@ function pairingKey(e: { fvtt: string; system: string; systemMinor: string }): s
 // thing that actually happened once: several unrelated rows all failing or
 // running long back to back exhausted the whole timeout window before the
 // sweep finished, with nothing to show for it but a killed process. Batching
-// it small and tracking cross-run progress in reverify-state.json means each
-// night makes bounded, guaranteed forward progress instead of gambling the
-// whole window on one run.
+// it small means each night makes bounded, guaranteed forward progress
+// instead of gambling the whole window on one run - progress itself is just
+// each row's own verifiedWith field, so there's nothing extra to track
+// across runs.
 const STABLE_RESWEEP_BATCH_SIZE = 2;
-
-interface ReverifyState {
-  requestedVersion?: string;
-  fulfilledVersion?: string;
-  // (fvtt, system, systemMinor) pairings already re-verified against
-  // requestedVersion by a previous --if-release-pending batch this cycle.
-  // Scoped to requestedVersion via verifiedPairingsFor, not just present/
-  // absent - release.yml's version bump only ever sets requestedVersion
-  // itself, so a newer release landing mid-sweep must not let a stale
-  // progress list (verified against the *previous* pending release) be
-  // mistaken for progress against the new one.
-  verifiedPairingsFor?: string;
-  verifiedPairings?: string[];
-}
 
 const program = new Command();
 
@@ -976,7 +977,7 @@ program
   .option("--all", "Verify all pairings (pending and stable) in the registry", false)
   .option(
     "--if-release-pending",
-    `Also re-verify stable pairings, ${STABLE_RESWEEP_BATCH_SIZE} per run, if reverify-state.json shows a library release hasn't been fully re-verified yet. Deferred entirely on a run that also finds new --all-pending work.`,
+    `Also re-verify stable pairings not yet verified with the current package.json version, ${STABLE_RESWEEP_BATCH_SIZE} per run. Deferred entirely on a run that also finds new --all-pending work.`,
     false,
   )
   .option("--update-registry", "Update verified-versions.json on successful verification", false)
@@ -1011,72 +1012,16 @@ program
 
     // Read once, at the start of the run, not after the (potentially
     // hours-long) verification loop below - if a newer release lands on
-    // main mid-run, this run still only claims to have fulfilled the
-    // version it actually started against, and the newer one is picked up
-    // by the next run instead of being silently swallowed here.
-    const reverifyStatePath = path.join(process.cwd(), "reverify-state.json");
-    let pendingReleaseVersion: string | null = null;
-    let alreadyVerifiedThisCycle = new Set<string>();
-    // Reused at the end of the run to preserve the last-confirmed-fulfilled
-    // value when this run only makes partial progress on the resweep, rather
-    // than accidentally clobbering it with an empty/stale value.
-    let existingFulfilledVersion = "";
-    if (options.ifReleasePending && fs.existsSync(reverifyStatePath)) {
-      // Parsed defensively: this file is now written mid-run by the batched
-      // resweep below, so a process killed at exactly the wrong instant is a
-      // real (if unlikely, given the atomic write) possibility to guard
-      // against - a corrupt/unreadable file must degrade to "skip the
-      // release-triggered sweep this run", never crash the whole script and
-      // take --all-pending's genuinely new work down with it.
-      let state: ReverifyState | null = null;
-      try {
-        const parsed: unknown = JSON.parse(fs.readFileSync(reverifyStatePath, "utf8"));
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          state = parsed as ReverifyState;
-        } else {
-          console.warn(
-            `[verify] ${reverifyStatePath} does not contain a JSON object - skipping the release-triggered stable sweep this run.`,
-          );
-        }
-      } catch (e) {
-        console.warn(
-          `[verify] ${reverifyStatePath} is not valid JSON (${(e as Error).message}) - skipping the release-triggered stable sweep this run.`,
-        );
-      }
-      const requestedVersion =
-        typeof state?.requestedVersion === "string" ? state.requestedVersion : "";
-      const fulfilledVersion =
-        typeof state?.fulfilledVersion === "string" ? state.fulfilledVersion : "";
-      existingFulfilledVersion = fulfilledVersion;
-      if (state && (!requestedVersion || !fulfilledVersion)) {
-        console.warn(
-          `[verify] ${reverifyStatePath} is missing a valid requestedVersion/fulfilledVersion - skipping the release-triggered stable sweep this run.`,
-        );
-      } else if (state && requestedVersion !== fulfilledVersion) {
-        pendingReleaseVersion = requestedVersion;
-        // A progress list only means something against the requestedVersion
-        // it was built for - a newer release bumping requestedVersion mid-
-        // sweep (release.yml only ever sets that one field) must not let
-        // progress from the *previous* pending release be mistaken for
-        // progress against this one.
-        if (
-          state.verifiedPairingsFor === requestedVersion &&
-          Array.isArray(state.verifiedPairings)
-        ) {
-          alreadyVerifiedThisCycle = new Set(state.verifiedPairings);
-        }
-        console.log(
-          `[verify] Release v${pendingReleaseVersion} hasn't been fully re-verified yet (${alreadyVerifiedThisCycle.size} pairing(s) already covered this cycle).`,
-        );
-      }
-    }
+    // main mid-run, this run should keep targeting the version it actually
+    // started against; the newer one is picked up by the next run.
+    const pkgVersion = getPackageVersion();
 
     // Tracked so the automatic release-triggered resweep below can defer to
     // genuinely new work discovered this run, rather than competing with it
     // for the same time budget.
     let pendingTargetCount = 0;
 
-    if (options.allPending || options.reVerify || options.all || pendingReleaseVersion) {
+    if (options.allPending || options.reVerify || options.all || options.ifReleasePending) {
       const registryPath = path.join(process.cwd(), "verified-versions.json");
       if (fs.existsSync(registryPath)) {
         const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
@@ -1126,32 +1071,18 @@ program
 
         if (options.reVerify || options.all) {
           // Explicit, deliberate full resweep - uncapped, same as a direct
-          // request for "everything, right now" has always meant. Still
-          // tagged for resweep-progress tracking when a release resweep also
-          // happens to be pending (--re-verify/--all combined with
-          // --if-release-pending) - otherwise this branch's targets never
-          // set stableResweepBatch, so a manual full resweep that covers
-          // every currently-stable pairing would silently fail to credit
-          // reverify-state.json at all, leaving the automatic capped batch
-          // path thinking a resweep is still needed on subsequent nights
-          // even though a human already finished it by hand.
+          // request for "everything, right now" has always meant.
           const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
-          targets.push(
-            ...stable.map((e) => ({
-              ...stableTargetOf(e),
-              stableResweepBatch: pendingReleaseVersion !== null,
-            })),
-          );
+          targets.push(...stable.map((e) => stableTargetOf(e)));
           if (stable.length > 0)
             console.log(`Targeting ${stable.length} stable pairings for re-verification.`);
-        } else if (pendingReleaseVersion) {
+        } else if (options.ifReleasePending) {
           // Automatic, release-triggered resweep: bounded to a small batch
-          // per run (see STABLE_RESWEEP_BATCH_SIZE) and resumed via
-          // reverify-state.json's progress list across as many nightly runs
-          // as it takes, rather than trying to fit a potentially dozens-of-
-          // rows sweep into one run's timeout. Deferred entirely on a run
-          // that already found genuinely new pending work - that's the more
-          // actionable thing to spend this run's time budget on.
+          // per run (see STABLE_RESWEEP_BATCH_SIZE), resumed across as many
+          // nightly runs as it takes by simply re-filtering on verifiedWith
+          // each time - no cross-run state to maintain. Deferred entirely on
+          // a run that already found genuinely new pending work - that's the
+          // more actionable thing to spend this run's time budget on.
           if (pendingTargetCount > 0) {
             console.log(
               `[verify] Deferring the release-triggered stable resweep this run - ${pendingTargetCount} new pending pairing(s) take priority.`,
@@ -1159,20 +1090,13 @@ program
           } else {
             const stable = list.filter((e: Record<string, unknown>) => e.status === "stable");
             const remaining = stable.filter(
-              (e: Record<string, unknown>) =>
-                !alreadyVerifiedThisCycle.has(
-                  pairingKey({
-                    fvtt: e["fvtt"] as string,
-                    system: e["system"] as string,
-                    systemMinor: e["systemMinor"] as string,
-                  }),
-                ),
+              (e: Record<string, unknown>) => e["verifiedWith"] !== pkgVersion,
             );
             const batch = remaining.slice(0, STABLE_RESWEEP_BATCH_SIZE);
-            targets.push(...batch.map((e) => ({ ...stableTargetOf(e), stableResweepBatch: true })));
+            targets.push(...batch.map((e) => stableTargetOf(e)));
             if (batch.length > 0)
               console.log(
-                `Targeting ${batch.length} of ${remaining.length} remaining stable pairing(s) for this cycle's resweep.`,
+                `Targeting ${batch.length} of ${remaining.length} remaining stable pairing(s) for this cycle's resweep (not yet verified with v${pkgVersion}).`,
               );
           }
         }
@@ -1201,13 +1125,6 @@ program
 
     if (targets.length === 0) {
       console.log("No versions matched the criteria. Nothing to verify.");
-      // Deliberately not returning here: a release-triggered resweep can
-      // still need to record that its final batch finished on a *previous*
-      // run - e.g. the registry's stable set shrank between runs (a row
-      // this cycle had already covered got retired), leaving nothing left
-      // to target this run even though reverify-state.json was never
-      // updated to reflect that the sweep is actually done. Falling through
-      // lets the fulfillment check below run regardless.
     }
 
     const results: { key: string; success: boolean; failures: TestFailure[]; skipped?: boolean }[] =
@@ -1240,57 +1157,6 @@ program
       }
     }
 
-    // Persists the release-triggered resweep's progress (or marks it
-    // fulfilled outright once every currently-stable pairing is covered).
-    // Called after each stable-resweep-batch target, not just once at the
-    // very end - a run interrupted between two targets in the same batch
-    // must not lose the progress already made on the one(s) that did finish.
-    function persistResweepProgress(releaseVersion: string, verifiedSoFar: Set<string>): void {
-      const finalVerifiedSet = new Set([...alreadyVerifiedThisCycle, ...verifiedSoFar]);
-      const registryPath = path.join(process.cwd(), "verified-versions.json");
-      const currentRegistry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
-      const currentStable = (Array.isArray(currentRegistry) ? currentRegistry : []).filter(
-        (e: Record<string, unknown>) => e["status"] === "stable",
-      );
-      const stillRemaining = currentStable.filter(
-        (e: Record<string, unknown>) =>
-          !finalVerifiedSet.has(
-            pairingKey({
-              fvtt: e["fvtt"] as string,
-              system: e["system"] as string,
-              systemMinor: e["systemMinor"] as string,
-            }),
-          ),
-      );
-
-      const newState: ReverifyState =
-        stillRemaining.length === 0
-          ? { requestedVersion: releaseVersion, fulfilledVersion: releaseVersion }
-          : {
-              requestedVersion: releaseVersion,
-              fulfilledVersion: existingFulfilledVersion,
-              verifiedPairingsFor: releaseVersion,
-              verifiedPairings: [...finalVerifiedSet],
-            };
-
-      // Atomic: write to a scratch file in the same directory, then rename
-      // over the real path. A same-filesystem rename is atomic, so a kill
-      // mid-write can never leave reverify-state.json truncated/corrupted
-      // for the next run's read side to choke on.
-      const tmpPath = `${reverifyStatePath}.tmp-${process.pid}`;
-      fs.writeFileSync(tmpPath, JSON.stringify(newState, null, 2) + "\n");
-      fs.renameSync(tmpPath, reverifyStatePath);
-
-      commitIfChanged(
-        ["reverify-state.json"],
-        stillRemaining.length === 0
-          ? `chore(registry): mark v${releaseVersion} release re-verification fulfilled`
-          : `chore(registry): record resweep progress for v${releaseVersion} (${finalVerifiedSet.size}/${currentStable.length} pairings)`,
-      );
-    }
-
-    const newlyVerifiedKeys = new Set<string>();
-
     for (const target of targets) {
       const result = await verifyVersion(target.version, {
         system: target.system,
@@ -1300,6 +1166,7 @@ program
         updateRegistry: options.updateRegistry,
         recordFailures: options.recordFailures,
         keepContainer: options.keepContainer,
+        pkgVersion,
       });
       const sysLabel = target.systemVersion
         ? `${target.system} v${target.systemVersion}`
@@ -1317,24 +1184,6 @@ program
         ["verified-versions.json", "verification-report.md"],
         `chore(registry): verify ${key} [${status}]`,
       );
-
-      // result.recorded reflects whether verifyVersion's own registry write
-      // actually succeeded, not an inference from success/failures here - a
-      // malformed stable row (missing systemVersion, unsupported system)
-      // could otherwise slip through and advance resweep progress with
-      // nothing actually persisted to back that claim up.
-      if (target.stableResweepBatch && result.recorded && pendingReleaseVersion) {
-        newlyVerifiedKeys.add(
-          pairingKey({
-            fvtt: target.version,
-            system: target.system,
-            systemMinor: target.systemMinor ?? "",
-          }),
-        );
-        // Persisted immediately, not just once after the whole batch - see
-        // persistResweepProgress's own comment for why.
-        persistResweepProgress(pendingReleaseVersion, newlyVerifiedKeys);
-      }
     }
 
     console.log("\n--- Verification Summary ---");
@@ -1350,30 +1199,11 @@ program
 
     const allPassed = results.every((r) => r.success);
 
-    // Final safety net: the per-target calls above already persist progress
-    // as the batch runs, but this covers the case where the resweep was due
-    // and ran (pendingTargetCount === 0) yet nothing in the loop actually
-    // touched persistResweepProgress - e.g. the registry's stable set
-    // shrank between runs in just the wrong way, leaving zero targets this
-    // run even though the sweep was never marked fulfilled. Idempotent: if
-    // the loop above already left state fully up to date, this just
-    // rewrites the same content and commitIfChanged's own diff check no-ops
-    // the commit. Left untouched entirely when the resweep was deferred to
-    // prioritize new pending work (pendingTargetCount > 0) - that must not
-    // be treated as "nothing to do."
-    if (pendingReleaseVersion && options.updateRegistry && pendingTargetCount === 0) {
-      persistResweepProgress(pendingReleaseVersion, newlyVerifiedKeys);
-    }
-
     // Non---git-commit mode only: the incremental commits above already
     // cover --git-commit runs, so this is just the original "one combined
     // suggested command" behavior for a fully manual/dry-run invocation.
     if (!options.gitCommit) {
-      const changedFiles = [
-        "verified-versions.json",
-        "verification-report.md",
-        "reverify-state.json",
-      ].filter((f) => {
+      const changedFiles = ["verified-versions.json", "verification-report.md"].filter((f) => {
         try {
           execFileSync("git", ["diff", "--quiet", f]);
           return false;

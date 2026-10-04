@@ -60,12 +60,21 @@ async function run() {
       const issue = openIssues.find((i) => i.title === title);
       if (!issue) continue;
 
+      // A "failed" entry is never retried automatically (see the DELETE
+      // below's own comment) - this checkbox is the only way back in.
+      // Checking it (see .github/workflows/reset-verification.yml) resets
+      // this entry to "pending" so the next run actually re-verifies it,
+      // instead of it sitting here forever until someone edits the
+      // registry by hand.
+      const resetCheckbox =
+        "\n\n---\n- [ ] <!-- reset-to-pending --> Reset this entry to `pending` and retry it on the next verification run";
+
       const outcome =
         entry.status === "stable"
           ? `✅ Verified stable.\n\n${entry.notes}`
           : entry.status === "incompatible"
             ? `❌ Confirmed incompatible.\n\n${entry.notes}`
-            : `⚠️ Automated verification failed and needs investigation.\n\n${entry.notes}`;
+            : `⚠️ Automated verification failed and needs investigation.\n\n${entry.notes}${resetCheckbox}`;
 
       console.log(`[close-resolved-issues] #${issue.number}: ${title} -> ${entry.status}`);
       await githubRequest(token, "POST", `/repos/${repo}/issues/${issue.number}/comments`, {
