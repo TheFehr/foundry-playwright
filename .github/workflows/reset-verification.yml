@@ -131,11 +131,22 @@ jobs:
           delete-branch: true
           sign-commits: true
 
+      # --auto first, same fallback pattern as monitor-releases.yml - a bare
+      # --squash right after creating the PR can lose a race against branch
+      # protection's own check-completion bookkeeping ("Required status
+      # check ... is expected") even when the checks are in fact about to
+      # pass seconds later. Confirmed live 2026-10-04 on PR #194 opened by
+      # this exact workflow: build-and-lint finished 22s after the bare
+      # --squash attempt failed. --auto tells GitHub to merge once it
+      # actually considers the PR mergeable instead of requiring that to
+      # already be true at this exact instant.
       - name: Merge the reset PR
         if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
+        run: |
+          gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}" ||
+            gh pr merge --squash "${{ steps.cpr.outputs.pull-request-number }}"
 
       # close-resolved-issues.ts's escalation path (POST needs-investigation,
       # DELETE verification-required) only looks for a "failed" entry's
