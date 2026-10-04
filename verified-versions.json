@@ -289,9 +289,9 @@
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "failed",
-    "timestamp": "2026-09-20T18:27:20.009Z",
-    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: Deprecation Warnings detected during test:); user management: create, update, and login (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\"); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.state: embedded document management (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\")"
+    "status": "pending",
+    "timestamp": "2026-10-04T18:41:24.200Z",
+    "notes": "Manually reset to pending via issue #148 by @TheFehr on 2026-10-04."
   },
   {
     "fvtt": "14.368",
