@@ -1,5 +1,15 @@
 # Changelog
 
+# [1.7.0](https://github.com/TheFehr/foundry-playwright/compare/v1.6.8...v1.7.0) (2026-10-04)
+
+### Bug Fixes
+
+- **registry:** reconcile three entries falsely failed by the returnToSetup hang ([#186](https://github.com/TheFehr/foundry-playwright/issues/186)) ([215ec6f](https://github.com/TheFehr/foundry-playwright/commit/215ec6ff84fe706292c47bb37292f3d88be3c849))
+
+### Features
+
+- **registry:** replace reverify-state.json with per-row verifiedWith; add checkbox-driven reset for failed entries ([#191](https://github.com/TheFehr/foundry-playwright/issues/191)) ([3d6e59e](https://github.com/TheFehr/foundry-playwright/commit/3d6e59e7d29195c0088889bf76ab6a11b4a2d090))
+
 ## [1.6.8](https://github.com/TheFehr/foundry-playwright/compare/v1.6.7...v1.6.8) (2026-10-03)
 
 ### Bug Fixes
