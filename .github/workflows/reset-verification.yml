@@ -86,6 +86,7 @@ jobs:
 
       - name: Reset entry
         if: steps.triage.outputs.proceed == 'true'
+        id: reset
         env:
           RESET_FVTT: ${{ steps.triage.outputs.fvtt }}
           RESET_SYSTEM: ${{ steps.triage.outputs.system }}
@@ -150,8 +151,15 @@ jobs:
       # (harmless to the scripts, which only ever add to one list or the
       # other) would still be a confusing, never-otherwise-seen state for a
       # human reading the issue.
+      #
+      # Gated on the entry's actual current status (reset-failed-entry.ts's
+      # own output), not on this run having produced a PR - a checkbox
+      # retry where the registry side already succeeded on a prior run but
+      # this same label step failed separately is a real case: the entry is
+      # "pending" right now regardless of whether *this* invocation is what
+      # made it so, and that's exactly when the labels need reconciling.
       - name: Reset issue labels
-        if: steps.triage.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number != ''
+        if: steps.triage.outputs.proceed == 'true' && steps.reset.outputs.status == 'pending'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -176,13 +184,29 @@ jobs:
       # the checkbox still needs marking, or it's stuck in checked-but-
       # unhandled form with no automated step left to ever get to it.
       - name: Confirm no-op on the issue
-        if: steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false'
+        if: >-
+          steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false' &&
+          steps.reset.outputs.status != 'pending'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue comment "${{ github.event.issue.number }}" \
             --repo "${{ github.repository }}" \
             --body "ℹ️ This entry is no longer \`failed\` (likely already resolved by a normal run) - nothing to reset."
+
+      # Distinct from the no-op above: the entry actually is "pending" (a
+      # prior reset's registry change already landed), just not because of
+      # this run - the labels step above is what actually mattered here.
+      - name: Confirm already-pending on the issue
+        if: >-
+          steps.triage.outputs.proceed == 'true' && steps.diff.outputs.updated == 'false' &&
+          steps.reset.outputs.status == 'pending'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "🔄 Already \`pending\` from an earlier reset - re-synced this issue's labels in case that run didn't finish cleanly."
 
       # Only rewritten once the reset has been fully handled one way or the
       # other (merged, or confirmed as a no-op) - if an earlier step fails

@@ -40,6 +40,19 @@ function requireEnv(name: string): string {
   return value;
 }
 
+// Written regardless of which path below is taken (reset, already-moved-on,
+// or not found) - the workflow uses this, not "did this run produce a
+// diff," to decide whether to reconcile issue labels. A checkbox retry
+// after the registry side of a prior run already succeeded but its
+// separate label-update step failed is a real no-diff-yet-still-pending
+// case: this entry *is* "pending" right now, just not because of anything
+// this particular invocation did.
+function setOutput(name: string, value: string): void {
+  const outputPath = process.env.GITHUB_OUTPUT;
+  if (!outputPath) return;
+  fs.appendFileSync(outputPath, `${name}=${value}\n`);
+}
+
 function run() {
   const fvtt = requireEnv("RESET_FVTT");
   const system = requireEnv("RESET_SYSTEM");
@@ -65,6 +78,7 @@ function run() {
     console.log(
       `[reset-failed-entry] FVTT ${fvtt} + ${system} v${systemVersion} is already "${entry.status}", not "failed" - leaving it as-is.`,
     );
+    setOutput("status", entry.status);
     return;
   }
 
@@ -83,6 +97,7 @@ function run() {
   console.log(
     `[reset-failed-entry] Reset FVTT ${fvtt} + ${system} v${systemVersion} to "pending".`,
   );
+  setOutput("status", "pending");
 }
 
 run();
