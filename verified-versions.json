@@ -25,9 +25,9 @@
     "systemMinor": "8.1",
     "systemVersion": "8.1.2",
     "status": "stable",
-    "timestamp": "2026-10-03T18:18:51.573Z",
+    "timestamp": "2026-10-05T09:53:37.074Z",
     "notes": "Verified locally with pf2e v8.1.2.",
-    "verifiedWith": "1.6.8"
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "13.351.0",
@@ -53,9 +53,9 @@
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
     "status": "stable",
-    "timestamp": "2026-10-03T18:27:49.768Z",
+    "timestamp": "2026-10-05T10:02:39.557Z",
     "notes": "Verified locally with dnd5e v5.2.5.",
-    "verifiedWith": "1.6.8"
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "13.351.0",
