@@ -271,9 +271,9 @@
     "system": "dnd5e",
     "systemMinor": "6.0",
     "systemVersion": "6.0.2",
-    "status": "failed",
-    "timestamp": "2026-09-20T18:09:03.607Z",
-    "notes": "Automated verification failed: export: version metadata (Error: page.goto: Navigation to \"http://127.0.0.1:30000/join\" is interrupted by another navigation to \"http://127.0.0.1:30000/players\")"
+    "status": "pending",
+    "timestamp": "2026-10-05T10:45:57.424Z",
+    "notes": "Manually reset to pending via issue #147 by @TheFehr on 2026-10-05."
   },
   {
     "fvtt": "14.368",
