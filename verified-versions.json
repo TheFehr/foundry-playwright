@@ -274,9 +274,10 @@
     "system": "dnd5e",
     "systemMinor": "6.0",
     "systemVersion": "6.0.2",
-    "status": "pending",
-    "timestamp": "2026-10-05T10:45:57.424Z",
-    "notes": "Manually reset to pending via issue #147 by @TheFehr on 2026-10-05."
+    "status": "stable",
+    "timestamp": "2026-10-05T18:34:45.088Z",
+    "notes": "Verified locally with dnd5e v6.0.2.",
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "14.368",
