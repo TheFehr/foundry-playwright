@@ -182,9 +182,10 @@
     "system": "pf2e",
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
-    "status": "pending",
-    "timestamp": "2026-10-05T10:45:59.120Z",
-    "notes": "Manually reset to pending via issue #168 by @TheFehr on 2026-10-05."
+    "status": "stable",
+    "timestamp": "2026-10-05T18:16:02.348Z",
+    "notes": "Verified locally with pf2e v8.2.0.",
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "13.351.0",
