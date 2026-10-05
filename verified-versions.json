@@ -208,9 +208,9 @@
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.0",
-    "status": "failed",
-    "timestamp": "2026-09-06T18:20:56.147Z",
-    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m)"
+    "status": "pending",
+    "timestamp": "2026-10-05T10:46:01.558Z",
+    "notes": "Manually reset to pending via issue #146 by @TheFehr on 2026-10-05."
   },
   {
     "fvtt": "14.367",
