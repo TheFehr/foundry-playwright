@@ -91,9 +91,9 @@
     "systemMinor": "8.0",
     "systemVersion": "8.0.3",
     "status": "stable",
-    "timestamp": "2026-10-04T04:25:15.592Z",
+    "timestamp": "2026-10-05T10:29:56.657Z",
     "notes": "Verified locally with pf2e v8.0.3.",
-    "verifiedWith": "1.6.8"
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "13.351.0",
