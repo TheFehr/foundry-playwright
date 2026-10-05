@@ -63,9 +63,9 @@
     "systemMinor": "5.1",
     "systemVersion": "5.1.10",
     "status": "stable",
-    "timestamp": "2026-10-04T04:14:32.730Z",
+    "timestamp": "2026-10-05T10:18:41.350Z",
     "notes": "Verified locally with dnd5e v5.1.10.",
-    "verifiedWith": "1.6.8"
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "14.360.0",
