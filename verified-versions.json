@@ -289,10 +289,9 @@
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "failed",
-    "timestamp": "2026-10-05T04:21:47.361Z",
-    "notes": "Automated verification failed: user management: create, update, and login (Error: Failed to get user or actor ID); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.state: embedded document management (Error: Actor not found after creation); foundry.ui: drop simulation (TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.)",
-    "verifiedWith": "1.7.0"
+    "status": "pending",
+    "timestamp": "2026-10-05T10:46:03.183Z",
+    "notes": "Manually reset to pending via issue #148 by @TheFehr on 2026-10-05."
   },
   {
     "fvtt": "14.368",
