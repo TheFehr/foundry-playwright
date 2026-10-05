@@ -1,0 +1,79 @@
+name: Reconcile Registry
+
+# Runs close-resolved-issues/report-regressions against whatever
+# verified-versions.json looks like the instant a change actually lands on
+# main, instead of them being a tail-step of foundry-verify.sh's own,
+# potentially 10-40+ minute Docker verification loop on the VM. That
+# coupling is what let an unrelated concurrent registry change (checking a
+# reset-to-pending checkbox on a different issue while a VM run was still
+# mid-flight) get clobbered by the VM run's own stale, run-start-frozen
+# read of the registry - see homelab-infrastructure's foundry_verify role
+# history, 2026-10-05. Triggering straight off the push itself means every
+# change to verified-versions.json - whichever of the several things that
+# write to it caused this one - gets its own fresh checkout and its own
+# fast reconciliation pass within seconds, regardless of how long whatever
+# produced that change took to run.
+on:
+  push:
+    branches: [main]
+    paths:
+      - verified-versions.json
+  # Both scripts catch and log per-entry GitHub API failures without
+  # failing the job (so one transient failure doesn't abort reconciling
+  # every other independent entry) - but that also means a failed update
+  # has no retry path if no later push happens to re-trigger this
+  # workflow. The old VM-script version ran these unconditionally every
+  # invocation regardless of whether the registry changed, which gave it
+  # an implicit retry cadence this push-only trigger doesn't have on its
+  # own. This daily run is that safety net - cheap (seconds) even as a
+  # near-always-no-op.
+  schedule:
+    - cron: "17 5 * * *" # Daily at 05:17 UTC
+  workflow_dispatch:
+
+# queue: max, not the default queue: single - with only one pending slot
+# per group, a third push arriving while one run is in-progress and
+# another is already pending cancels that pending run outright (regardless
+# of cancel-in-progress), so it would never get its own pass at all. max
+# queues up to 100 pending runs instead of dropping anything beyond the
+# first. These runs are seconds long, so queuing depth costs nothing.
+concurrency:
+  group: reconcile-registry
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.14.1"
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Reconcile resolved/failed entries onto their issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run close-resolved-issues
+
+      # Must run after close-resolved-issues: a "pending" entry that just
+      # failed for the first time still has its original monitor-
+      # releases.yml issue open, and close-resolved-issues just reconciled
+      # that issue onto it above. This only files new issues for "failed"
+      # entries nothing is tracking yet - chiefly a stable entry a
+      # --if-release-pending sweep just broke.
+      - name: File issues for untracked failures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run report-regressions
