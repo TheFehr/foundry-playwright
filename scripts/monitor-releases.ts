@@ -4,6 +4,7 @@ import path from "path";
 import { execSync } from "child_process";
 import {
   minorOf,
+  majorOf,
   compareVersions,
   isCompatibleWithFvtt,
   fetchCompatRange,
@@ -101,6 +102,40 @@ function topMinors(latestByMinor: Map<string, string>, count = TRACKED_MINOR_COU
     .slice(0, count);
 }
 
+// A manifest's compatibility range can't catch every real incompatibility -
+// confirmed live: dnd5e v5.2.5 declares no `maximum` at all (just
+// `minimum: 13.347, verified: 13`), so isCompatibleWithFvtt sees nothing
+// wrong with pairing it against FVTT 14, even though dnd5e 5.3.0's own
+// release notes confirm V14 support didn't exist before that release - 5.2.5
+// never worked against *any* V14 build. That incompatibility had already
+// been recorded for FVTT 14.360.0/14.365/14.366/14.367, but FVTT 14.368 (added
+// to fvttToCheck later) still got queued as a fresh "pending" entry and had to
+// fail a real Docker run before anyone noticed - exactly the gap this closes.
+//
+// Scoped to the same exact systemVersion (not just systemMinor) and the same
+// Foundry major (via majorOf, not the full fvtt string) - a system version
+// confirmed incompatible with one build of a major is overwhelmingly likely
+// incompatible with every other build of that same major too, but says
+// nothing about a *different* major (a system incompatible with all of V13
+// is a completely separate boundary from whether it supports V14, and vice
+// versa) or a *different*, not-yet-tested systemVersion (a later patch could
+// genuinely fix the underlying issue).
+function findInheritedIncompatibility(
+  registry: RegistryEntry[],
+  retired: RegistryEntry[],
+  systemId: string,
+  systemVersion: string,
+  fvtt: string,
+): RegistryEntry | undefined {
+  const major = majorOf(fvtt);
+  const matches = (e: RegistryEntry) =>
+    e.system === systemId &&
+    e.systemVersion === systemVersion &&
+    e.status === "incompatible" &&
+    majorOf(e.fvtt) === major;
+  return registry.find(matches) ?? retired.find(matches);
+}
+
 async function fetchFoundryVersion(): Promise<string> {
   console.log("[monitor] Fetching latest Foundry VTT version...");
   const html = execSync("curl -sf https://foundryvtt.com/releases/", { encoding: "utf8" });
@@ -179,6 +214,31 @@ async function run() {
               (e) => e.fvtt === fvtt && e.system === systemId && e.systemMinor === minor,
             );
           if (hasExistingEntry) continue;
+
+          const inherited = findInheritedIncompatibility(
+            registry,
+            retired,
+            systemId,
+            latestPatch,
+            fvtt,
+          );
+          if (inherited) {
+            console.log(
+              `[monitor] Inherited incompatible: ${systemId} v${latestPatch} with FVTT ${fvtt} ` +
+                `(already incompatible with FVTT ${inherited.fvtt})`,
+            );
+            registry.push({
+              fvtt,
+              system: systemId,
+              systemMinor: minor,
+              systemVersion: latestPatch,
+              status: "incompatible",
+              timestamp: new Date().toISOString(),
+              notes: `Same systemVersion already confirmed incompatible with FVTT ${inherited.fvtt} (same major): ${inherited.notes}`,
+            });
+            updated = true;
+            continue;
+          }
 
           if (!(await isCompatibleWithFvtt(systemId, latestPatch, fvtt))) {
             const rangeNote = formatCompatRange(await fetchCompatRange(systemId, latestPatch));
