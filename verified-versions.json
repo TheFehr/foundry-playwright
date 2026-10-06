@@ -265,9 +265,9 @@
     "system": "dnd5e",
     "systemMinor": "6.0",
     "systemVersion": "6.0.0",
-    "status": "failed",
-    "timestamp": "2026-10-02T04:28:37.402Z",
-    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (\u001b[31m\"beforeAll\" hook timeout of 900000ms exceeded.\u001b[39m)"
+    "status": "pending",
+    "timestamp": "2026-10-06T09:54:05.364Z",
+    "notes": "Manually reset to pending via issue #170 by @TheFehr on 2026-10-06."
   },
   {
     "fvtt": "14.368",
