@@ -286,8 +286,9 @@
     "system": "pf2e",
     "systemMinor": "8.3",
     "systemVersion": "8.3.0",
-    "status": "pending",
-    "timestamp": "2026-10-06T11:38:17.632Z",
-    "notes": "Manually reset to pending via issue #183 by @TheFehr on 2026-10-06."
+    "status": "stable",
+    "timestamp": "2026-10-06T11:58:31.630Z",
+    "notes": "Verified locally with pf2e v8.3.0.",
+    "verifiedWith": "1.7.0"
   }
 ]
