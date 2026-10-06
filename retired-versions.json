@@ -198,5 +198,29 @@
     "verifiedWith": "1.7.0",
     "retiredAt": "2026-10-06T10:03:16.086Z",
     "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.367",
+    "system": "pf2e",
+    "systemMinor": "8.5",
+    "systemVersion": "8.5.0",
+    "status": "stable",
+    "timestamp": "2026-10-06T10:12:44.897Z",
+    "notes": "Verified locally with pf2e v8.5.0.",
+    "verifiedWith": "1.7.0",
+    "retiredAt": "2026-10-06T11:41:15.613Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.367",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.0",
+    "status": "stable",
+    "timestamp": "2026-10-06T10:20:22.537Z",
+    "notes": "Verified locally with dnd5e v6.0.0.",
+    "verifiedWith": "1.7.0",
+    "retiredAt": "2026-10-06T11:41:15.613Z",
+    "supersededBy": "14.368"
   }
 ]
