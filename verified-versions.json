@@ -256,10 +256,9 @@
     "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
-    "status": "failed",
-    "timestamp": "2026-10-05T18:47:00.431Z",
-    "notes": "Automated verification failed: user management: create, update, and login (Error: Failed to get user or actor ID); foundry.state: document management (TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.); foundry.state: embedded document management (Error: Actor not found after creation); foundry.ui: drop simulation (TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.)",
-    "verifiedWith": "1.7.0"
+    "status": "incompatible",
+    "timestamp": "2026-10-06T13:00:00.000Z",
+    "notes": "dnd5e v5.2.5 never supports Foundry V14 - its own manifest sets no compatibility maximum (minimum: 13.347, verified: 13 only), and dnd5e 5.3.0's release notes state V14 support was added in that release. Reproduced locally against FVTT 14.368: Actor5e schema validation crashes on actor creation (SchemaField#_validateRecursive fails identically across every MappingField-based system field - currency/abilities/skills/tools/spells/traits). Same root incompatibility already recorded against FVTT 14.360.0 below - not a flake, will never pass on any V14 build."
   },
   {
     "fvtt": "14.368",
