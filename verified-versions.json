@@ -170,16 +170,6 @@
   {
     "fvtt": "14.367",
     "system": "pf2e",
-    "systemMinor": "8.4",
-    "systemVersion": "8.4.1",
-    "status": "stable",
-    "timestamp": "2026-10-05T10:51:13.926Z",
-    "notes": "Verified locally with pf2e v8.4.1.",
-    "verifiedWith": "1.7.0"
-  },
-  {
-    "fvtt": "14.367",
-    "system": "pf2e",
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
     "status": "stable",
@@ -206,23 +196,14 @@
     "notes": "System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
   },
   {
-    "fvtt": "14.365",
-    "system": "pf2e",
-    "systemMinor": "8.5",
-    "systemVersion": "8.5.0",
-    "status": "stable",
-    "timestamp": "2026-10-05T18:27:15.225Z",
-    "notes": "Verified locally with pf2e v8.5.0.",
-    "verifiedWith": "1.7.0"
-  },
-  {
     "fvtt": "14.367",
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.0",
-    "status": "pending",
-    "timestamp": "2026-10-06T09:54:14.451Z",
-    "notes": "Manually reset to pending via issue #169 by @TheFehr on 2026-10-06."
+    "status": "stable",
+    "timestamp": "2026-10-06T10:12:44.897Z",
+    "notes": "Verified locally with pf2e v8.5.0.",
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "13.351.0",
@@ -265,9 +246,10 @@
     "system": "dnd5e",
     "systemMinor": "6.0",
     "systemVersion": "6.0.0",
-    "status": "pending",
-    "timestamp": "2026-10-06T09:54:05.364Z",
-    "notes": "Manually reset to pending via issue #170 by @TheFehr on 2026-10-06."
+    "status": "stable",
+    "timestamp": "2026-10-06T10:20:22.537Z",
+    "notes": "Verified locally with dnd5e v6.0.0.",
+    "verifiedWith": "1.7.0"
   },
   {
     "fvtt": "14.368",

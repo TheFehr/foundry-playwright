@@ -174,5 +174,29 @@
     "notes": "Verified locally with pf2e v8.5.0.",
     "retiredAt": "2026-09-30T20:46:12.647Z",
     "supersededBy": "14.367"
+  },
+  {
+    "fvtt": "14.367",
+    "system": "pf2e",
+    "systemMinor": "8.4",
+    "systemVersion": "8.4.1",
+    "status": "stable",
+    "timestamp": "2026-10-05T10:51:13.926Z",
+    "notes": "Verified locally with pf2e v8.4.1.",
+    "verifiedWith": "1.7.0",
+    "retiredAt": "2026-10-06T10:03:16.086Z",
+    "supersededBy": "14.368"
+  },
+  {
+    "fvtt": "14.365",
+    "system": "pf2e",
+    "systemMinor": "8.5",
+    "systemVersion": "8.5.0",
+    "status": "stable",
+    "timestamp": "2026-10-05T18:27:15.225Z",
+    "notes": "Verified locally with pf2e v8.5.0.",
+    "verifiedWith": "1.7.0",
+    "retiredAt": "2026-10-06T10:03:16.086Z",
+    "supersededBy": "14.368"
   }
 ]
