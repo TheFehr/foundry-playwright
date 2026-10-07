@@ -57,7 +57,7 @@
     "lint-staged": "17.6.0",
     "oxfmt": "0.71.0",
     "oxlint": "1.87.0",
-    "release-it": "21.1.0",
+    "release-it": "21.1.1",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vitest": "1.6.1"
