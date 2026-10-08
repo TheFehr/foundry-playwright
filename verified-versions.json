@@ -290,5 +290,41 @@
     "timestamp": "2026-10-06T11:58:31.630Z",
     "notes": "Verified locally with pf2e v8.3.0.",
     "verifiedWith": "1.7.0"
+  },
+  {
+    "fvtt": "13.351.0",
+    "system": "pf2e",
+    "systemMinor": "8.6",
+    "systemVersion": "8.6.0",
+    "status": "incompatible",
+    "timestamp": "2026-10-08T11:25:35.488Z",
+    "notes": "System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 13.351.0."
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "pf2e",
+    "systemMinor": "8.6",
+    "systemVersion": "8.6.0",
+    "status": "incompatible",
+    "timestamp": "2026-10-08T11:25:35.488Z",
+    "notes": "System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.367",
+    "system": "pf2e",
+    "systemMinor": "8.6",
+    "systemVersion": "8.6.0",
+    "status": "incompatible",
+    "timestamp": "2026-10-08T11:25:35.488Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.368",
+    "system": "pf2e",
+    "systemMinor": "8.6",
+    "systemVersion": "8.6.0",
+    "status": "incompatible",
+    "timestamp": "2026-10-08T11:25:35.488Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
   }
 ]
