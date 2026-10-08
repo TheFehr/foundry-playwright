@@ -66,8 +66,18 @@ jobs:
         id: cpr
         with:
           token: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
-          commit-message: "chore(registry): update pending verification matrix"
-          title: "chore(registry): update pending verification matrix"
+          # [no-release]: this PR only ever touches verified-versions.json
+          # (registry-only, never src/) - without the tag, release-it bundles
+          # it into an actual, real version bump anyway rather than finding
+          # nothing releasable (confirmed live 2026-10-08: this exact PR,
+          # unflagged, triggered an unwanted v1.8.0 publish for a changeset
+          # with zero src/ content). This workflow auto-merges with zero
+          # human review, so a missing tag here isn't a one-off slip to catch
+          # next time - it fires every single day a new system patch is
+          # found, and would do this every time until the tag is actually in
+          # the title.
+          commit-message: "chore(registry): update pending verification matrix [no-release]"
+          title: "chore(registry): update pending verification matrix [no-release]"
           body: "Automated update from the Monitor Releases workflow."
           branch: monitor-releases-updates
           delete-branch: true
