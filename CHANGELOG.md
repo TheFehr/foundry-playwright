@@ -1,5 +1,18 @@
 # Changelog
 
+# [1.8.0](https://github.com/TheFehr/foundry-playwright/compare/v1.7.0...v1.8.0) (2026-10-08)
+
+### Bug Fixes
+
+- **deps:** update dependency commander to v15 [no-release] ([#181](https://github.com/TheFehr/foundry-playwright/issues/181)) ([8257e6f](https://github.com/TheFehr/foundry-playwright/commit/8257e6fddad121550ffbfcecb7a820d49ab081ae))
+- **registry:** reclassify FVTT 14.368 + dnd5e v5.2.5 as incompatible [no-release] ([#217](https://github.com/TheFehr/foundry-playwright/issues/217)) ([e9e2937](https://github.com/TheFehr/foundry-playwright/commit/e9e2937c2eb2105b48ffc7a3aff0da5377116090))
+- **registry:** reconcile via a dedicated workflow, not the VM script [no-release] ([#204](https://github.com/TheFehr/foundry-playwright/issues/204)) ([8a09765](https://github.com/TheFehr/foundry-playwright/commit/8a097651c710beac87fbebd38a66ca3cfefa182d))
+- **reset-verification:** use --auto on the reset PR merge [no-release] ([#195](https://github.com/TheFehr/foundry-playwright/issues/195)) ([fcd1432](https://github.com/TheFehr/foundry-playwright/commit/fcd1432822d71072b0e1c574a5022b725766bbca))
+
+### Features
+
+- **monitor-releases:** inherit incompatibility across FVTT builds of the same major [no-release] ([#218](https://github.com/TheFehr/foundry-playwright/issues/218)) ([fabe09d](https://github.com/TheFehr/foundry-playwright/commit/fabe09dca5cb9d9dda63d4fdc50f74e277281191))
+
 # [1.7.0](https://github.com/TheFehr/foundry-playwright/compare/v1.6.8...v1.7.0) (2026-10-04)
 
 ### Bug Fixes
