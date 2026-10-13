@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.8.1](https://github.com/TheFehr/foundry-playwright/compare/v1.8.0...v1.8.1) (2026-10-13)
+
+### Bug Fixes
+
+- **monitor-releases:** tag the auto-opened registry PR [no-release] ([#224](https://github.com/TheFehr/foundry-playwright/issues/224)) ([ab6ce36](https://github.com/TheFehr/foundry-playwright/commit/ab6ce36b633674d86fb1e57f20d873db85c070fd))
+
 # [1.8.0](https://github.com/TheFehr/foundry-playwright/compare/v1.7.0...v1.8.0) (2026-10-08)
 
 ### Bug Fixes
