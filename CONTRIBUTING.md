@@ -26,10 +26,13 @@ npm run format   # oxfmt --check (npm run format:fix to auto-fix)
 npm test         # unit tests (vitest)
 ```
 
-The Playwright E2E suite (`npm run test:e2e`) and the Docker-based
-compatibility verifier (`npm run verify:local`) both need a licensed
-FoundryVTT account and Docker, and aren't expected for most contributions -
-CI only requires the build/lint/format/unit-test suite above to pass.
+The Playwright E2E suite (`npm run test:e2e`) runs against whatever Foundry
+instance `FOUNDRY_URL` points at (default `http://localhost:30000`) - no
+Docker required if you already have one running. `npm run verify:local`
+only needs Docker and a licensed FoundryVTT account
+(`FOUNDRY_USERNAME`/`FOUNDRY_PASSWORD`) when you pass `--docker`. Neither is
+expected for most contributions - CI only requires the
+build/lint/format/unit-test suite above to pass.
 
 ## Commit messages and PR titles
 
@@ -44,7 +47,8 @@ Use a [Conventional Commits](https://www.conventionalcommits.org/) title:
 <type>(<scope>): <description>
 ```
 
-- `feat:` / `fix:` trigger a release (minor / patch respectively).
+- `feat:` triggers a minor release; `fix:` / `perf:` / `revert:` trigger a
+  patch release.
 - `chore:` / `docs:` / `ci:` / `test:` / `refactor:` / `style:` / `build:`
   do not trigger a release.
 - A breaking change uses `!` right after the type/scope, e.g.
