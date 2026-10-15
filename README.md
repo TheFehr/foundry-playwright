@@ -105,3 +105,10 @@ npx foundry-playwright test --docker --module-dir ../my-module/dist
 - [Multi-Version Support](docs/architecture/multi-version-support.md)
 - [Docker Orchestrator](docs/architecture/docker-orchestrator.md)
 - [Getting Started / Migration Guide](docs/getting-started/migration-guide.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, local checks, and PR
+conventions. This project follows a [Code of Conduct](CODE_OF_CONDUCT.md).
+Found a security issue? See [SECURITY.md](SECURITY.md) instead of opening a
+public issue.
