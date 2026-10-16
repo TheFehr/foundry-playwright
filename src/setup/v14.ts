@@ -916,7 +916,11 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
         .locator("dialog, .application")
         .filter({ hasText: /Delete World/i })
         .last();
-      await expect(dialog).toBeVisible();
+      // See the identical fix/comment in V12SetupAdapter.deleteWorldIfExists
+      // (src/setup/v12.ts) - no explicit timeout here fell back to
+      // Playwright's default 5000ms, inconsistent with every other
+      // dialog-visibility wait in this file (10-30s).
+      await expect(dialog).toBeVisible({ timeout: 15000 });
       const confirmCode = await dialog.locator(".reference, .confirm-code").first().innerText();
       const input = dialog
         .locator('input#delete-confirm, input[name="confirm"], input[name="world-id"]')

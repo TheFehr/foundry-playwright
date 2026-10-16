@@ -534,7 +534,16 @@ export class V12SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
         .locator("dialog, .application, .window-app")
         .filter({ hasText: new RegExp(`Delete World: ${worldId}`, "i") })
         .last();
-      await expect(dialog).toBeVisible();
+      // Unlike every other toBeVisible() call in this file, this one had no
+      // explicit timeout - falling back to Playwright's default 5000ms,
+      // noticeably shorter than every sibling dialog/tab wait here (10-30s).
+      // A context-menu-triggered dialog is exactly the kind of UI transition
+      // prone to slower first-render timing - confirmed live 2026-10-16/17:
+      // this was the root cause of an intermittent "export: version
+      // metadata" flake against FVTT 13.351.0 (attributed to that test only
+      // because it's the first to run after the shared beforeAll setup this
+      // lives in, not because the test itself was at fault).
+      await expect(dialog).toBeVisible({ timeout: 15000 });
 
       const confirmCode = await dialog.locator(".reference").innerText();
       await dialog.getByRole("textbox").fill(confirmCode);

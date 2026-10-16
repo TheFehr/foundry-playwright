@@ -626,7 +626,11 @@ export async function handleReload(page: Page) {
     .locator("dialog, foundry-app, .window-app")
     .filter({ hasText: /Reload/i })
     .last();
-  await expect(dialog).toBeVisible();
+  // See the identical fix/comment in V12SetupAdapter.deleteWorldIfExists
+  // (src/setup/v12.ts) - no explicit timeout here fell back to Playwright's
+  // default 5000ms, inconsistent with every other dialog-visibility wait
+  // in this codebase (10-30s).
+  await expect(dialog).toBeVisible({ timeout: 15000 });
   await dialog.locator('button:has-text("Yes")').first().click();
   // Best-effort settle - a reload can land back on a live game session with
   // persistent WebSocket traffic that never satisfies networkidle, and
