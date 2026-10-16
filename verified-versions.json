@@ -234,51 +234,11 @@
   {
     "fvtt": "14.368",
     "system": "dnd5e",
-    "systemMinor": "6.0",
-    "systemVersion": "6.0.2",
-    "status": "stable",
-    "timestamp": "2026-10-05T18:34:45.088Z",
-    "notes": "Verified locally with dnd5e v6.0.2.",
-    "verifiedWith": "1.7.0"
-  },
-  {
-    "fvtt": "14.368",
-    "system": "dnd5e",
-    "systemMinor": "5.3",
-    "systemVersion": "5.3.3",
-    "status": "stable",
-    "timestamp": "2026-10-06T11:49:07.525Z",
-    "notes": "Verified locally with dnd5e v5.3.3.",
-    "verifiedWith": "1.7.0"
-  },
-  {
-    "fvtt": "14.368",
-    "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
     "status": "incompatible",
     "timestamp": "2026-10-06T13:00:00.000Z",
     "notes": "dnd5e v5.2.5 never supports Foundry V14 - its own manifest sets no compatibility maximum (minimum: 13.347, verified: 13 only), and dnd5e 5.3.0's release notes state V14 support was added in that release. Reproduced locally against FVTT 14.368: Actor5e schema validation crashes on actor creation (SchemaField#_validateRecursive fails identically across every MappingField-based system field - currency/abilities/skills/tools/spells/traits). Same root incompatibility already recorded against FVTT 14.360.0 below - not a flake, will never pass on any V14 build.",
-    "verifiedWith": "1.7.0"
-  },
-  {
-    "fvtt": "14.368",
-    "system": "pf2e",
-    "systemMinor": "8.5",
-    "systemVersion": "8.5.1",
-    "status": "stable",
-    "timestamp": "2026-10-06T08:27:12.901Z",
-    "notes": "Verified locally with pf2e v8.5.1.",
-    "verifiedWith": "1.7.0"
-  },
-  {
-    "fvtt": "14.368",
-    "system": "pf2e",
-    "systemMinor": "8.4",
-    "systemVersion": "8.4.1",
-    "status": "stable",
-    "timestamp": "2026-10-06T08:36:45.223Z",
-    "notes": "Verified locally with pf2e v8.4.1.",
     "verifiedWith": "1.7.0"
   },
   {
