@@ -30,7 +30,21 @@ export class V14SetupAdapter extends BaseSetupAdapter implements SetupAdapter {
   }
 
   async login(page: FoundryPage, userName: string, password?: string): Promise<void> {
-    await page.locator("#join-username").fill(userName);
+    // #join-username has flip-flopped between a free-text <input> and a
+    // <select> picker across V14 builds while keeping the same id/name
+    // attributes each time - confirmed directly against each image's own
+    // join-form.hbs: builds 366-368 rendered a real <input id="join-username">,
+    // then 14.369 reverted to <select id="join-username" name="userId">.
+    // Checking the actual tag at runtime is more robust than chasing another
+    // build-number cutoff the way V14_USERNAME_LOGIN_BUILD already had to for
+    // the pre-366 split.
+    const usernameField = page.locator("#join-username");
+    const tagName = await usernameField.evaluate((el) => el.tagName);
+    if (tagName === "SELECT") {
+      await usernameField.selectOption({ label: userName });
+    } else {
+      await usernameField.fill(userName);
+    }
     if (password) await page.locator('input[name="password"]').fill(password);
     await page
       .locator('button[name="join"]')
