@@ -370,9 +370,10 @@
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.1",
-    "status": "pending",
-    "timestamp": "2026-10-09T02:37:41.892Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.369 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+    "status": "failed",
+    "timestamp": "2026-10-16T05:11:33.269Z",
+    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); user management: create, update, and login (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); export: version metadata (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: document management (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: embedded document management (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: createEmbeddedDocument throws for a missing parent (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: settings management (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.ui: Application V2 tab switching (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.helpers: tour suppression (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: event logic (Hooks) (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.ui: drop simulation (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.setup: manifest-based installation UI (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element)",
+    "verifiedWith": "1.8.2"
   },
   {
     "fvtt": "14.369",
