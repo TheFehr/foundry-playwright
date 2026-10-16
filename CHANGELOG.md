@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.8.3](https://github.com/TheFehr/foundry-playwright/compare/v1.8.2...v1.8.3) (2026-10-16)
+
+### Bug Fixes
+
+- **setup:** detect select vs input for V14 join-screen username field ([#252](https://github.com/TheFehr/foundry-playwright/issues/252)) ([fe9fd96](https://github.com/TheFehr/foundry-playwright/commit/fe9fd96032c4f724fdf21bf7532f5dbb8a4158c5))
+
 ## [1.8.2](https://github.com/TheFehr/foundry-playwright/compare/v1.8.1...v1.8.2) (2026-10-13)
 
 ## [1.8.1](https://github.com/TheFehr/foundry-playwright/compare/v1.8.0...v1.8.1) (2026-10-13)
