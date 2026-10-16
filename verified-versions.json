@@ -342,10 +342,9 @@
     "system": "dnd5e",
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
-    "status": "failed",
-    "timestamp": "2026-10-16T04:49:07.251Z",
-    "notes": "Automated verification failed: foundrySetup installs and activates both a manifest module and a registry module together (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); user management: create, update, and login (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); export: version metadata (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: document management (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: embedded document management (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: createEmbeddedDocument throws for a missing parent (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: settings management (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.ui: Application V2 tab switching (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.helpers: tour suppression (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.state: event logic (Hooks) (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.ui: drop simulation (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element); foundry.setup: manifest-based installation UI (Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element)",
-    "verifiedWith": "1.8.2"
+    "status": "pending",
+    "timestamp": "2026-10-16T10:15:37.206Z",
+    "notes": "Manually reset to pending via issue #249 by @TheFehr on 2026-10-16."
   },
   {
     "fvtt": "14.369",
