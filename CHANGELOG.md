@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.8.4](https://github.com/TheFehr/foundry-playwright/compare/v1.8.3...v1.8.4) (2026-10-16)
+
+### Bug Fixes
+
+- **setup:** add explicit timeout to Delete World / Reload dialog waits ([#263](https://github.com/TheFehr/foundry-playwright/issues/263)) ([2a9a2cc](https://github.com/TheFehr/foundry-playwright/commit/2a9a2cc21f2b9c3079e9e99cd288e8b130c9a53f))
+
 ## [1.8.3](https://github.com/TheFehr/foundry-playwright/compare/v1.8.2...v1.8.3) (2026-10-16)
 
 ### Bug Fixes
