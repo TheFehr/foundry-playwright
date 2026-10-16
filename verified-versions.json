@@ -14,10 +14,10 @@
     "system": "pf2e",
     "systemMinor": "7.12",
     "systemVersion": "7.12.2",
-    "status": "stable",
-    "timestamp": "2026-10-08T18:30:25.871Z",
-    "notes": "Verified locally with pf2e v7.12.2.",
-    "verifiedWith": "1.8.0"
+    "status": "failed",
+    "timestamp": "2026-10-16T11:39:40.923Z",
+    "notes": "Automated verification failed: export: version metadata (Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed)",
+    "verifiedWith": "1.8.3"
   },
   {
     "fvtt": "14.360.0",
