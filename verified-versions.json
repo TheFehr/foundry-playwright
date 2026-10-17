@@ -14,9 +14,10 @@
     "system": "pf2e",
     "systemMinor": "7.12",
     "systemVersion": "7.12.2",
-    "status": "pending",
-    "timestamp": "2026-10-16T19:24:57.029Z",
-    "notes": "Manually reset to pending via issue #260 by @TheFehr on 2026-10-16."
+    "status": "stable",
+    "timestamp": "2026-10-17T04:19:46.565Z",
+    "notes": "Verified locally with pf2e v7.12.2.",
+    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "14.360.0",
