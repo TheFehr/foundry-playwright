@@ -303,9 +303,9 @@
     "systemMinor": "5.3",
     "systemVersion": "5.3.3",
     "status": "stable",
-    "timestamp": "2026-10-16T10:52:59.404Z",
+    "timestamp": "2026-10-18T14:45:16.694Z",
     "notes": "Verified locally with dnd5e v5.3.3.",
-    "verifiedWith": "1.8.3"
+    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "14.369",
