@@ -91,9 +91,9 @@
     "systemMinor": "8.0",
     "systemVersion": "8.0.3",
     "status": "stable",
-    "timestamp": "2026-10-05T10:29:56.657Z",
+    "timestamp": "2026-10-18T02:45:03.104Z",
     "notes": "Verified locally with pf2e v8.0.3.",
-    "verifiedWith": "1.7.0"
+    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "13.351.0",
@@ -173,9 +173,9 @@
     "systemMinor": "8.2",
     "systemVersion": "8.2.0",
     "status": "stable",
-    "timestamp": "2026-10-05T18:16:02.348Z",
+    "timestamp": "2026-10-18T02:54:46.742Z",
     "notes": "Verified locally with pf2e v8.2.0.",
-    "verifiedWith": "1.7.0"
+    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "13.351.0",
