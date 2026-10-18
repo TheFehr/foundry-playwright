@@ -341,8 +341,8 @@
     "systemMinor": "8.4",
     "systemVersion": "8.4.1",
     "status": "stable",
-    "timestamp": "2026-10-16T11:12:45.107Z",
+    "timestamp": "2026-10-18T18:44:23.054Z",
     "notes": "Verified locally with pf2e v8.4.1.",
-    "verifiedWith": "1.8.3"
+    "verifiedWith": "1.8.4"
   }
 ]
