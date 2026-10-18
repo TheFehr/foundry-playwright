@@ -331,9 +331,9 @@
     "systemMinor": "8.5",
     "systemVersion": "8.5.1",
     "status": "stable",
-    "timestamp": "2026-10-16T11:02:42.059Z",
+    "timestamp": "2026-10-18T14:55:11.872Z",
     "notes": "Verified locally with pf2e v8.5.1.",
-    "verifiedWith": "1.8.3"
+    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "14.369",
