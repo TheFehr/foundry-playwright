@@ -344,5 +344,59 @@
     "timestamp": "2026-10-18T18:44:23.054Z",
     "notes": "Verified locally with pf2e v8.4.1.",
     "verifiedWith": "1.8.4"
+  },
+  {
+    "fvtt": "14.370",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.6",
+    "status": "pending",
+    "timestamp": "2026-11-04T12:14:32.519Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system dnd5e --system-minor 6.0 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.370",
+    "system": "dnd5e",
+    "systemMinor": "5.3",
+    "systemVersion": "5.3.3",
+    "status": "pending",
+    "timestamp": "2026-11-04T12:14:32.728Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system dnd5e --system-minor 5.3 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.370",
+    "system": "dnd5e",
+    "systemMinor": "5.2",
+    "systemVersion": "5.2.5",
+    "status": "incompatible",
+    "timestamp": "2026-11-04T12:14:32.728Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): dnd5e v5.2.5 EnchantmentData schema incompatibility with Foundry V14.360.0: 'Class EnchantmentData must define a changes field in its schema'. Actor creation fails validation even with minimal data."
+  },
+  {
+    "fvtt": "14.370",
+    "system": "pf2e",
+    "systemMinor": "8.6",
+    "systemVersion": "8.6.1",
+    "status": "pending",
+    "timestamp": "2026-11-04T12:14:34.253Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system pf2e --system-minor 8.6 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.370",
+    "system": "pf2e",
+    "systemMinor": "8.5",
+    "systemVersion": "8.5.1",
+    "status": "pending",
+    "timestamp": "2026-11-04T12:14:34.472Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.370",
+    "system": "pf2e",
+    "systemMinor": "8.4",
+    "systemVersion": "8.4.1",
+    "status": "pending",
+    "timestamp": "2026-11-04T12:14:34.708Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system pf2e --system-minor 8.4 --update-registry --git-commit`"
   }
 ]
