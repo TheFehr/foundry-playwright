@@ -398,5 +398,59 @@
     "status": "pending",
     "timestamp": "2026-11-04T12:14:34.708Z",
     "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system pf2e --system-minor 8.4 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "13.351.0",
+    "system": "pf2e",
+    "systemMinor": "8.7",
+    "systemVersion": "8.7.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-05T12:27:14.342Z",
+    "notes": "System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 13.351.0."
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "pf2e",
+    "systemMinor": "8.7",
+    "systemVersion": "8.7.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-05T12:27:14.342Z",
+    "notes": "System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.367",
+    "system": "pf2e",
+    "systemMinor": "8.7",
+    "systemVersion": "8.7.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-05T12:27:14.342Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.368",
+    "system": "pf2e",
+    "systemMinor": "8.7",
+    "systemVersion": "8.7.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-05T12:27:14.342Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.369",
+    "system": "pf2e",
+    "systemMinor": "8.7",
+    "systemVersion": "8.7.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-05T12:27:14.342Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.370",
+    "system": "pf2e",
+    "systemMinor": "8.7",
+    "systemVersion": "8.7.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-05T12:27:14.342Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
   }
 ]
