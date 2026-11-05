@@ -389,9 +389,10 @@
     "system": "pf2e",
     "systemMinor": "8.5",
     "systemVersion": "8.5.1",
-    "status": "pending",
-    "timestamp": "2026-11-04T12:14:34.472Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-11-05T16:11:24.575Z",
+    "notes": "Verified locally with pf2e v8.5.1.",
+    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "14.370",
