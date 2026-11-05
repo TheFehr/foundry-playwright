@@ -290,26 +290,6 @@
   {
     "fvtt": "14.369",
     "system": "dnd5e",
-    "systemMinor": "6.0",
-    "systemVersion": "6.0.6",
-    "status": "stable",
-    "timestamp": "2026-10-18T06:53:19.441Z",
-    "notes": "Verified locally with dnd5e v6.0.6.",
-    "verifiedWith": "1.8.4"
-  },
-  {
-    "fvtt": "14.369",
-    "system": "dnd5e",
-    "systemMinor": "5.3",
-    "systemVersion": "5.3.3",
-    "status": "stable",
-    "timestamp": "2026-10-18T14:45:16.694Z",
-    "notes": "Verified locally with dnd5e v5.3.3.",
-    "verifiedWith": "1.8.4"
-  },
-  {
-    "fvtt": "14.369",
-    "system": "dnd5e",
     "systemMinor": "5.2",
     "systemVersion": "5.2.5",
     "status": "incompatible",
@@ -324,26 +304,6 @@
     "status": "incompatible",
     "timestamp": "2026-10-09T02:37:41.710Z",
     "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
-  },
-  {
-    "fvtt": "14.369",
-    "system": "pf2e",
-    "systemMinor": "8.5",
-    "systemVersion": "8.5.1",
-    "status": "stable",
-    "timestamp": "2026-10-18T14:55:11.872Z",
-    "notes": "Verified locally with pf2e v8.5.1.",
-    "verifiedWith": "1.8.4"
-  },
-  {
-    "fvtt": "14.369",
-    "system": "pf2e",
-    "systemMinor": "8.4",
-    "systemVersion": "8.4.1",
-    "status": "stable",
-    "timestamp": "2026-10-18T18:44:23.054Z",
-    "notes": "Verified locally with pf2e v8.4.1.",
-    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "14.370",
