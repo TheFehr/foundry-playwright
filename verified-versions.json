@@ -350,9 +350,10 @@
     "system": "dnd5e",
     "systemMinor": "6.0",
     "systemVersion": "6.0.6",
-    "status": "pending",
-    "timestamp": "2026-11-04T12:14:32.519Z",
-    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.370 --system dnd5e --system-minor 6.0 --update-registry --git-commit`"
+    "status": "stable",
+    "timestamp": "2026-11-05T15:43:13.974Z",
+    "notes": "Verified locally with dnd5e v6.0.6.",
+    "verifiedWith": "1.8.4"
   },
   {
     "fvtt": "14.370",
