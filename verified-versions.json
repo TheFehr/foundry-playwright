@@ -417,5 +417,50 @@
     "status": "incompatible",
     "timestamp": "2026-11-05T12:27:14.342Z",
     "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.361, maximum: 14; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "13.351.0",
+    "system": "dnd5e",
+    "systemMinor": "6.1",
+    "systemVersion": "6.1.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-13T12:18:05.195Z",
+    "notes": "System declares compatibility minimum: 14.367; incompatible with FVTT 13.351.0."
+  },
+  {
+    "fvtt": "14.360.0",
+    "system": "dnd5e",
+    "systemMinor": "6.1",
+    "systemVersion": "6.1.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-13T12:18:05.196Z",
+    "notes": "System declares compatibility minimum: 14.367; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.367",
+    "system": "dnd5e",
+    "systemMinor": "6.1",
+    "systemVersion": "6.1.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-13T12:18:05.196Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.367; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.368",
+    "system": "dnd5e",
+    "systemMinor": "6.1",
+    "systemVersion": "6.1.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-13T12:18:05.196Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.367; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.370",
+    "system": "dnd5e",
+    "systemMinor": "6.1",
+    "systemVersion": "6.1.0",
+    "status": "incompatible",
+    "timestamp": "2026-11-13T12:18:05.196Z",
+    "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.367; incompatible with FVTT 14.360.0."
   }
 ]
