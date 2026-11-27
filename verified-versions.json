@@ -462,5 +462,59 @@
     "status": "incompatible",
     "timestamp": "2026-11-13T12:18:05.196Z",
     "notes": "Same systemVersion already confirmed incompatible with FVTT 14.360.0 (same major): System declares compatibility minimum: 14.367; incompatible with FVTT 14.360.0."
+  },
+  {
+    "fvtt": "14.371",
+    "system": "dnd5e",
+    "systemMinor": "6.1",
+    "systemVersion": "6.1.2",
+    "status": "pending",
+    "timestamp": "2026-11-27T13:57:05.617Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.371 --system dnd5e --system-minor 6.1 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.371",
+    "system": "dnd5e",
+    "systemMinor": "6.0",
+    "systemVersion": "6.0.6",
+    "status": "pending",
+    "timestamp": "2026-11-27T13:57:05.744Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.371 --system dnd5e --system-minor 6.0 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.371",
+    "system": "dnd5e",
+    "systemMinor": "5.3",
+    "systemVersion": "5.3.3",
+    "status": "pending",
+    "timestamp": "2026-11-27T13:57:05.873Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.371 --system dnd5e --system-minor 5.3 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.371",
+    "system": "pf2e",
+    "systemMinor": "8.7",
+    "systemVersion": "8.7.1",
+    "status": "pending",
+    "timestamp": "2026-11-27T13:57:06.925Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.371 --system pf2e --system-minor 8.7 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.371",
+    "system": "pf2e",
+    "systemMinor": "8.6",
+    "systemVersion": "8.6.1",
+    "status": "pending",
+    "timestamp": "2026-11-27T13:57:07.072Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.371 --system pf2e --system-minor 8.6 --update-registry --git-commit`"
+  },
+  {
+    "fvtt": "14.371",
+    "system": "pf2e",
+    "systemMinor": "8.5",
+    "systemVersion": "8.5.1",
+    "status": "pending",
+    "timestamp": "2026-11-27T13:57:07.242Z",
+    "notes": "Automated detection. Run verification: `npm run verify:local -- --docker --version 14.371 --system pf2e --system-minor 8.5 --update-registry --git-commit`"
   }
 ]
